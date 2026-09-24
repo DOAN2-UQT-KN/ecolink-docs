@@ -546,7 +546,7 @@ Client chỉ có **1 role cứng**: `ADMIN_ROLE_ID = "40ed59d7-5d7c-4ab2-88a2-a2
 | Admin gift redemptions — đổi trạng thái | PROCESSING → SHIPPED/CANCELLED; SHIPPED → DELIVERED/CANCELLED; trạng thái khác không có lựa chọn | `admin/gifts/_components/RedeemsTable.tsx > nextStatuses()` |
 | Admin gift form | Gift `isActive === false` ở chế độ edit → form bị disable | `admin/gifts/_components/GiftFormDialog.tsx` |
 | Admin application review | `isClosed` (APPROVED/REJECTED/WITHDRAWN) khoá quyết định; nút "Claim" ẩn khi đã UNDER_REVIEW | `admin/organization-applications/_components/ApplicationReviewDialog.tsx` |
-| Admin application review — card "Activity" | Timeline `events` mới nhất trước; người thao tác = `actor_name` → "Admin" (có `actor_id`) → "System" (ACCOUNT_PROVISIONED) / "Applicant"; DOCUMENT_VIEWED ẩn mặc định, bật bằng checkbox "Show document views"; RESUBMITTED hiện chip các trường đã sửa và ±số giấy tờ | `admin/organization-applications/_components/ApplicationActivity.tsx` |
+| Admin application review — tab "Activity" | Modal chia 2 tab dưới header (tên tổ chức + trạng thái): "Information" (các card hồ sơ + khối Decision) và "Activity" (kèm số event). Timeline `events` mới nhất trước; người thao tác = `actor_name` → "Admin" (có `actor_id`) → "System" (ACCOUNT_PROVISIONED) / "Applicant"; DOCUMENT_VIEWED ẩn mặc định, bật bằng checkbox "Show document views"; RESUBMITTED hiện chip các trường đã sửa và ±số giấy tờ | `admin/organization-applications/_components/ApplicationActivity.tsx` |
 | Admin DataTable chung | `permission.role === 'staff'` mà không khai báo `canSelect`/`canEdit` → không cho chọn/sửa (hạ tầng, không trang nào truyền role staff) | `components/admin/shared/DataTable/DataTable.tsx` |
 
 ---
