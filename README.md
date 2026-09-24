@@ -25,3 +25,4 @@ Toàn bộ nội dung được viết dựa trên source code của [`ecolink-se
 ## Quy tắc cập nhật
 
 Docs phải đi cùng thay đổi code: sửa tính năng, endpoint, schema, trạng thái, quyền hay màn hình thì cập nhật file tương ứng trong cùng đợt làm việc. Chỉ ghi điều code thể hiện, giữ nguyên format (bảng, trích dẫn `path > function()`, mermaid, mã BR-xxx). Không đưa secret, giá trị env thật hay chi tiết lỗ hổng vào đây.
+# ecolink-docs
