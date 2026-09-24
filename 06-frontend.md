@@ -236,6 +236,8 @@ Ghi chú: `(hook)` = hàm trong `apis/`, path là path gửi tới `VITE_API_URL
 | (submit) | `uploadToCloudinary` (logo, background) → `useCreateApplication` (`apis/organization-application/createApplication.ts`) | POST `/api/v1/organization-applications` (header `x-submission-token`) → push `/organizations/apply/submitted?id=&token=` |
 | `/organizations/apply/submitted` | `useGetApplication` (`apis/organization-application/getApplication.ts`) | GET `/api/v1/organization-applications/:id?token=` |
 | `/organizations/apply/status/:id` | `useGetApplication`, `useWithdrawApplication` | GET `/api/v1/organization-applications/:id?token=`; POST `/api/v1/organization-applications/:id/withdraw?token=` |
+| Xem giấy tờ (status, submitted, edit — file đã nộp) | `buildApplicantDocumentUrl` (`apis/organization-application/getApplication.ts`) → link mở tab mới | GET `/api/v1/organization-applications/:id/documents/:docId/file?token=` |
+| Xem giấy tờ vừa chọn (form Apply / file mới ở edit) | `ApplicationContext > openDocumentPreview` (object URL của file trên máy, không gọi API) | — |
 | `/organizations/apply/edit/:id` | `useGetApplication`, `presignDocumentForApplication`, `useUpdateApplication` | GET như trên; POST `/api/v1/organization-applications/:id/documents/presign?token=`; PUT `/api/v1/organization-applications/:id?token=` (kèm `remove_document_ids`) |
 | `/organizations/email-verified` | — (không gọi API) | — |
 

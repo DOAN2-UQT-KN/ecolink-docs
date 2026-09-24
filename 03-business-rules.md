@@ -79,7 +79,7 @@
 | BR-075 | Nếu không miễn giấy tờ thì đơn phải có ≥ 1 giấy tờ; nếu miễn thì phải ghi lý do | decision | 400 | `approve()` |
 | BR-076 | Profile phải có name và logo mới được duyệt | decision | 400 | `approve()` |
 | BR-077 | Blue Tick (`trustTier=VERIFIED`) = `grant_blue_tick`, mặc định bằng `lane === A`. Lane B đặt `verificationExpiresAt` = +365 ngày; `domainVerified = laneA && documentsWaived` | decision APPROVE | — | `approve()`, `DC/organization-trust.ts > LANE_B_VERIFICATION_VALID_DAYS` |
-| BR-078 | Mỗi lần mở giấy tờ đều ghi audit DOCUMENT_VIEWED; link tải có TTL 5 phút; giấy tờ đã bị purge thì không mở được | `GET /:id/documents/:docId/file` | 404 | `openDocument()` |
+| BR-078 | Mỗi lần mở giấy tờ đều ghi audit DOCUMENT_VIEWED — cả admin lẫn người nộp (người nộp mở bằng tracking token, event không có actor); link tải có TTL 5 phút; giấy tờ đã bị purge thì không mở được | `GET /admin/…/:id/documents/:docId/file`, `GET /organization-applications/:id/documents/:docId/file?token=` | 404 | `openDocument()`, `openDocumentForApplicant()` |
 | BR-079 | Saga provision: payload phải đủ applicationId, organizationId, email, displayName; chỉ gửi email kích hoạt khi identity trả token mới | outbox ORG_ACCOUNT_PROVISION | throw → retry | `organization-account-provision.publisher.ts` |
 
 ## 5. Tổ chức
