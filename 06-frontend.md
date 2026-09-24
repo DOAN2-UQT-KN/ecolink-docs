@@ -541,6 +541,7 @@ Client chỉ có **1 role cứng**: `ADMIN_ROLE_ID = "40ed59d7-5d7c-4ab2-88a2-a2
 | — "Verify" (approve/ban) | status ∉ {INACTIVE, COMPLETED, WAITING_CONFIRMED} và ≠ ACTIVE | như trên |
 | — "Completion review" | status = WAITING_CONFIRMED | như trên |
 | Admin incidents — preview + verify/ban | ẩn khi status = INACTIVE; mode `verify` nếu status = PENDING, còn lại `ban` | `admin/incidents/_components/DataTable.tsx` |
+| Dấu tick cạnh tên tổ chức | Chỉ hiện `BlueTickBadge` khi `trust_tier === "VERIFIED" && !tick_suspended`; không còn icon ✅/❌ theo `is_email_verified` (email đã bắt buộc xác minh bằng OTP trước khi nộp đơn). Áp dụng cho card tìm kiếm, trang chi tiết, bảng My organizations, bảng admin Organizations | `components/ui/BlueTickBadge.tsx > isBlueTickVisible()` |
 | Admin organizations — "Ban" / "Approve" | ACTIVE → ban; khác INACTIVE → approve/ban; INACTIVE → không nút | `admin/organizations/_components/DataTable.tsx` |
 | Admin users — "Ban" | status = ACTIVE | `admin/users/_components/DataTable.tsx` |
 | Admin gift redemptions — đổi trạng thái | PROCESSING → SHIPPED/CANCELLED; SHIPPED → DELIVERED/CANCELLED; trạng thái khác không có lựa chọn | `admin/gifts/_components/RedeemsTable.tsx > nextStatuses()` |
