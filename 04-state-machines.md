@@ -158,7 +158,7 @@ stateDiagram-v2
 | (mới) → SUBMITTED | Người nộp ẩn danh (submission token) | BR-055..BR-065 | Event SUBMITTED; burn token; tracking token; email ORG_APPLICATION_RECEIVED | `INC/modules/organization_application/organization-application.service.ts > createApplication()` |
 | SUBMITTED / NEEDS_MORE_INFO / UNDER_REVIEW (cùng reviewer) → UNDER_REVIEW | Admin | BR-070 | reviewerId, claimedAt; event CLAIMED | `organization-application-admin.service.ts > claim()` |
 | mở → NEEDS_MORE_INFO | Admin (không cần claim) | Có message | reviewNote; event INFO_REQUESTED; tracking token mới; email NEEDS_INFO | `requestMoreInfo()` |
-| NEEDS_MORE_INFO → SUBMITTED | Người nộp (tracking token) | Validate lại | Reset reviewer; xoá mềm giấy tờ bị bỏ; event RESUBMITTED | `updateApplication()` |
+| NEEDS_MORE_INFO → SUBMITTED | Người nộp (tracking token) | Validate lại | Reset reviewer; xoá mềm giấy tờ bị bỏ; event RESUBMITTED (payload `changedFields` — chỉ tên trường đã sửa, không lưu giá trị — cùng `addedDocumentIds`, `removedDocumentIds`) | `updateApplication()` |
 | mở → APPROVED | Admin (không cần claim) | BR-074..BR-076 | Tạo organization (trust fields) và channels; outbox ORG_ACCOUNT_PROVISION; event APPROVED (và DOCUMENTS_WAIVED nếu có) | `approve()` |
 | mở → REJECTED | Admin | Có lý do | Email ORG_APPLICATION_REJECTED; event REJECTED | `reject()` |
 | mở → WITHDRAWN | Người nộp | — | Event WITHDRAWN | `withdrawApplication()` |

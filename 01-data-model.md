@@ -342,7 +342,7 @@ erDiagram
 | Bảng | Field chính | Ghi chú |
 |---|---|---|
 | OrganizationApplicationDocument | applicationId? (null từ lúc presign tới lúc nộp; cascade), submissionEmail, docType, storageKey (khoá Cloudinary private), format, mimeType, sizeBytes (client tự khai), fileName, purgedAt | |
-| OrganizationApplicationEvent | applicationId (cascade), eventType (`ApplicationEventType`), actorId? (null = người nộp hoặc relay), payload | Audit trail |
+| OrganizationApplicationEvent | applicationId (cascade), eventType (`ApplicationEventType`), actorId? (null = người nộp hoặc relay), payload | Audit trail; hiển thị ở card "Activity" trong modal Review của admin. RESUBMITTED ghi `changedFields` (tên trường, không có giá trị) |
 | OrganizationApplicationOtp | email, purpose (`OTP` / `LINK` / `SUBMISSION` / `TRACKING`), codeHash (sha256), attempts, expiresAt, usedAt | index (email, purpose) |
 
 Migration `incident-service/prisma/migrations/20260922104500_truncate_legacy_organizations` chạy `TRUNCATE organizations … CASCADE`, nên dữ liệu campaign và report cũ trỏ tới tổ chức cũng bị xoá theo.
