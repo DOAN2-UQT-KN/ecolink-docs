@@ -59,7 +59,7 @@ Cây provider: `main.tsx` → `App` (`RouterProvider`) → `RootLayout` (`ReactQ
 
 | Biến | Ý nghĩa | Nơi dùng |
 |---|---|---|
-| `VITE_API_URL` | Base URL API (gateway, mặc định local `http://localhost:8081` trong `.env.example`); nếu trống, axios dùng `window.location.origin` | `ecolink-client/libs/axiosClient.ts > getBaseUrl()`, `apis/organization-application/adminApplications.ts > buildApplicationDocumentUrl()`, `components/client/ai-chat/aiChatClient.ts > isChatApiConfigured()` |
+| `VITE_API_URL` | Base URL API (gateway, mặc định local `http://localhost:8081` trong `.env.example`); nếu trống, axios dùng `window.location.origin` | `ecolink-client/libs/axiosClient.ts > getBaseUrl()`, `components/client/ai-chat/aiChatClient.ts > isChatApiConfigured()` |
 | `VITE_CLOUDINARY_CLOUD_NAME` | Cloud name Cloudinary (fallback `"example"`) | `.../incidents/create/_services/upload.service.ts` |
 | `VITE_CLOUDINARY_UPLOAD_PRESET` | Unsigned upload preset (fallback `"example"`) | như trên |
 
@@ -276,7 +276,7 @@ Ghi chú: `(hook)` = hàm trong `apis/`, path là path gửi tới `VITE_API_URL
 | | `useClaimApplication` | PUT `/api/v1/admin/organization-applications/:id/claim` |
 | | `useRequestMoreInfo` | PUT `/api/v1/admin/organization-applications/:id/request-info` body `{ message }` |
 | | `useDecideApplication` | PUT `/api/v1/admin/organization-applications/:id/decision` body `{ decision:"APPROVE", lane, documents_waived, documents_waived_reason, grant_blue_tick }` hoặc `{ decision:"REJECT", reject_reason }` |
-| | `buildApplicationDocumentUrl` (thẻ `<a target="_blank">`) | GET `<VITE_API_URL>/api/v1/admin/organization-applications/:id/documents/:docId/file` (điều hướng trình duyệt, **không có Bearer** — mục 10) |
+| | `fetchApplicationDocument` (qua `requestApi`, `responseType: "blob"`, có Bearer) → object URL mở tab mới | GET `/api/v1/admin/organization-applications/:id/documents/:docId/file` |
 | `/admin/users` | `useGetUsers` (`apis/user/getUsers.ts`), `useBanUser` (`apis/user/banUser.ts`) | GET `/api/v1/users`; PUT `/api/v1/users/:id/ban` body `{ reject_reason }` |
 | `/admin/gifts` | `useGetGifts`, `useCreateGift`, `useUpdateGift` + `uploadToCloudinary` | GET `/api/v1/gifts`; POST `/api/v1/gifts`; PUT `/api/v1/gifts/:id` |
 | | `useGetAdminGiftRedemptions`, `useUpdateGiftRedemptionStatus` (`apis/gift/adminGiftRedemptions.ts`, trong `RedeemsTable.tsx`) | GET `/api/v1/admin/gift-redemptions`; PATCH `/api/v1/admin/gift-redemptions/:id/status` body `{ status }` |
@@ -351,7 +351,7 @@ Tổng số file hàm (không tính `models/`): 70; trong đó `apis/auth/update
 | `markNotificationRead` | PATCH | `/api/v1/notifications/:id/read` | `NotificationMenu.tsx` |
 | `getAdminApplications` / `useGetAdminApplications` | GET | `/api/v1/admin/organization-applications` | `admin/organization-applications/_context/ApplicationsContext.tsx` |
 | `getAdminApplicationById` / `useGetAdminApplicationById` | GET | `/api/v1/admin/organization-applications/:id` | `ApplicationReviewDialog.tsx` |
-| `buildApplicationDocumentUrl` | (URL) GET | `/api/v1/admin/organization-applications/:id/documents/:docId/file` | `ApplicationReviewDialog.tsx` |
+| `fetchApplicationDocument` | GET (blob) | `/api/v1/admin/organization-applications/:id/documents/:docId/file` | `ApplicationReviewDialog.tsx > openDocument` |
 | `claimApplication` / `useClaimApplication` | PUT | `/api/v1/admin/organization-applications/:id/claim` | `ApplicationReviewDialog.tsx` |
 | `requestMoreInfo` / `useRequestMoreInfo` | PUT | `/api/v1/admin/organization-applications/:id/request-info` | `ApplicationReviewDialog.tsx` |
 | `decideApplication` / `useDecideApplication` | PUT | `/api/v1/admin/organization-applications/:id/decision` | `ApplicationReviewDialog.tsx` |
@@ -615,7 +615,6 @@ Client chỉ có **1 role cứng**: `ADMIN_ROLE_ID = "40ed59d7-5d7c-4ab2-88a2-a2
 | GET `/api/reverse-geocode` | Chỉ tồn tại trong middleware Vite dev/preview; bản build chạy nginx/Vercel sẽ trả `index.html` → hook `useReverseGeocode` ở `/incidents/me` hỏng ở production | `vite/reverseGeocode.ts`, `app/(pages)/(main)/incidents/me/_hooks/useReverseGeocode.ts`, `nginx.conf`, `vercel.json` |
 | DELETE `/api/v1/reports/:id/media` | Server là `DELETE /api/v1/reports/:id/media/:mediaFileId` (hàm client đang UNUSED) | `apis/incident/deleteReportMedia.ts`, `ecolink-server/services/incident-service/src/modules/report/report.routes.ts` |
 | GET `/api/v1/organizations/owned` | Server không có `/owned` → sẽ rơi vào `GET /:id` với id=`owned` (hàm UNUSED) | `apis/organization/getOwnedOrganizations.ts`, `incident-service/src/modules/organization/organization.routes.ts` |
-| `<a href>` tới `/api/v1/admin/organization-applications/:id/documents/:docId/file` | Điều hướng trình duyệt không mang header `Authorization`; server `authenticate` đọc Bearer hoặc cookie `accessToken`, mà client không set cookie `accessToken` (axios không `withCredentials`) → khả năng cao 401 khi admin mở tài liệu | `apis/organization-application/adminApplications.ts > buildApplicationDocumentUrl()`, `incident-service/src/middleware/auth.middleware.ts`, `incident-service/src/modules/organization_application/organization-application-admin.routes.ts` |
 | Path tương đối không có `/` đầu (`api/v1/organizations/join-requests...`, `api/v1/incident/saved-resources`) | axios vẫn nối đúng với `baseURL`, nhưng không nhất quán (và nếu `VITE_API_URL` có path con sẽ khác hành vi) | `apis/organization/joinRequest.ts`, `apis/saved-resource/getSavedResource.ts` |
 
 Các prefix gateway có nhưng client **không dùng**: `/api/v1/roles`, `/api/v1/difficulties`, `/api/v1/leaderboard`, `/api/v1/seasons`, `/api/v1/me/gamification`, `/api/v1/me/badges`, `/api/v1/metric-tables`, `/api/v1/metric-columns`, `/api/v1/gamification`, `/api/v1/admin/gamification`, `/api/v1/admin/seasons`, `/api/v1/translate`, `/api/v1/admin/media` (hàm có nhưng UNUSED). Tức là toàn bộ tính năng gamification/season/badge/leaderboard của reward-service chưa có UI.
