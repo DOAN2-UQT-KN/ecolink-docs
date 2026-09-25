@@ -238,6 +238,7 @@ Ghi chú: `(hook)` = hàm trong `apis/`, path là path gửi tới `VITE_API_URL
 | `/organizations/apply/status/:id` | `useGetApplication`, `useWithdrawApplication` | GET `/api/v1/organization-applications/:id?token=`; POST `/api/v1/organization-applications/:id/withdraw?token=` |
 | Xem giấy tờ (status, submitted, edit — file đã nộp) | `buildApplicantDocumentUrl` (`apis/organization-application/getApplication.ts`) → link mở tab mới | GET `/api/v1/organization-applications/:id/documents/:docId/file?token=` |
 | Xem giấy tờ vừa chọn (form Apply / file mới ở edit) | `ApplicationContext > openDocumentPreview` (object URL của file trên máy, không gọi API) | — |
+| Icon loại file của giấy tờ | `components/ui/FileTypeIcon.tsx` chọn icon theo `mime_type` (PDF đỏ, JPG/PNG xanh; không có MIME thì theo đuôi file). Dùng ở `StepDocuments`, `StepReview`, `ApplicationDetails`, modal Review của admin; file vừa chọn lấy `mimeType` từ `File.type` (chỉ để hiển thị, không gửi API) | — |
 | `/organizations/apply/edit/:id` | `useGetApplication`, `presignDocumentForApplication`, `useUpdateApplication` | GET như trên; POST `/api/v1/organization-applications/:id/documents/presign?token=`; PUT `/api/v1/organization-applications/:id?token=` (kèm `remove_document_ids`) |
 | `/organizations/email-verified` | — (không gọi API) | — |
 
