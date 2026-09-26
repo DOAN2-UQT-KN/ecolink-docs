@@ -115,6 +115,9 @@ soạn nháp để người nộp đóng tab rồi quay lại sau. Mở lại h�
 khung `DraftLinkNotice` báo đã gửi link và có nút "Sao chép liên kết". Mất link: nhập lại email ở
 `/organizations/apply` để lấy mã mới — hệ thống mở lại đúng bản nháp.
 
+Bấm **"Lưu nháp"** thủ công gửi email `ORG_APPLICATION_DRAFT_UPDATED` (kèm link) tới người nộp,
+tối đa 1 email/giờ/hồ sơ; lưu tự động khi bấm "Continue" không gửi.
+
 ### Bước 2 — Soạn nháp
 
 Các bước: Hồ sơ → Liên hệ → **Owners** → Giấy tờ → Kiểm tra. Mỗi lần bấm "Tiếp tục" hoặc

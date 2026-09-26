@@ -109,6 +109,7 @@ Lọc theo preferences: các client dùng `enqueueWebsiteNotificationsToUsers()`
 | 16 | `REPORT_APPROVED` / `REPORT_REJECTED` | website | Người gửi report | `report.service.ts > adminVerifyReport()` → `notifyOwnerOfReportModeration()` | `enqueueReportApprovedWebsiteNotification()` / `enqueueReportRejectedWebsiteNotification()` | Có gọi filter, kind admin-only → luôn bật |
 | 17 | `ORG_APPLICATION_OTP` | email (`toEmail`) | Email người nộp hồ sơ | `IS/src/modules/organization_application/organization-application-otp.service.ts > requestOtp()` | `IS/src/modules/organization_application/organization-application-notify.client.ts > enqueueApplicationOtpEmail()` | Không |
 | 17b | `ORG_APPLICATION_DRAFT_STARTED` | email | Người nộp hồ sơ | `organization-application.service.ts > openDraftForEmail()` (chỉ đơn mới) | `enqueueApplicationDraftStartedEmail()` | Không |
+| 17c | `ORG_APPLICATION_DRAFT_UPDATED` | email | Người nộp hồ sơ | `organization-application.service.ts > saveDraft()` khi `notifySubmitter`, tối đa 1/giờ | `enqueueApplicationDraftUpdatedEmail()` | Không |
 | 18 | `ORG_APPLICATION_RECEIVED` | email | Người nộp hồ sơ | `organization-application.service.ts > submitApplication()` (lần nộp đầu) | `enqueueApplicationReceivedEmail()` | Không |
 | 19 | `ORG_APPLICATION_NEEDS_INFO` | email | Người nộp hồ sơ | `organization-application-admin.service.ts > requestMoreInfo()` | `enqueueApplicationNeedsInfoEmail()` | Không |
 | 20 | `ORG_APPLICATION_REJECTED` | email | Người nộp hồ sơ | `organization-application-admin.service.ts > reject()` | `enqueueApplicationRejectedEmail()` | Không |
@@ -145,7 +146,7 @@ Ma trận template hiện có (thư mục `NS/templates/notifications/`):
 |---|---|---|
 | CAMPAIGN_CREATED, CAMPAIGN_DONE, CAMPAIGN_COMPLETION_PENDING_ADMIN, CAMPAIGN_COMPLETION_REJECTED_BY_ADMIN, REPORT_STATUS, REPORT_READY, TASK_ASSIGNED, VOLUNTEER_REQUEST, VOLUNTEER_APPROVED, VOLUNTEER_REJECTED, RESET_PASSWORD, GENERIC | có | có |
 | CAMPAIGN_COMPLETION_APPROVED_BY_ADMIN, CAMPAIGN_VERIFY_INVITE, CAMPAIGN_COMPLETION_VERIFY_INVITE, ORGANIZATION_APPROVED, ORGANIZATION_REJECTED, REPORT_APPROVED, REPORT_REJECTED | có | **không** |
-| ORGANIZATION_CONTACT_VERIFY, ORG_APPLICATION_OTP, ORG_APPLICATION_DRAFT_STARTED, ORG_APPLICATION_RECEIVED, ORG_APPLICATION_NEEDS_INFO, ORG_APPLICATION_REJECTED, ACCOUNT_ACTIVATION, ORG_OWNER_CONFIRMATION_REQUEST, ORG_OWNER_DECLINED, ORG_OWNER_CONFIRMATION_EXPIRED, ORG_APPLICATION_WITHDRAWN_NOTICE, ORG_OWNER_ATTACHED | **không** | có |
+| ORGANIZATION_CONTACT_VERIFY, ORG_APPLICATION_OTP, ORG_APPLICATION_DRAFT_STARTED, ORG_APPLICATION_DRAFT_UPDATED, ORG_APPLICATION_RECEIVED, ORG_APPLICATION_NEEDS_INFO, ORG_APPLICATION_REJECTED, ACCOUNT_ACTIVATION, ORG_OWNER_CONFIRMATION_REQUEST, ORG_OWNER_DECLINED, ORG_OWNER_CONFIRMATION_EXPIRED, ORG_APPLICATION_WITHDRAWN_NOTICE, ORG_OWNER_ATTACHED | **không** | có |
 | CAMPAIGN_SUBMISSION_PENDING_REVIEW, CAMPAIGN_SUBMISSION_APPROVED | **không** | **không** |
 
 ## 7. Phụ thuộc vào service khác và dịch vụ bên ngoài

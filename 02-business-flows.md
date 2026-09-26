@@ -930,6 +930,7 @@ sequenceDiagram
 |---|---|---|---|---|
 | ORG_APPLICATION_OTP | email | email người nộp | Xin mã OTP | `organization-application-otp.service.ts > requestOtp()` |
 | ORG_APPLICATION_DRAFT_STARTED | email | người nộp | OTP mở đơn DRAFT **mới** (không gửi khi mở lại) | `organization-application.service.ts > openDraftForEmail()` |
+| ORG_APPLICATION_DRAFT_UPDATED | email | người nộp | Bấm "Lưu nháp" thủ công, tối đa 1/giờ/hồ sơ (BR-318) | `organization-application.service.ts > saveDraft() → notifyDraftUpdated()` |
 | ORG_APPLICATION_RECEIVED | email | người nộp | Nộp đơn lần đầu | `organization-application.service.ts > submitApplication()` |
 | ORG_APPLICATION_NEEDS_INFO | email | người nộp | Admin yêu cầu bổ sung | `organization-application-admin.service.ts > requestMoreInfo()` |
 | ORG_APPLICATION_REJECTED | email | người nộp | Admin từ chối | `... > reject()` |

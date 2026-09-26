@@ -109,6 +109,7 @@
 | BR-315 | Bất biến DB: mọi tổ chức chưa xoá luôn có ≥ 1 membership chưa xoá vai `LEGAL_REPRESENTATIVE` / `OWNER`; kiểm tra lúc COMMIT bằng constraint trigger deferred | insert/update tổ chức, update/delete membership | Postgres raise `ORG_MUST_HAVE_OWNER` | migration `20260926100000_org_multi_owner`, `isOrgMustHaveOwnerViolation()` |
 | BR-316 | Một người chỉ có một vai trong một tổ chức (khoá chính `(organization_id, user_id)`) | membership | — | `schema.prisma > OrganizationMember` |
 | BR-317 | OTP mở đơn DRAFT **mới** thì gửi email `ORG_APPLICATION_DRAFT_STARTED` kèm link trình soạn nháp (tracking token 180 ngày); mở lại đơn đang có thì không gửi. Gửi lỗi không chặn việc mở nháp | `POST /email-otp/verify` | — | `organization-application.service.ts > openDraftForEmail()` |
+| BR-318 | Bấm **"Lưu nháp"** (client gửi `notify_submitter: true`; "Continue"/"Nộp" thì không) → gửi `ORG_APPLICATION_DRAFT_UPDATED` tới email người nộp kèm link trình soạn nháp; tối đa **1 email / giờ / hồ sơ** (đếm theo event `DRAFT_UPDATE_NOTIFIED`). Quá hạn mức thì vẫn lưu, `notified=false`. Gửi lỗi không làm hỏng việc lưu | `PUT /:id` | — | `organization-application.service.ts > saveDraft() → notifyDraftUpdated()` |
 
 ## 5. Tổ chức
 
@@ -266,4 +267,4 @@
 
 ---
 
-**Tổng số rule đã ghi nhận: 183** (BR-001…BR-317, có các khoảng trống dành sẵn trong từng dải).
+**Tổng số rule đã ghi nhận: 184** (BR-001…BR-318, có các khoảng trống dành sẵn trong từng dải).
