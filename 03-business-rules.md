@@ -1,7 +1,7 @@
 # 03 — Business rules
 
 > Tất cả rule trong bảng đều tìm thấy trong code. Viết tắt đường dẫn giống [02-business-flows.md](02-business-flows.md): `ID/`, `INC/`, `RW/`, `NS/`, `AI/`, `FE/`, `DC/` (= `ecolink-server/shared/da2-constants/src`).
-> Dải mã theo module: 001–019 xác thực · 020–049 người dùng và nội bộ identity · 050–069 nộp đơn tổ chức · 070–079 thẩm định đơn · 300–329 owner xác nhận và membership tổ chức · 080–099 tổ chức · 100–129 report · 130–149 vote và lưu · 150–189 campaign · 190–199 SOS · 200–219 thông báo · 220–239 quà tặng · 240–269 điểm và gamification · 270–289 AI và dịch · 290–299 kiểm tra phía client. Một số mã trong dải được để trống để dành chỗ.
+> Dải mã theo module: 001–019 xác thực · 020–049 người dùng và nội bộ identity · 050–069 nộp đơn tổ chức · 070–079 thẩm định đơn · 300–329 owner xác nhận và membership tổ chức · 330–349 phân quyền tổ chức và lời mời thành viên · 080–099 tổ chức · 100–129 report · 130–149 vote và lưu · 150–189 campaign · 190–199 SOS · 200–219 thông báo · 220–239 quà tặng · 240–269 điểm và gamification · 270–289 AI và dịch · 290–299 kiểm tra phía client. Một số mã trong dải được để trống để dành chỗ.
 > Mã lỗi theo envelope `{success:false, code, message}` (`DC/http-status.ts > sendError`).
 
 ## 1. Xác thực (identity và các service)
@@ -110,6 +110,10 @@
 | BR-316 | Một người chỉ có một vai trong một tổ chức (khoá chính `(organization_id, user_id)`) | membership | — | `schema.prisma > OrganizationMember` |
 | BR-317 | OTP mở đơn DRAFT **mới** thì gửi email `ORG_APPLICATION_DRAFT_STARTED` kèm link trình soạn nháp (tracking token 180 ngày); mở lại đơn đang có thì không gửi. Gửi lỗi không chặn việc mở nháp | `POST /email-otp/verify` | — | `organization-application.service.ts > openDraftForEmail()` |
 | BR-318 | Bấm **"Lưu nháp"** (client gửi `notify_submitter: true`; "Continue"/"Nộp" thì không) → gửi `ORG_APPLICATION_DRAFT_UPDATED` tới email người nộp kèm link trình soạn nháp; tối đa **1 email / giờ / hồ sơ** (đếm theo event `DRAFT_UPDATE_NOTIFIED`). Quá hạn mức thì vẫn lưu, `notified=false`. Gửi lỗi không làm hỏng việc lưu | `PUT /:id` | — | `organization-application.service.ts > saveDraft() → notifyDraftUpdated()` |
+| BR-319 | Đề xuất thêm owner (đơn `ADD_OWNER`): chỉ người có `OWNER_PROPOSE` (owner / LR); 1–5 người, mỗi người là tài khoản có sẵn (`user_id`, email lấy từ identity) hoặc email chưa có tài khoản; không được đã là owner; mỗi tổ chức chỉ một đề xuất đang mở (AWAITING_OWNER_CONFIRMATION / PENDING_REVIEW); chạy cùng kiểm tra chặn sớm BR-300..BR-302. Đơn lưu `organizationId` (cột thường), `profile` là snapshot tổ chức, vào thẳng AWAITING_OWNER_CONFIRMATION, gửi `ORG_OWNER_CONFIRMATION_REQUEST` (`isAddOwner`) | `POST /organizations/:id/owner-proposals` | 403 ORG_PERMISSION_DENIED; 409 OWNER_PROPOSAL_ALREADY_OPEN / ALREADY_OWNER; 422 | `INC/modules/organization_application/owner-proposal.service.ts > create()` |
+| BR-320 | Đề xuất ADD_OWNER: người được đề xuất từ chối hoặc hết hạn 14 ngày → đề xuất **bị huỷ** (WITHDRAWN + `reviewNote`), không chuyển NEEDS_REVISION; người đề xuất nhận email kèm link trang tổ chức. Đủ xác nhận → PENDING_REVIEW | xác nhận / từ chối owner, sweeper | — | `owner-confirmation.service.ts > statusAfterRefusal(), submitterLink()` |
+| BR-321 | Owner huỷ được đề xuất đang mở (→ WITHDRAWN, link chưa dùng hết hạn, báo người đã xác nhận); gửi lại lời xác nhận dùng chung cooldown 1 giờ của BR-307, xác thực bằng membership | `POST /:id/owner-proposals/:applicationId/cancel`, `/owners/:candidateId/resend` | 403; 409 ORGANIZATION_APPLICATION_ALREADY_DECIDED; 429 RESEND_TOO_SOON | `owner-proposal.service.ts > cancel(), resend()`, `organization-application.service.ts > resendCandidate()` |
+| BR-322 | Admin duyệt ADD_OWNER: không cần lane / giấy tờ, không tạo tổ chức; `ensureUsers`; khoá đơn, phải PENDING_REVIEW và mọi người CONFIRMED; mỗi người qua trần 3 tổ chức dưới advisory lock như BR-312 rồi được cấp `OWNER` (đang là member vai khác thì **nâng vai**, đã là owner thì bỏ qua); outbox `ORG_OWNER_ONBOARD`. Không "yêu cầu bổ sung" được đơn ADD_OWNER | `PUT /admin/organization-applications/:id/decision`, `/request-info` | 409 NOT_PENDING_REVIEW / OWNERS_NOT_ALL_CONFIRMED; 422 OWNER_QUOTA_EXCEEDED; 400 INVALID_INPUT | `organization-application-admin.service.ts > approveAddOwner(), requestMoreInfo()` |
 
 ## 5. Tổ chức
 
@@ -118,15 +122,31 @@
 | BR-080 | Tạo tổ chức trực tiếp chỉ qua API key nội bộ: name ≤ 200, logoUrl bắt buộc, contactEmail bắt buộc, ownerId là UUID; tạo luôn membership OWNER trong cùng transaction | `POST /api/v1/organizations` | 401 / 400 | `INC/modules/organization/organization.controller.ts > createOrganization`, `organization.repository.ts > create()` |
 | BR-081 | Tên (không phân biệt hoa thường) + contactEmail là duy nhất trong các tổ chức chưa xoá và chưa bị ban. Rule này **không áp dụng khi duyệt đơn** | tạo, cập nhật tổ chức | 409 ORGANIZATION_ALREADY_EXISTS | `organization.service.ts > assertUniqueNameAndContactEmail()` |
 | BR-082 | Slug = tên bỏ dấu, lowercase, gạch nối; trùng thì thêm -2, -3…; không đổi khi đổi tên | tạo tổ chức | 409 "Unable to allocate a unique slug" | `DC/organization-slug.ts`, `allocateUniqueSlug()` |
-| BR-083 | Chỉ người có vai owner (`LEGAL_REPRESENTATIVE` hoặc `OWNER`) được sửa tổ chức; phải có ít nhất 1 field; đổi contactEmail thì mất trạng thái xác minh email và hệ thống gửi link mới | `PUT /organizations/:id` | 403; 400 | `updateOrganization()`, `assertOwner()` |
+| BR-083 | Chỉ người có quyền `ORG_EDIT` (owner, LR, ADMIN) được sửa tổ chức; phải có ít nhất 1 field; đổi contactEmail thì mất trạng thái xác minh email và hệ thống gửi link mới | `PUT /organizations/:id` | 403 ORG_PERMISSION_DENIED; 400 | `updateOrganization()`, `org-access.service.ts > assertOrgPermission()` |
 | BR-084 | Admin duyệt tổ chức (status 1) chỉ từ DRAFT, INACTIVE, INREVIEW, PENDING; ban (status 2) chỉ từ DRAFT, PENDING, INREVIEW, ACTIVE và bắt buộc lý do ≤ 5000 | `PUT /organizations/:id/verify` | 400 | `adminVerifyOrganization()` |
 | BR-085 | Xin gia nhập: người đã có membership (kể cả owner) không được xin; không được có 2 yêu cầu PENDING | `POST /organizations/:id/join-requests` | 409 / 400 | `createJoinRequest()` |
-| BR-086 | Mọi owner xem và xử lý được yêu cầu gia nhập (và đều nhận thông báo có yêu cầu mới); yêu cầu phải đang PENDING; duyệt thì tạo membership role `MEMBER` | `GET /:id/join-requests`, `PUT /join-requests/process` | 403; 409 JOIN_REQUEST_ALREADY_PROCESSED | `processJoinRequest()`, `listJoinRequestsForOwner()` |
+| BR-086 | Người có quyền `MEMBER_APPROVE` (owner, LR, ADMIN) xem và xử lý được yêu cầu gia nhập, và đều nhận thông báo có yêu cầu mới; yêu cầu phải đang PENDING; duyệt thì cấp membership `MEMBER` qua `grantMembership` (source `JOIN_REQUEST`) trong cùng transaction | `GET /:id/join-requests`, `PUT /join-requests/process` | 403 ORG_PERMISSION_DENIED; 409 JOIN_REQUEST_ALREADY_PROCESSED | `processJoinRequest()`, `listJoinRequestsForOwner()`, `orgAccessService.userIdsWith()` |
 | BR-087 | Chỉ người xin được huỷ, và chỉ khi yêu cầu PENDING | `DELETE /join-requests/cancel` | 403 / 400 | `cancelJoinRequest()` |
 | BR-088 | Owner không được rời tổ chức (luồng rời / chuyển giao chưa có); owner cuối cùng trả ORG_MUST_HAVE_OWNER; phải là thành viên thì mới rời được | `DELETE /:id/members/me` | 409 ORG_MUST_HAVE_OWNER / 400 | `leaveOrganization()` |
 | BR-089 | Tổ chức bị ban (INACTIVE) trả 404 khi xem theo slug | `GET /organizations/by-slug/:slug` | 404 | `getBySlug()` |
-| BR-090 | Gửi lại email xác minh: chỉ owner; tổ chức phải có email và email chưa được xác minh | `POST /:id/resend-contact-email` | 403 / 400 / 502 | `resendOrganizationContactVerificationEmail()` |
+| BR-090 | Gửi lại email xác minh: chỉ người có `ORG_EDIT`; tổ chức phải có email và email chưa được xác minh | `POST /:id/resend-contact-email` | 403 / 400 / 502 | `resendOrganizationContactVerificationEmail()` |
 | BR-091 | Xác minh email liên hệ: email trong token phải trùng contactEmail hiện tại | `GET /organizations/verify-contact-email` | 302 `?error=mismatch` | `confirmOrganizationContactEmail()` |
+
+## 5b. Phân quyền tổ chức và lời mời thành viên
+
+> Dải mã 330–349. Ma trận: `DC/org-permissions.ts`. Kiểm tra: `INC/modules/organization/org-access.service.ts`. Hằng số: `ORG_INVITATION_TTL_DAYS = 7` (`DC/organization-trust.ts`). Quyền campaign theo vai **chưa áp dụng** (phase 4).
+
+| ID | Rule | Áp dụng ở đâu | Hệ quả khi vi phạm | File |
+|---|---|---|---|---|
+| BR-330 | Quyền quản lý tổ chức suy ra từ vai theo ma trận duy nhất (`ORG_EDIT`, `MEMBER_APPROVE`, `MEMBER_INVITE`, `MEMBER_MANAGE`, `OWNER_PROPOSE`, và `CAMPAIGN_*` mới khai báo); đọc vai từ DB mỗi request | mọi endpoint quản lý tổ chức | 403 ORG_PERMISSION_DENIED | `hasOrgPermission()`, `assertOrgPermission()` |
+| BR-331 | Đổi vai: cần `MEMBER_MANAGE`; vai mới phải thuộc `assignableRoles(actor)` (owner: ADMIN / CAMPAIGN_MANAGER / MEMBER; admin: CAMPAIGN_MANAGER / MEMBER); `canActOnMember`: không tác động owner / LR, admin không tác động admin, không tự tác động mình; người bị đổi nhận thông báo `ORG_MEMBERSHIP_CHANGED` | `PATCH /organizations/:id/members/:userId/role` | 403 ROLE_NOT_ASSIGNABLE / CANNOT_ACT_ON_MEMBER; 404 MEMBER_NOT_FOUND | `organization.service.ts > changeMemberRole()` |
+| BR-332 | Gỡ thành viên: cùng giới hạn BR-331; xoá mềm membership; người bị gỡ nhận `ORG_MEMBERSHIP_CHANGED` (`removed`) | `DELETE /organizations/:id/members/:userId` | như BR-331 | `removeMember()` |
+| BR-333 | Tạo lời mời: cần `MEMBER_INVITE` (mọi vai); chỉ mời **tài khoản có sẵn đang ACTIVE**, luôn vai MEMBER; người được mời chưa có membership; mỗi người chỉ một lời mời đang mở (PENDING_APPROVAL / SENT) trong một tổ chức (unique partial index) | `POST /organizations/:id/invitations` | 409 ALREADY_MEMBER / INVITATION_ALREADY_PENDING; 422 INVITEE_NOT_AVAILABLE | `organization-invitation.service.ts > create()` |
+| BR-334 | Duyệt lời mời: người mời có `MEMBER_APPROVE` → SENT ngay (token 7 ngày, email `ORG_INVITATION`); ngược lại PENDING_APPROVAL và người có quyền duyệt nhận `ORG_INVITATION_PENDING`. Duyệt → SENT + email; từ chối → REJECTED + `ORG_INVITATION_REJECTED` cho người mời; người được mời đã vào tổ chức trong lúc chờ → CANCELLED + ALREADY_MEMBER | `PUT /:id/invitations/:invitationId/approve`, `/reject` | 403; 409 INVITATION_NOT_ACTIVE / ALREADY_MEMBER | `approve()`, `reject()` |
+| BR-335 | Huỷ lời mời: người mời hoặc người có `MEMBER_APPROVE`, chỉ khi đang mở | `DELETE /:id/invitations/:invitationId` | 403; 409 INVITATION_NOT_ACTIVE | `cancel()` |
+| BR-336 | Chấp nhận / từ chối theo token (không cần đăng nhập): phải SENT và chưa hết hạn; hết hạn → status EXPIRED + 410; chấp nhận idempotent; người được mời đã có vai khác thì **không bị hạ vai**; sweeper mỗi giờ chuyển SENT quá hạn sang EXPIRED | `POST /api/v1/organization-invitations/:token/accept`, `/decline` | 404 INVITATION_NOT_FOUND; 410 INVITATION_EXPIRED; 409 INVITATION_NOT_ACTIVE | `accept()`, `decline()`, `expireOverdue()` |
+| BR-337 | Tìm user để mời: cần `MEMBER_INVITE`; `q` ≥ 2 ký tự, tối đa 10 kết quả, chỉ user ACTIVE chưa xoá; email **ẩn bớt** (`ng***@gmail.com`) trừ khi người gọi có `OWNER_PROPOSE`; mỗi kết quả kèm `is_member`, `role` | `GET /organizations/:id/user-search` | 403; 400 | `searchUsers()`, `maskEmail()`, `ID/internal/internal.routes.ts > /users/search` |
+| BR-338 | Danh sách lời mời: người có `MEMBER_APPROVE` thấy tất cả, người khác chỉ thấy lời mời mình gửi; email người được mời chỉ đầy đủ với người có quyền duyệt | `GET /organizations/:id/invitations` | 403 | `list()`, `toResponses()` |
 
 ## 6. Báo cáo sự cố (report)
 
@@ -267,4 +287,4 @@
 
 ---
 
-**Tổng số rule đã ghi nhận: 184** (BR-001…BR-318, có các khoảng trống dành sẵn trong từng dải).
+**Tổng số rule đã ghi nhận: 197** (BR-001…BR-338, có các khoảng trống dành sẵn trong từng dải).

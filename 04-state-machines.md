@@ -189,6 +189,55 @@ stateDiagram-v2
 | bất kỳ → gỡ (`removedAt`) | Người nộp (lưu nháp) | Không xoá bản ghi; event OWNER_CANDIDATE_REMOVED; thêm lại thì về PENDING | `syncOwners()` |
 | CONFIRMED / EXPIRED → PENDING | Người nộp (nộp lại) | Reset do BR-306, hoặc cấp link mới cho EXPIRED | `submitApplication()` |
 
+### 7b. Đề xuất thêm owner (`type = ADD_OWNER`)
+
+Dùng chung bảng và state `organization_applications`, nhưng không có DRAFT / NEEDS_REVISION: không có gì để sửa, bị từ chối là huỷ.
+
+```mermaid
+stateDiagram-v2
+  [*] --> AWAITING_OWNER_CONFIRMATION: owner tạo đề xuất
+  AWAITING_OWNER_CONFIRMATION --> PENDING_REVIEW: mọi người xác nhận
+  AWAITING_OWNER_CONFIRMATION --> WITHDRAWN: có người từ chối / hết hạn / owner huỷ
+  PENDING_REVIEW --> APPROVED: admin duyệt (cấp / nâng vai OWNER)
+  PENDING_REVIEW --> REJECTED: admin từ chối
+  PENDING_REVIEW --> WITHDRAWN: owner huỷ
+  APPROVED --> [*]
+  REJECTED --> [*]
+  WITHDRAWN --> [*]
+```
+
+| Từ → sang | Ai | Điều kiện | File |
+|---|---|---|---|
+| (mới) → AWAITING_OWNER_CONFIRMATION | Người có `OWNER_PROPOSE` | BR-319 | `owner-proposal.service.ts > create()` |
+| AWAITING → PENDING_REVIEW | Hệ thống (lần xác nhận cuối) | như §7 | `owner-confirmation.service.ts > confirm()` |
+| AWAITING → WITHDRAWN | Người được đề xuất (từ chối) / sweeper (hết hạn) | BR-320 | `decline()`, `expireOverdue()`, `statusAfterRefusal()` |
+| AWAITING / PENDING_REVIEW → WITHDRAWN | Owner | BR-321 | `owner-proposal.service.ts > cancel()` |
+| PENDING_REVIEW → APPROVED / REJECTED | Admin nền tảng | BR-322; không có request-info | `approveAddOwner()`, `reject()` |
+
+### 7c. Lời mời thành viên (`organization_invitations.status`)
+
+```mermaid
+stateDiagram-v2
+  [*] --> PENDING_APPROVAL: người mời không có MEMBER_APPROVE
+  [*] --> SENT: người mời có MEMBER_APPROVE
+  PENDING_APPROVAL --> SENT: owner / admin duyệt
+  PENDING_APPROVAL --> REJECTED: owner / admin từ chối
+  PENDING_APPROVAL --> CANCELLED: huỷ / người được mời đã vào tổ chức
+  SENT --> ACCEPTED: người được mời chấp nhận
+  SENT --> DECLINED: người được mời từ chối
+  SENT --> EXPIRED: quá 7 ngày (sweeper hoặc lúc chấp nhận)
+  SENT --> CANCELLED: huỷ
+```
+
+| Từ → sang | Ai | Điều kiện | Side effect | File |
+|---|---|---|---|---|
+| (mới) → PENDING_APPROVAL / SENT | Thành viên (`MEMBER_INVITE`) | BR-333 | SENT: token 7 ngày + email ORG_INVITATION; PENDING: ORG_INVITATION_PENDING | `organization-invitation.service.ts > create()` |
+| PENDING_APPROVAL → SENT / REJECTED | Owner / LR / ADMIN | BR-334 | Email / ORG_INVITATION_REJECTED | `approve()`, `reject()` |
+| PENDING_APPROVAL / SENT → CANCELLED | Người mời hoặc người duyệt | BR-335 | — | `cancel()` |
+| SENT → ACCEPTED | Người có token | Chưa hết hạn; idempotent | `grantMembership(MEMBER, INVITATION)` nếu chưa có vai | `accept()` |
+| SENT → DECLINED | Người có token | — | — | `decline()` |
+| SENT → EXPIRED | Sweeper mỗi giờ / lúc chấp nhận | `expiresAt < now` | — | `expireOverdue()`, `accept()` |
+
 ## 8. Tổ chức (`organizations.status`, `trustTier`, `isEmailVerified`) và owner
 
 ```mermaid
@@ -210,17 +259,21 @@ stateDiagram-v2
 | isEmailVerified | false → true | Người click link | Token hợp lệ, email khớp | — | `confirmOrganizationContactEmail()` |
 | isEmailVerified | true → false | Owner | Đổi contactEmail | Gửi link mới | `updateOrganization()` |
 | owner | (mới) → membership `LEGAL_REPRESENTATIVE` / `OWNER` | Admin (duyệt đơn) | Trần 3 tổ chức dưới advisory lock | Outbox ORG_OWNER_ONBOARD | `organization-membership.service.ts > grantMembership()` |
+| owner | membership vai khác → `OWNER` | Admin (duyệt đơn ADD_OWNER) | Trần 3 tổ chức dưới advisory lock | Outbox ORG_OWNER_ONBOARD | `approveAddOwner()` |
 | owner | owner cuối cùng → rời / xoá | — | **DB chặn** (`ORG_MUST_HAVE_OWNER`); chưa có luồng thu hồi / chuyển giao | — | trigger `organization_members_owner_guard` [CHƯA HOÀN THIỆN] |
 
 ## 9. Yêu cầu gia nhập tổ chức (`organization_joining_requests.status`) và thành viên
 
 | Từ → sang | Ai | Điều kiện | Side effect | File |
 |---|---|---|---|---|
-| (mới) → PENDING 12 | User chưa có membership | BR-085 | VOLUNTEER_REQUEST cho mọi owner | `organization.service.ts > createJoinRequest()` |
-| 12 → APPROVED 14 | Owner bất kỳ | — | Upsert organization_members vai MEMBER; VOLUNTEER_APPROVED | `processJoinRequest()` |
-| 12 → REJECTED 18 | Owner bất kỳ | — | VOLUNTEER_REJECTED | `processJoinRequest()` |
+| (mới) → PENDING 12 | User chưa có membership | BR-085 | VOLUNTEER_REQUEST cho owner / LR / ADMIN | `organization.service.ts > createJoinRequest()` |
+| 12 → APPROVED 14 | Người có `MEMBER_APPROVE` | — | `grantMembership` vai MEMBER; VOLUNTEER_APPROVED | `processJoinRequest()` |
+| 12 → REJECTED 18 | Người có `MEMBER_APPROVE` | — | VOLUNTEER_REJECTED | `processJoinRequest()` |
 | 12 → xoá mềm | Người xin | — | — | `cancelJoinRequest()` |
 | Thành viên: đang hoạt động → xoá mềm | Chính thành viên (không có vai owner) | BR-088 | — | `leaveOrganization()` |
+| Thành viên: đang hoạt động → xoá mềm | Người có `MEMBER_MANAGE` | BR-332 (không phải owner; admin không gỡ admin) | ORG_MEMBERSHIP_CHANGED | `removeMember()` |
+| Vai: ADMIN / CAMPAIGN_MANAGER / MEMBER ↔ nhau | Người có `MEMBER_MANAGE` | BR-331 (`assignableRoles`, `canActOnMember`) | ORG_MEMBERSHIP_CHANGED | `changeMemberRole()` |
+| (mới) → MEMBER | Người được mời (chấp nhận) | BR-336 | — | `organization-invitation.service.ts > accept()` |
 
 ## 10. Tài khoản người dùng (`users.status`)
 

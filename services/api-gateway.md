@@ -52,6 +52,7 @@ Mọi method (`app.use`) được chuyển tiếp nguyên path. Trừ 2 trườn
 | `/api/v1/campaigns` | incident-service | giữ nguyên |
 | `/api/v1/organizations` | incident-service | giữ nguyên |
 | `/api/v1/organization-applications` | incident-service | giữ nguyên |
+| `/api/v1/organization-invitations` | incident-service | giữ nguyên (trang nhận lời mời công khai) |
 | `/api/v1/admin/organization-applications` | incident-service | giữ nguyên |
 | `/api/v1/admin/media` | incident-service | giữ nguyên |
 | `/api/v1/incident/votes` | incident-service | giữ nguyên |

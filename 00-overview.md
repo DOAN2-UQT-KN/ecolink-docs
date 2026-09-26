@@ -46,7 +46,7 @@ Ecolink là nền tảng cộng đồng về môi trường. Code thể hiện c
 | Người dùng (citizen / volunteer) | Tài khoản cá nhân, role `USER` | `identity-service/src/modules/auth/auth.service.ts > signup()` |
 | Admin | Claim JWT `role` so sánh không phân biệt hoa thường với `"admin"` | Ví dụ `identity-service/src/modules/user/user.controller.ts > requireAdmin()`, `reward-service/src/middleware/require-admin.middleware.ts`, các controller của incident |
 | Owner tổ chức | **Không phải role identity.** User thường có membership vai `LEGAL_REPRESENTATIVE` / `OWNER` ở `organization_members` (incident), được gắn khi admin duyệt đơn sau khi owner tự xác nhận. Tổ chức không có tài khoản đăng nhập | `incident-service/src/modules/organization/organization-membership.service.ts`, `organization_member.repository.ts > isOwner()`; thiết kế ở [ORG_OWNERSHIP_FLOW.md](ORG_OWNERSHIP_FLOW.md) |
-| Owner tổ chức (quyền theo tổ chức) | Membership vai `LEGAL_REPRESENTATIVE` / `OWNER` (`organization_member.repository.ts > isOwner()`) | `incident-service/src/modules/organization/organization.service.ts > assertOwner()` |
+| Vai trong tổ chức (quyền theo tổ chức) | Membership `organization_members.role` (LEGAL_REPRESENTATIVE / OWNER / ADMIN / CAMPAIGN_MANAGER / MEMBER); quyền quản lý tổ chức suy ra theo ma trận `shared/da2-constants/src/org-permissions.ts`, trả client trong `permissions`. Quyền chiến dịch theo vai: phase 4 | `incident-service/src/modules/organization/org-access.service.ts > assertOrgPermission()` |
 | Campaign creator / manager | `campaign.createdBy`, bảng `campaign_managers` | `incident-service/src/modules/campaign/campaign_manager/campaign_manager.service.ts > canManageCampaign()` |
 | Tình nguyện viên (volunteer) | `campaign_joining_requests.status = 14 (APPROVED)` | `campaign_joining_request.service.ts` |
 | Thành viên tổ chức | Bảng `organization_members` | `organization.service.ts > processJoinRequest()` |
@@ -232,7 +232,7 @@ Bảng chỉ ghi tên biến và ý nghĩa, không ghi giá trị. Chi tiết c�
 |---|---|---|
 | `PASSWORD_RESET_TTL_MS` | identity | TTL token reset mật khẩu (mặc định 1h) |
 | `ORG_CONTACT_EMAIL_TOKEN_TTL_MS`, `ACCOUNT_ACTIVATION_TTL_MS` | identity | TTL link xác minh email tổ chức / kích hoạt tài khoản owner mới (mặc định 72h) |
-| `OWNER_CONFIRMATION_EXPIRY_INTERVAL_MS`, `OWNER_CONFIRMATION_EXPIRY_ENABLED` | incident (worker) | Chu kỳ sweeper owner hết hạn xác nhận (mặc định 1h) / tắt sweeper |
+| `OWNER_CONFIRMATION_EXPIRY_INTERVAL_MS`, `OWNER_CONFIRMATION_EXPIRY_ENABLED` | incident (worker) | Chu kỳ sweeper owner hết hạn xác nhận và lời mời thành viên hết hạn (mặc định 1h) / tắt sweeper |
 | `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `GOOGLE_OAUTH_REDIRECT_URI` | identity | Google OAuth (không có trong `.env.example`) |
 | `APPLICATION_OTP_TTL_MS` (10 phút), `APPLICATION_OTP_MAX_ATTEMPTS` (5), `APPLICATION_SUBMISSION_TOKEN_TTL_MS` (30 phút), `APPLICATION_TRACKING_TOKEN_TTL_MS` (180 ngày) | incident | Luồng đơn đăng ký tổ chức |
 | `OTP_RATE_*`, `APPLICATION_RATE_*`, `APPLICATION_RATE_LIMIT_DISABLED` | incident | Rate limit cho endpoint đơn tổ chức |

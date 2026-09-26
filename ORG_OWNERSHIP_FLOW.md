@@ -6,7 +6,13 @@ Sep 26, 2026 · @Minh
 >
 > **Đã làm (Phase 1):** mô hình `OrgMembership` có `role`, bỏ tài khoản `accountType = ORG`, hồ sơ `NEW_ORG` nhiều owner, email xác nhận từng owner, nộp lại / rút, duyệt tạo membership, hai nhánh email (kích hoạt / "đã gắn vai"), tự gửi lại email kích hoạt từ trang đăng nhập.
 >
-> **Ngoài phạm vi Phase 1 [CHƯA HOÀN THIỆN]:** hồ sơ `ADD_OWNER` (cột `type` đã có sẵn), invitation nhẹ cho `ADMIN` / `CAMPAIGN_MANAGER` / `MEMBER`, bộ chọn ngữ cảnh tổ chức, luồng đi ra (thu hồi owner, owner tự rời, chuyển giao), vòng đời riêng của dấu tích xanh.
+> **Đã làm (Phase 2, 2026-09-26):** ma trận quyền quản lý tổ chức theo vai (`DC/org-permissions.ts`, `org-access.service.ts`, `permissions` trong response); đổi vai / gỡ thành viên không phải owner; **mời thành viên** (vai MEMBER); **đề xuất thêm owner** (`ADD_OWNER`); bộ chọn ngữ cảnh tổ chức ở client. Quyết định của chủ sản phẩm khác thiết kế gốc:
+> - Mời thành viên: **ai trong tổ chức cũng mời được**, nhưng lời mời phải được owner / admin duyệt rồi người được mời bấm chấp nhận qua email (7 ngày). Chỉ mời được **người đã có tài khoản**, chọn qua SelectList tìm theo tên / email với **email bị che bớt**. Không có "invitation nhẹ" cho ADMIN / CAMPAIGN_MANAGER: vai đó được gán bằng **đổi vai** sau khi đã là thành viên.
+> - Đề xuất owner: ô AutoComplete (chọn user có sẵn, hoặc gõ email chưa có tài khoản — tài khoản chỉ tạo lúc admin duyệt; owner thấy email đầy đủ). Người được đề xuất từ chối / hết hạn thì **huỷ đề xuất** (WITHDRAWN) như sơ đồ "Luồng thêm owner".
+> - Endpoint tìm user đặt ở incident (`GET /organizations/:id/user-search`) để quyết định che email theo vai; identity chỉ có route nội bộ `/users/search`, `/users/lookup-by-ids`.
+> - `membershipVersion` vẫn **không cần**: không có ngữ cảnh tổ chức trong JWT, mọi kiểm tra đọc DB mỗi request; bộ chọn ngữ cảnh chỉ lưu ở client.
+>
+> **Còn lại [CHƯA HOÀN THIỆN]:** Phase 3 — gỡ / thu hồi / chuyển giao owner, owner tự rời. Phase 4 — quyền quản lý chiến dịch theo vai (`CAMPAIGN_CREATE`, `CAMPAIGN_MANAGE_ANY` mới khai báo), sửa các chỗ thiếu kiểm quyền campaign / SOS, lọc trang chiến dịch theo ngữ cảnh. Vòng đời riêng của dấu tích xanh.
 >
 > **Điều chỉnh cho kiến trúc microservice** (tài liệu gốc viết như thể chỉ có một DB):
 > - `User` nằm ở identity-service; `Organization`, hồ sơ và membership nằm ở incident-service. `OrgMembership` = bảng `organization_members` sẵn có, thêm cột `role`.
@@ -14,7 +20,7 @@ Sep 26, 2026 · @Minh
 > - User không được tạo trong transaction duyệt: incident gọi identity `POST /internal/v1/users/ensure` (find-or-create, idempotent theo email) **trước** transaction.
 > - Email xác nhận owner gửi sau commit (không qua outbox); email onboarding sau duyệt đi qua outbox `ORG_OWNER_ONBOARD`.
 > - Hết hạn 14 ngày do một sweeper chạy mỗi giờ trong worker incident; chuyển sang `PENDING_REVIEW` vẫn nằm trong transaction của lần xác nhận cuối.
-> - `membershipVersion` **chưa làm**: JWT không mang membership, incident đọc membership trực tiếp mỗi request. Để lại cho Phase 2 cùng bộ chọn ngữ cảnh.
+> - `membershipVersion` **không làm**: JWT không mang membership, incident đọc membership trực tiếp mỗi request (Phase 2 xác nhận không cần).
 > - Bất biến 1 được bảo vệ bằng constraint trigger `DEFERRABLE INITIALLY DEFERRED` (xem `01-data-model.md`).
 
 ## Tóm tắt

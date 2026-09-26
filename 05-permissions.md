@@ -39,7 +39,8 @@
 | OTP (6 số) | Email | 10 phút, tối đa 5 lần sai | Mở đơn DRAFT và lấy tracking token | `organization-application-otp.service.ts` |
 | LINK token | Link trong email OTP | 10 phút | Xác định email trên form | `resolveEmailLink()` |
 | Tracking token (`?token=`) | Xác thực OTP thành công; kèm trong các email gửi người nộp | 180 ngày, dùng lại được | Xem, lưu nháp, tải giấy tờ, nộp, gửi lại lời mời, rút **mọi đơn có cùng `submitterEmail`** | `resolveTrackingToken()`, `loadForApplicant()` |
-| Token xác nhận owner (path `/owner-confirmations/:token`) | Email `ORG_OWNER_CONFIRMATION_REQUEST` tới từng owner | 14 ngày; gửi lại thì token cũ mất hiệu lực | Xem tóm tắt đơn, xác nhận, từ chối — **sở hữu hộp thư là bằng chứng đồng thuận**; lưu sha256 | `owner-confirmation.service.ts` |
+| Token xác nhận owner (path `/owner-confirmations/:token`) | Email `ORG_OWNER_CONFIRMATION_REQUEST` tới từng owner (đơn NEW_ORG và đề xuất ADD_OWNER) | 14 ngày; gửi lại thì token cũ mất hiệu lực | Xem tóm tắt đơn, xác nhận, từ chối — **sở hữu hộp thư là bằng chứng đồng thuận**; lưu sha256 | `owner-confirmation.service.ts` |
+| Token lời mời thành viên (path `/api/v1/organization-invitations/:token`) | Email `ORG_INVITATION` khi lời mời được duyệt (SENT) | 7 ngày (`ORG_INVITATION_TTL_DAYS`); lưu sha256 | Xem tóm tắt, chấp nhận (thành MEMBER), từ chối — không cần đăng nhập; JWT (nếu có) chỉ để cảnh báo `session_mismatch` | `INC/modules/organization/organization-invitation.service.ts` |
 
 ### 1.4 Token một lần khác
 
@@ -54,7 +55,7 @@
 
 - **Role ở identity:** `ADMIN`, `USER` (role `ORG_OWNER` và tài khoản `accountType = ORG` đã bị xoá bởi migration `20260926100000_drop_org_accounts`). Hệ thống permission set tồn tại nhưng **không được dùng để phân quyền** (`ID/middleware/authorize.middleware.ts` không được route nào gọi).
 - **Kiểm tra admin:** tất cả đều là `req.user.role.toLowerCase() === "admin"`, viết lặp lại ở từng controller hoặc middleware (identity `requireAdmin`, reward `requireAdmin`, incident inline trong từng controller).
-- **Quyền theo ngữ cảnh** (lưu ở incident): vai trong tổ chức (`organization_members.role`: `LEGAL_REPRESENTATIVE` và `OWNER` là **owner**, ngoài ra `ADMIN`, `CAMPAIGN_MANAGER` — chưa có luồng gán — và `MEMBER`), kiểm tra bằng `organization_member.repository.ts > isOwner(), findActiveRole()`, `campaign.createdBy`, manager (`campaign_managers`), volunteer APPROVED, chủ report, người được giao task.
+- **Quyền theo ngữ cảnh** (lưu ở incident): vai trong tổ chức (`organization_members.role`: `LEGAL_REPRESENTATIVE` và `OWNER` là **owner**, ngoài ra `ADMIN`, `CAMPAIGN_MANAGER`, `MEMBER` — gán bằng "đổi vai", xem §2.3). Quyền quản lý tổ chức suy ra từ vai theo **ma trận duy nhất** `DC/org-permissions.ts` và được kiểm tra qua `INC/modules/organization/org-access.service.ts > assertOrgPermission()` (đọc DB mỗi request, không có ngữ cảnh tổ chức trong JWT). Quyền campaign vẫn theo `campaign.createdBy`, manager (`campaign_managers`), owner tổ chức khi tạo — **chưa đổi cho tới phase 4**. Ngoài ra: volunteer APPROVED, chủ report, người được giao task.
 - **Phía client:** link Admin chỉ hiện khi `user.roleId === ADMIN_ROLE_ID` (UUID cứng trong `FE/constants/roles.ts`). Guard trong `AdminLayout` **bị comment out**, nên mọi user đăng nhập đều vào được `/admin/*`. Việc chặn thực sự nằm ở API.
 
 ## 2. Ma trận phân quyền
@@ -98,21 +99,44 @@ Cột:
 
 ### 2.3 Tổ chức
 
-Cột **Owner** = membership vai `LEGAL_REPRESENTATIVE` hoặc `OWNER` (một tổ chức có thể có nhiều owner, ai cũng đủ quyền).
+**Ma trận quyền theo vai** (`DC/org-permissions.ts > ROLE_PERMISSIONS`, `hasOrgPermission()`):
 
-| Hành động | Khách | User | Owner | Thành viên | Admin | Nơi kiểm tra |
-|---|---|---|---|---|---|---|
-| Tạo tổ chức trực tiếp | ❌ | ❌ | ❌ | ❌ | ❌ (chỉ service có `INTERNAL_INCIDENT_API_KEY`) | `requireInternalIncidentApiKey()` |
-| Xem danh sách, chi tiết, theo slug | ❌ | ✅ | ✅ | ✅ | ✅ | `authenticate` |
-| Sửa thông tin tổ chức | ❌ | ❌ | ✅ | ❌ | ❌ | `updateOrganization()`, `assertOwner()` |
-| Gửi lại email xác minh | ❌ | ❌ | ✅ | ❌ | ❌ | `resendOrganizationContactVerificationEmail()` |
-| Xác minh email liên hệ (click link) | ✅ | ✅ | ✅ | ✅ | ✅ | Token |
-| Duyệt hoặc ban tổ chức | ❌ | ❌ | ❌ | ❌ | ✅ | `adminVerifyOrganization` |
-| Xin gia nhập | ❌ | ⚠️ (chưa là thành viên, chưa có PENDING) | ❌ | ❌ | ⚠️ | `createJoinRequest()` |
-| Xem và xử lý yêu cầu gia nhập | ❌ | ❌ | ✅ | ❌ | ❌ | `processJoinRequest()` |
-| Huỷ yêu cầu gia nhập của mình | ❌ | ⚠️ (khi PENDING) | | | | `cancelJoinRequest()` |
-| Rời tổ chức | ❌ | | ❌ (owner cuối cùng: DB chặn `ORG_MUST_HAVE_OWNER`) | ✅ | | `leaveOrganization()` |
-| Xem danh sách thành viên | ❌ | 🔓 | ✅ | 🔓 | ✅ | Kiểm tra owner bị comment out (`listMembersForOwner()`) |
+| Quyền (`OrgPermission`) | LEGAL_REPRESENTATIVE / OWNER | ADMIN | CAMPAIGN_MANAGER | MEMBER |
+|---|---|---|---|---|
+| `ORG_EDIT` — sửa hồ sơ, gửi lại email xác minh | ✅ | ✅ | ❌ | ❌ |
+| `MEMBER_APPROVE` — xem và xử lý yêu cầu gia nhập, duyệt / từ chối lời mời | ✅ | ✅ | ❌ | ❌ |
+| `MEMBER_INVITE` — mời người có tài khoản làm MEMBER, tìm user | ✅ | ✅ | ✅ | ✅ |
+| `MEMBER_MANAGE` — đổi vai, gỡ thành viên | ✅ | ⚠️¹ | ❌ | ❌ |
+| `OWNER_PROPOSE` — đề xuất thêm owner (đơn ADD_OWNER) | ✅ | ❌ | ❌ | ❌ |
+| `CAMPAIGN_CREATE`, `CAMPAIGN_MANAGE_ANY` | ✅ | ✅ | chỉ `CAMPAIGN_CREATE` | ❌ |
+
+¹ `assignableRoles(actor)`: owner gán được `ADMIN`, `CAMPAIGN_MANAGER`, `MEMBER`; admin chỉ gán được `CAMPAIGN_MANAGER`, `MEMBER`. `canActOnMember(actor, target)`: không ai đổi vai / gỡ owner hoặc LR (phase 3), admin không tác động admin khác, không tự tác động chính mình (`INC/modules/organization/organization.service.ts > changeMemberRole(), removeMember()`).
+
+`CAMPAIGN_CREATE` / `CAMPAIGN_MANAGE_ANY` mới **khai báo** trong ma trận và trả trong `permissions`; `createCampaign()` vẫn chỉ cho owner và quyền quản lý campaign chưa theo vai — **[CHƯA HOÀN THIỆN] phase 4**.
+
+Mọi response tổ chức có người xem (`GET /:id`, `/by-slug/:slug`, `/`, `/my`) kèm `my_role`, `is_owner`, `is_member` và `permissions { can_edit_org, can_approve_members, can_invite, can_manage_members, can_propose_owners, can_create_campaign, can_manage_all_campaigns, assignable_roles }` (`permissionsFor(role)`); client ẩn / hiện nút theo object này.
+
+| Hành động | Khách | User | Owner | Admin tổ chức | CM / Member | Admin nền tảng | Nơi kiểm tra |
+|---|---|---|---|---|---|---|---|
+| Tạo tổ chức trực tiếp | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ (chỉ service có `INTERNAL_INCIDENT_API_KEY`) | `requireInternalIncidentApiKey()` |
+| Xem danh sách, chi tiết, theo slug | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | `authenticate` |
+| Sửa thông tin, gửi lại email xác minh | ❌ | ❌ | ✅ | ✅ | ❌ | ❌ | `ORG_EDIT` |
+| Xác minh email liên hệ (click link) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | Token |
+| Duyệt hoặc ban tổ chức | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | `adminVerifyOrganization` |
+| Xin gia nhập | ❌ | ⚠️ (chưa là thành viên, chưa có PENDING) | ❌ | ❌ | ❌ | ⚠️ | `createJoinRequest()` |
+| Xem và xử lý yêu cầu gia nhập | ❌ | ❌ | ✅ | ✅ | ❌ | ❌ | `MEMBER_APPROVE` |
+| Huỷ yêu cầu gia nhập của mình | ❌ | ⚠️ (khi PENDING) | | | | | `cancelJoinRequest()` |
+| Tìm user để mời (`GET /:id/user-search`) | ❌ | ❌ | ✅ (email đầy đủ) | ✅ (email ẩn) | ✅ (email ẩn) | ❌ | `MEMBER_INVITE`; email đầy đủ chỉ khi có `OWNER_PROPOSE` |
+| Tạo lời mời MEMBER | ❌ | ❌ | ✅ (gửi ngay) | ✅ (gửi ngay) | ✅ (chờ duyệt) | ❌ | `MEMBER_INVITE`; có `MEMBER_APPROVE` thì SENT ngay |
+| Xem lời mời | ❌ | ❌ | ✅ tất cả | ✅ tất cả | ⚠️ chỉ lời mời của mình | ❌ | `organization-invitation.service.ts > list()` |
+| Duyệt / từ chối lời mời | ❌ | ❌ | ✅ | ✅ | ❌ | ❌ | `MEMBER_APPROVE` |
+| Huỷ lời mời đang mở | ❌ | ❌ | ✅ | ✅ | ⚠️ lời mời của mình | ❌ | `cancel()` |
+| Chấp nhận / từ chối lời mời (theo token) | ⚠️ | ⚠️ | | | | | Token lời mời (§1.3) |
+| Đổi vai, gỡ thành viên | ❌ | ❌ | ✅ (trừ owner) | ⚠️¹ | ❌ | ❌ | `MEMBER_MANAGE` + `canActOnMember()` |
+| Đề xuất thêm owner, xem / huỷ đề xuất, gửi lại lời xác nhận | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | `OWNER_PROPOSE` (`owner-proposal.service.ts`) |
+| Duyệt / từ chối đề xuất owner | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ (khi PENDING_REVIEW) | `approveAddOwner()` |
+| Rời tổ chức | ❌ | | ❌ (owner cuối cùng: DB chặn `ORG_MUST_HAVE_OWNER`) | ✅ | ✅ | | `leaveOrganization()` |
+| Xem danh sách thành viên (kèm `role`) | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | Không có guard — cần xác nhận có chủ ý công khai hay không (`listMembersForOwner()`) |
 
 ### 2.4 Báo cáo sự cố
 
@@ -198,6 +222,6 @@ Chi tiết từng vấn đề ở [99-open-issues.md](99-open-issues.md) mục A
 4. `request-password-reset` trả token reset trong response.
 5. `PATCH /admin/gift-redemptions/:id/status` thiếu kiểm tra admin.
 6. `PUT /campaigns/:id` cho người tạo đổi `status` tuỳ ý.
-7. Xem danh sách thành viên tổ chức, danh sách volunteer đã duyệt, giải quyết SOS và trạng thái job AI đều không kiểm tra quyền.
+7. Danh sách volunteer đã duyệt, giải quyết SOS và trạng thái job AI không kiểm tra quyền (campaign / SOS để phase 4). Danh sách thành viên tổ chức cũng không có guard — cần xác nhận.
 8. Guard `/admin` phía client bị comment out.
-9. Refresh token đổi claim `role` thành UUID, làm admin mất quyền (theo hướng an toàn, nhưng là bug).
+9. ~~Refresh token đổi claim `role` thành UUID~~ — đã sửa (`refreshAccessToken()` dùng tên role).

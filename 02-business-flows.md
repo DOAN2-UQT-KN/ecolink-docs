@@ -27,6 +27,9 @@
 | F16 | Owner cập nhật thông tin tổ chức | Tổ chức |
 | F17 | Admin duyệt hoặc ban tổ chức | Tổ chức |
 | F18 | Xin gia nhập, duyệt, huỷ, rời tổ chức | Tổ chức |
+| F18b | Mời thành viên (duyệt → chấp nhận qua email) | Tổ chức |
+| F18c | Đổi vai, gỡ thành viên (không phải owner) | Tổ chức |
+| F18d | Đề xuất thêm owner (đơn ADD_OWNER) | Tổ chức |
 | F19 | Tạo báo cáo sự cố (report) và phân tích AI | Sự cố |
 | F20 | Chủ report sửa, thêm ảnh, xoá ảnh, xoá report | Sự cố |
 | F21 | Admin duyệt hoặc ban report | Sự cố |
@@ -402,7 +405,7 @@ sequenceDiagram
 ```
 
 ### F16 — Owner cập nhật thông tin tổ chức
-- `PUT /api/v1/organizations/:id` (chỉ người có vai owner) với name, description*, logoUrl, backgroundUrl, contactEmail (BR-083).
+- `PUT /api/v1/organizations/:id` (người có quyền `ORG_EDIT`: owner, LR, ADMIN) với name, description*, logoUrl, backgroundUrl, contactEmail (BR-083).
 - Kiểm tra tên + email không trùng với tổ chức khác (BR-081).
 - Nếu contactEmail thay đổi: `isEmailVerified=false` và gửi link xác minh (F15). Email liên hệ không liên quan tới tài khoản đăng nhập nào.
 - Enqueue dịch mô tả (F45).
@@ -420,9 +423,9 @@ sequenceDiagram
 ### F18 — Xin gia nhập, duyệt, huỷ, rời tổ chức
 1. Người dùng: `POST /api/v1/organizations/:id/join-requests`.
    - Chưa có membership nào (kể cả vai owner), chưa có yêu cầu PENDING (BR-085).
-   - Tạo PENDING và gửi thông báo `VOLUNTEER_REQUEST` cho **mọi owner**.
-2. Owner (bất kỳ): `GET /:id/join-requests`, rồi `PUT /join-requests/process {requestId, approved}`:
-   - Duyệt: trong 1 transaction, request APPROVED (14) và upsert `organization_members` vai `MEMBER`, `source = JOIN_REQUEST`. Gửi `VOLUNTEER_APPROVED`.
+   - Tạo PENDING và gửi thông báo `VOLUNTEER_REQUEST` cho **mọi người có `MEMBER_APPROVE`** (owner, LR, ADMIN — `orgAccessService.userIdsWith()`).
+2. Người có `MEMBER_APPROVE`: `GET /:id/join-requests`, rồi `PUT /join-requests/process {requestId, approved}` (BR-086):
+   - Duyệt: trong 1 transaction, request APPROVED (14) và `grantMembership` vai `MEMBER`, `source = JOIN_REQUEST`. Gửi `VOLUNTEER_APPROVED`.
    - Từ chối: request REJECTED (18). Gửi `VOLUNTEER_REJECTED`.
 3. Người xin: `DELETE /join-requests/cancel {requestId}` → xoá mềm (chỉ khi PENDING).
 4. Thành viên: `DELETE /:id/members/me` → xoá mềm membership. Người có vai owner không được rời (owner cuối cùng → 409 ORG_MUST_HAVE_OWNER, còn lại 400 — BR-088).
@@ -434,9 +437,9 @@ sequenceDiagram
   actor U as Người dùng
   participant INC as incident
   participant NS as notification
-  actor O as Owner tổ chức
+  actor O as Owner / Admin tổ chức
   U->>INC: POST /organizations/:id/join-requests
-  INC->>NS: VOLUNTEER_REQUEST → mọi owner
+  INC->>NS: VOLUNTEER_REQUEST → owner / LR / ADMIN
   O->>INC: PUT /organizations/join-requests/process
   alt approved
     INC->>INC: TX request=14 + organization_members
@@ -446,6 +449,53 @@ sequenceDiagram
     INC->>NS: VOLUNTEER_REJECTED → U
   end
 ```
+
+### F18b — Mời thành viên
+1. Thành viên bất kỳ (`MEMBER_INVITE`) mở dialog "Mời thành viên", tìm người qua `GET /api/v1/organizations/:id/user-search?q=` (incident gọi identity `POST /internal/v1/users/search`; email ẩn bớt trừ khi người gọi có `OWNER_PROPOSE` — BR-337).
+2. `POST /api/v1/organizations/:id/invitations {user_id}` (BR-333): identity `POST /internal/v1/users/lookup-by-ids` kiểm tra ACTIVE và lấy email.
+   - Người mời có `MEMBER_APPROVE` → lời mời **SENT** ngay: token 32 byte (lưu sha256), hạn 7 ngày, email `ORG_INVITATION` với link `/organizations/invitations?token=`.
+   - Không có → **PENDING_APPROVAL**, website `ORG_INVITATION_PENDING` tới người có quyền duyệt.
+3. Người duyệt: `PUT /:id/invitations/:invitationId/approve` → SENT + email; `/reject` → REJECTED + `ORG_INVITATION_REJECTED` cho người mời (BR-334). Người mời hoặc người duyệt huỷ được bằng `DELETE` khi còn mở (BR-335).
+4. Người được mời mở link (không cần đăng nhập): `GET /api/v1/organization-invitations/:token` (có `session_mismatch` nếu đang đăng nhập tài khoản khác), `POST /:token/accept` → transaction khoá lời mời, `grantMembership(MEMBER, source INVITATION)` nếu chưa có vai, ACCEPTED; `POST /:token/decline` → DECLINED (BR-336).
+5. Sweeper mỗi giờ chuyển lời mời SENT quá hạn sang EXPIRED (`owner-confirmation-expiry.job.ts`).
+- **File:** `INC/modules/organization/organization-invitation.{service,controller,routes}.ts`, `organization-member-notify.client.ts`, `ID/internal/internal.routes.ts`.
+
+```mermaid
+sequenceDiagram
+  actor M as Thành viên
+  actor A as Owner / Admin
+  participant INC as incident
+  participant ID as identity
+  participant NS as notification
+  actor U as Người được mời
+  M->>INC: GET /organizations/:id/user-search?q=
+  INC->>ID: POST /internal/v1/users/search
+  M->>INC: POST /organizations/:id/invitations {user_id}
+  INC->>ID: POST /internal/v1/users/lookup-by-ids
+  alt người mời có MEMBER_APPROVE
+    INC->>NS: ORG_INVITATION (email) → U
+  else
+    INC->>NS: ORG_INVITATION_PENDING → owner / admin
+    A->>INC: PUT /invitations/:id/approve
+    INC->>NS: ORG_INVITATION (email) → U
+  end
+  U->>INC: POST /organization-invitations/:token/accept
+  INC->>INC: TX grantMembership(MEMBER) + ACCEPTED
+```
+
+### F18c — Đổi vai, gỡ thành viên
+- `PATCH /api/v1/organizations/:id/members/:userId/role {role}` (BR-331): cần `MEMBER_MANAGE`; `role ∈ assignableRoles(actor)`; `canActOnMember(actor, target)`; cập nhật `organization_members.role` (`changeMembershipRole()`); website `ORG_MEMBERSHIP_CHANGED` tới người bị đổi.
+- `DELETE /api/v1/organizations/:id/members/:userId` (BR-332): cùng giới hạn; xoá mềm; `ORG_MEMBERSHIP_CHANGED` (`removed`).
+- Owner / LR không đổi vai hay gỡ được qua đây — thu hồi / chuyển giao owner là phase 3 **[CHƯA HOÀN THIỆN]**.
+- **File:** `organization.service.ts > changeMemberRole(), removeMember()`, `organization-membership.service.ts > changeMembershipRole()`.
+
+### F18d — Đề xuất thêm owner (ADD_OWNER)
+1. Owner mở "Đề xuất thêm owner", mỗi dòng chọn tài khoản có sẵn (AutoComplete, email đầy đủ) hoặc gõ email chưa có tài khoản, kèm họ tên; một lý do chung.
+2. `POST /api/v1/organizations/:id/owner-proposals {owners:[{user_id?, email?, full_name}], reason}` (BR-319): tạo `organization_applications` `type = ADD_OWNER`, `organizationId`, `submitterEmail` = email JWT, `profile` = snapshot tổ chức (+ `proposalReason`), status AWAITING_OWNER_CONFIRMATION; mỗi người nhận `ORG_OWNER_CONFIRMATION_REQUEST` (`isAddOwner`).
+3. Người được đề xuất xác nhận / từ chối như F11. Từ chối hoặc hết hạn → đề xuất WITHDRAWN, người đề xuất nhận email kèm link trang tổ chức (BR-320). Đủ xác nhận → PENDING_REVIEW.
+4. Owner xem `GET /:id/owner-proposals`, huỷ (`POST .../:applicationId/cancel`), gửi lại (`POST .../owners/:candidateId/resend`) — BR-321.
+5. Admin nền tảng duyệt trong màn thẩm định: `approveAddOwner()` — `ensureUsers` (tạo tài khoản PENDING_ACTIVATION cho email mới), cấp / nâng vai `OWNER` dưới trần quota, outbox `ORG_OWNER_ONBOARD` như F12 bước 6 (BR-322). Từ chối như đơn thường; không có "yêu cầu bổ sung".
+- **File:** `INC/modules/organization_application/owner-proposal.{service,controller}.ts`, `owner-confirmation.service.ts`, `organization-application-admin.service.ts > approveAddOwner()`.
 
 ---
 
@@ -942,7 +992,11 @@ sequenceDiagram
 | ORG_OWNER_ATTACHED | email | owner đã có tài khoản | Sau khi duyệt | `organization-owner-onboard.publisher.ts > publish()` |
 | ORGANIZATION_CONTACT_VERIFY | email | email liên hệ | Tạo tổ chức nội bộ, đổi email, gửi lại | `organization.service.ts` |
 | ORGANIZATION_APPROVED / REJECTED | website | mọi owner tổ chức | Admin duyệt hoặc ban tổ chức | `organization.service.ts > adminVerifyOrganization()` |
-| VOLUNTEER_REQUEST | website | mọi owner tổ chức / manager campaign | Có người xin gia nhập | `organization.service.ts`, `campaign_joining_request.service.ts` |
+| ORG_INVITATION | email | người được mời | Lời mời SENT (tạo bởi người có quyền duyệt hoặc vừa được duyệt) | `organization-invitation.service.ts > sendInvitationEmail()` |
+| ORG_INVITATION_PENDING | website | owner / LR / ADMIN | Lời mời cần duyệt | `organization-member-notify.client.ts` |
+| ORG_INVITATION_REJECTED | website | người mời | Lời mời bị từ chối | `organization-member-notify.client.ts` |
+| ORG_MEMBERSHIP_CHANGED | website | thành viên bị đổi vai / gỡ | Đổi vai, gỡ | `organization-member-notify.client.ts` |
+| VOLUNTEER_REQUEST | website | owner / LR / ADMIN tổ chức / manager campaign | Có người xin gia nhập | `organization.service.ts`, `campaign_joining_request.service.ts` |
 | VOLUNTEER_APPROVED / REJECTED | website | người xin | Được duyệt hoặc bị từ chối | như trên |
 | CAMPAIGN_CREATED | website | thành viên tổ chức | Tạo campaign | `campaign.service.ts > createCampaign()` |
 | CAMPAIGN_VERIFY_INVITE | website | người dân trong 5 km | Admin duyệt campaign | `adminVerifyCampaign()` |

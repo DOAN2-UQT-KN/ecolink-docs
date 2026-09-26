@@ -90,7 +90,8 @@ Nguồn: `ecolink-client/src/routes/index.tsx > router`. Tổng: **45 route entr
 | `/organizations/create` | `<Navigate to="/organizations/apply" replace />` | Main | — | — | Redirect (comment trong router: chỉ lập tổ chức qua pipeline hồ sơ) |
 | `/organizations/apply` | `app/(pages)/(main)/organizations/apply/page.tsx` | Main | **Không** (cổng OTP email; xác thực xong chuyển sang `/apply/edit/:id?token=`) | — | Không |
 | `/organizations/apply/status/:id` | `.../organizations/apply/status/page.tsx > ApplicationStatusPage` | Main | Không (`?token=` tracking) | — | Không |
-| `/organizations/owner-confirm` | `.../organizations/owner-confirm/page.tsx > OwnerConfirmPage` | Main | Không (`?token=` xác nhận owner; JWT nếu có chỉ để cảnh báo lệch email) | — | Không |
+| `/organizations/owner-confirm` | `.../organizations/owner-confirm/page.tsx > OwnerConfirmPage` | Main | Không (`?token=` xác nhận owner; JWT nếu có chỉ để cảnh báo lệch email; câu dẫn riêng khi `application_type = ADD_OWNER`) | — | Không |
+| `/organizations/invitations` | `.../organizations/invitations/page.tsx` | Main | Không (`?token=` lời mời thành viên; JWT nếu có chỉ để cảnh báo `session_mismatch`) | — | Không |
 | `/organizations/apply/edit/:id` | `.../organizations/apply/edit/page.tsx > ApplicationEditPage` | Main | Không (`?token=`); trình soạn nháp, chỉ khi status ∈ `EDITABLE_APPLICATION_STATUSES` (DRAFT, NEEDS_REVISION). Status DRAFT hiện `_components/DraftLinkNotice.tsx` (đã gửi link tới email người nộp + nút sao chép `window.location.href`) | — | Kiểm tra status trong page; context tự `replace` sang trang theo dõi nếu status đổi |
 | `/organizations/email-verified` | `.../organizations/email-verified/page.tsx` | Main | Không; chỉ hiển thị lỗi theo `?error=` | — | Không |
 | `/organizations/me` | `.../organizations/me/page.tsx` | Main | Có (qua API 401) | — | Không |
@@ -227,10 +228,15 @@ Ghi chú: `(hook)` = hàm trong `apis/`, path là path gửi tới `VITE_API_URL
 | | join/cancel/leave như trên (`.../organizations/[id]/_context/OrganizationDetailContext.tsx`) | |
 | | `useGetCampaigns` (tab campaign) | GET `/api/v1/campaigns?organization_id=...` |
 | | `useGetMembersByOrg` (`apis/organization/organizationById.ts`) | GET `/api/v1/organizations/:organization_id/members` |
-| | `useGetJoinRequestsByOrg` + `useProcessJoinRequest` (chỉ owner) | GET `/api/v1/organizations/:organization_id/join-requests`; PUT `api/v1/organizations/join-requests/process` |
-| | `useResendContactEmail` (owner, khi email chưa verify) | POST `/api/v1/organizations/:id/resend-contact-email` |
-| | `useUpdateOrganization` (owner — "Edit group", `UpdateOrganizationPopover`) + `uploadToCloudinary` | PUT `/api/v1/organizations/:id` |
-| `/organizations/me` | `useGetMyOrganizations` (`is_owner: true`), `useLeaveOrganization`, `useUpdateOrganization` | GET `/api/v1/organizations/my`; DELETE `/api/v1/organizations/:id/members/me`; PUT `/api/v1/organizations/:id` |
+| | `useGetJoinRequestsByOrg` + `useProcessJoinRequest` (khi `permissions.can_approve_members`) | GET `/api/v1/organizations/:organization_id/join-requests`; PUT `api/v1/organizations/join-requests/process` |
+| | `useResendContactEmail` (`permissions.can_edit_org`, khi email chưa verify) | POST `/api/v1/organizations/:id/resend-contact-email` |
+| | `useUpdateOrganization` (`permissions.can_edit_org` — "Edit group", `UpdateOrganizationPopover`) + `uploadToCloudinary` | PUT `/api/v1/organizations/:id` |
+| | `useChangeMemberRole`, `useRemoveMember` (`apis/organization/memberManagement.ts`; menu mỗi dòng trong `OrganizationMembers.tsx`, chỉ hiện khi `canActOnMember()`) | PATCH `/api/v1/organizations/:id/members/:userId/role` body `{ role }`; DELETE `/api/v1/organizations/:id/members/:userId` |
+| | `useSearchOrganizationUsers` (`SelectListUser`, `AutoCompleteUser`) | GET `/api/v1/organizations/:id/user-search?q=` |
+| | `useCreateInvitation` (`_components/InviteMemberDialog.tsx`, mọi thành viên có `can_invite`), `useGetInvitations`, `useApproveInvitation`, `useRejectInvitation`, `useCancelInvitation` (`_components/OrganizationInvitations.tsx`, tab "Invitations") (`apis/organization/invitations.ts`) | POST `/api/v1/organizations/:id/invitations` body `{ user_id }`; GET `…/invitations?status=`; PUT `…/invitations/:invitationId/approve|reject`; DELETE `…/invitations/:invitationId` |
+| | `useCreateOwnerProposal`, `useGetOwnerProposals`, `useCancelOwnerProposal`, `useResendOwnerProposalInvite` (`_components/OwnerProposals.tsx` trong card Owners, chỉ khi `can_propose_owners`) (`apis/organization/ownerProposals.ts`) | POST `/api/v1/organizations/:id/owner-proposals` body `{ owners: [{ user_id?, email?, full_name }], reason }`; GET `…/owner-proposals`; POST `…/owner-proposals/:applicationId/cancel`; POST `…/owners/:candidateId/resend` |
+| `/organizations/me` | `useGetMyOrganizations` (**mọi vai**, không còn `is_owner: true`; cột "Vai của bạn"; nhãn "Đang chọn" cho org ngữ cảnh), `useLeaveOrganization`, `useUpdateOrganization` | GET `/api/v1/organizations/my`; DELETE `/api/v1/organizations/:id/members/me`; PUT `/api/v1/organizations/:id` |
+| `/organizations/invitations` | `useGetInvitationByToken`, `useAcceptInvitation`, `useDeclineInvitation` (`apis/organization/invitations.ts`) | GET `/api/v1/organization-invitations/:token`; POST `…/:token/accept` (→ `organization_slug`, chuyển tới trang tổ chức); POST `…/:token/decline` |
 | `/organizations/apply` (bước email) | `useRequestApplicationOtp`, `useVerifyApplicationOtp` (`apis/organization-application/emailOtp.ts`) | POST `/api/v1/organization-applications/email-otp`; POST `/api/v1/organization-applications/email-otp/verify` → nhận `{application_id, tracking_token, resumed}` rồi push `/organizations/apply/edit/:id?token=` |
 | | `useResolveApplicationEmailLink` (khi URL có `?t=`) | GET `/api/v1/organization-applications/email-otp/link?token=` |
 | `/organizations/apply/status/:id` | `useGetApplication`, `useWithdrawApplication` (confirm dialog), `useResendOwnerInvite` (`_components/OwnerConfirmations.tsx`) | GET `/api/v1/organization-applications/:id?token=`; POST `/:id/withdraw?token=`; POST `/:id/owners/:candidateId/resend?token=` |
@@ -414,7 +420,11 @@ Ngoài `apis/` còn có các lời gọi trực tiếp: chat (`components/client
 - `persist` (storage mặc định = **localStorage**, key `auth_store`), `partialize` chỉ lưu `accessToken, user, refreshToken, permissions, ip`. **`is_authenticated` không được persist**; `onRehydrateStorage` đặt lại `is_authenticated=true, is_verified=true` nếu còn cả `accessToken` và `user`, rồi `has_hydrated=true`.
 - Actions: `setLoginSuccess(accessToken, user, refreshToken, permissions?)`, `setLogoutSuccess()` (xoá token/user/permissions/ip, `is_authenticated=false`), `setAccessToken`, `setRefreshToken`, `setUser`, `setIsAuthenticated`, `setHasHydrated`...
 - `permissions` không được client điền ở luồng nào (sign-in gọi `setLoginSuccess` không truyền permissions) — trường thừa.
-- `IUser.roleId` là trường duy nhất client dùng để phân quyền UI (`ecolink-client/apis/auth/models/user.ts`).
+- `IUser.roleId` là trường duy nhất client dùng cho quyền **nền tảng** (`ecolink-client/apis/auth/models/user.ts`). Quyền trong tổ chức lấy từ `organization.permissions` do API trả (xem §7).
+
+### 5.1b Ngữ cảnh tổ chức (Zustand)
+
+`ecolink-client/stores/useOrgContextStore.ts`: `activeOrganizationId | null`, persist localStorage, tự về `null` khi logout. `components/client/layout/OrgContextSwitcher.tsx` nằm trong menu user của `Header.tsx`: "Đang dùng với tư cách: Cá nhân / <tổ chức>", submenu radio liệt kê các tổ chức mình có vai (`useGetMyOrganizations`) kèm `RoleBadge`, lối tắt "Quản lý tổ chức"; tổ chức không còn trong danh sách thì tự về Cá nhân. Chỉ ảnh hưởng hiển thị (highlight ở `/organizations/me`); **không** gửi lên server — server kiểm quyền theo DB mỗi request. Trang campaign chưa dùng ngữ cảnh (phase 4).
 
 ### 5.2 Lưu token ở đâu
 
@@ -473,7 +483,7 @@ sequenceDiagram
     end
 ```
 
-- `PUBLIC_AUTH_PATHS` (so khớp bằng `url.includes`): `/api/v1/auth/sign-in`, `/sign-up`, `/refresh-token`, `/request-password-reset`, `/reset-password`, `/activate-account`, `/activation/resend`, `/api/v1/auth/oauth/`, và `/api/v1/organization-applications` (401 ở form hồ sơ nghĩa là tracking link hết hạn, không được đá về sign-in).
+- `PUBLIC_AUTH_PATHS` (so khớp bằng `url.includes`): `/api/v1/auth/sign-in`, `/sign-up`, `/refresh-token`, `/request-password-reset`, `/reset-password`, `/activate-account`, `/activation/resend`, `/api/v1/auth/oauth/`, `/api/v1/organization-applications` và `/api/v1/organization-invitations` (401 ở form hồ sơ nghĩa là tracking link hết hạn, không được đá về sign-in).
 - Chỉ retry 1 lần (`_retry`). Không có hàng đợi/khóa: nhiều request 401 đồng thời sẽ gọi refresh song song (mục 10).
 - Nếu refresh trả 2xx nhưng không có `data.data` → không làm gì, rơi xuống reject lỗi 401 gốc (không logout).
 - Refresh dùng `window.location.href` (full reload), không dùng router.
@@ -533,7 +543,14 @@ Client chỉ có **1 role cứng**: `ADMIN_ROLE_ID = "40ed59d7-5d7c-4ab2-88a2-a2
 | — nút "Attendance QR" | `campaign.can_manage_campaign` (owner hoặc manager, do API trả) và status = ACTIVE | `page.tsx`, `CampaignAttendanceQrButton.tsx` |
 | — tab "Join requests" + badge đếm | chỉ `isCampaignOwner` (manager không thấy) | `campaigns/[id]/_components/CampaignTabs.tsx` |
 | — nút "Add task", sửa/xoá task | chỉ `isCampaignOwner`; sửa/xoá ẩn khi task `status === COMPLETED` | `CampaignTask.tsx`, `components/client/shared/CampaignTaskCard.tsx` |
-| Organization detail — tag "Your group", nút "Edit group", tab "Join requests", nút "Resend contact email" | `organization.is_owner` do API trả (resend thêm điều kiện có contact email và chưa verify). Tab thành viên hiện danh sách `owners[]` (kèm nhãn người đại diện pháp lý) tách khỏi thành viên thường | `organizations/[id]/_context/OrganizationDetailContext.tsx > showYourGroupTag`, `HeroSection.tsx`, `OrganizationDetailTabs.tsx`, `GeneralInformation.tsx` |
+| Organization detail — tag "Your group" + `RoleBadge` | Có `my_role` (mọi vai) | `OrganizationDetailContext.tsx`, `HeroSection.tsx` |
+| Organization detail — nút "Edit group", "Resend contact email" | `permissions.can_edit_org` (resend thêm điều kiện có contact email và chưa verify) | `HeroSection.tsx`, `GeneralInformation.tsx` |
+| Organization detail — tab "Join requests" | `permissions.can_approve_members` | `OrganizationDetailTabs.tsx` |
+| Organization detail — tab "Invitations", nút "Invite member" | `permissions.can_invite`; dialog báo "cần owner/admin duyệt" khi không có `can_approve_members`; người không có quyền duyệt chỉ thấy lời mời của mình | `OrganizationDetailTabs.tsx`, `InviteMemberDialog.tsx`, `OrganizationInvitations.tsx` |
+| Organization detail — đổi vai / gỡ thành viên | `canActOnMember()` (bản client của rule server: có `can_manage_members`, target không phải owner / LR, admin không tác động admin, không phải chính mình); Select vai giới hạn theo `permissions.assignable_roles` | `apis/organization/models/organization.ts > canActOnMember()`, `OrganizationMembers.tsx` |
+| Organization detail — "Propose new owners" | `permissions.can_propose_owners`; dialog ≤ 5 dòng `AutoCompleteUser` (email đầy đủ, chọn user có sẵn hoặc "Dùng email chưa có tài khoản"), trạng thái từng người, gửi lại theo `next_resend_at`, huỷ | `OwnerProposals.tsx`, `components/form/AutoCompleteUser.tsx` |
+| Chọn người để mời | `SelectListUser`: chỉ user có sẵn, email ẩn bớt như server trả, người đã là thành viên bị làm mờ kèm badge vai | `components/form/SelectListUser.tsx`, `components/ui/RoleBadge.tsx` |
+| Nút "Leave" | Có vai nhưng không phải owner | `OrganizationDetailContext.tsx` |
 | — nút Join | `!is_owner`, `!is_member`, `joinListingShowsJoinButton(request_status)` | như trên, `modules/OrganizationCard/OrganizationCard.tsx` |
 | — nút Cancel | `joinListingShowsCancelButton(request_status)` | như trên |
 | — nút Leave | `!is_owner` và `is_member` | như trên |
@@ -551,7 +568,7 @@ Client chỉ có **1 role cứng**: `ADMIN_ROLE_ID = "40ed59d7-5d7c-4ab2-88a2-a2
 | Admin users — "Ban" | status = ACTIVE | `admin/users/_components/DataTable.tsx` |
 | Admin gift redemptions — đổi trạng thái | PROCESSING → SHIPPED/CANCELLED; SHIPPED → DELIVERED/CANCELLED; trạng thái khác không có lựa chọn | `admin/gifts/_components/RedeemsTable.tsx > nextStatuses()` |
 | Admin gift form | Gift `isActive === false` ở chế độ edit → form bị disable | `admin/gifts/_components/GiftFormDialog.tsx` |
-| Admin application review | `isClosed` (APPROVED/REJECTED/WITHDRAWN) hoặc NEEDS_REVISION khoá quyết định; nút "Claim" ẩn khi đã có `claimed_at`; card "Owners" (`OwnerRow`): giờ + IP xác nhận, tài khoản Ecolink, số tổ chức đang làm owner (≥ 2 tô màu), cảnh báo `same_ip_cluster`; email liên hệ khác email người nộp thì ghi "chưa xác thực" | `admin/organization-applications/_components/ApplicationReviewDialog.tsx` |
+| Admin application review | Đơn `type = ADD_OWNER`: banner "Đề xuất thêm owner cho <tổ chức>" (người đề xuất, lý do), ẩn kênh / người đại diện pháp lý / giấy tờ / lane / Blue Tick, không có "yêu cầu bổ sung", Duyệt gửi `{ decision: APPROVE }` không kèm lane; bảng danh sách có cột "Loại hồ sơ". `isClosed` (APPROVED/REJECTED/WITHDRAWN) hoặc NEEDS_REVISION khoá quyết định; nút "Claim" ẩn khi đã có `claimed_at`; card "Owners" (`OwnerRow`): giờ + IP xác nhận, tài khoản Ecolink, số tổ chức đang làm owner (≥ 2 tô màu), cảnh báo `same_ip_cluster`; email liên hệ khác email người nộp thì ghi "chưa xác thực" | `admin/organization-applications/_components/ApplicationReviewDialog.tsx` |
 | Admin application review — tab "Activity" | Modal chia 2 tab dưới header (tên tổ chức + trạng thái): "Information" (các card hồ sơ + khối Decision) và "Activity" (kèm số event). Timeline `events` mới nhất trước; người thao tác = `actor_name` → "Admin" (có `actor_id`) → "System" (ACCOUNT_PROVISIONED) / "Applicant"; DOCUMENT_VIEWED ẩn mặc định, bật bằng checkbox "Show document views"; RESUBMITTED hiện chip các trường đã sửa và ±số giấy tờ | `admin/organization-applications/_components/ApplicationActivity.tsx` |
 | Admin DataTable chung | `permission.role === 'staff'` mà không khai báo `canSelect`/`canEdit` → không cho chọn/sửa (hạ tầng, không trang nào truyền role staff) | `components/admin/shared/DataTable/DataTable.tsx` |
 
@@ -650,7 +667,7 @@ Các prefix gateway có nhưng client **không dùng**: `/api/v1/roles`, `/api/v
 | `app/(pages)/(main)/organizations/create/*` | Route `/organizations/create` đã redirect sang `/apply`; thư mục còn `OrganizationImageUpload.tsx`, `organization.service.ts` (chỉ `upload.service.ts` còn được `UpdateOrganizationPopover` import lại) |
 | `app/(pages)/(main)/gifts/_context/GiftContext.tsx > onViewMore()` | push `/gifts/:id` — route không tồn tại; hàm cũng không được component nào gọi |
 | `components/client/layout/Header.tsx` (menu nav) links `/about`, `/mission`, `/partnership`, `/support` | Không có route → NotFound |
-| `libs/notificationDisplay.ts > getNotificationHref()` | Fallback `/organizations/<organizationId>` dùng id làm slug → trang detail tra `by-slug` sẽ không tìm thấy |
+| `libs/notificationDisplay.ts > getNotificationHref()` (kind `ORG_INVITATION_PENDING`, `ORG_INVITATION_REJECTED`, `ORG_MEMBERSHIP_CHANGED` dẫn tới `/organizations/<organization_slug>`) | Fallback `/organizations/<organizationId>` dùng id làm slug → trang detail tra `by-slug` sẽ không tìm thấy |
 | Hàm API UNUSED | `registerAdminMedia`, `useRefreshToken`, `useSignOut`, `addReportMedia`, `deleteReport`, `deleteReportMedia`, `updateReport`, `useGetAllReports`, `useGetAllSOS`, `getOwnedOrganizations`, `getOrganizationById`, `createJoinRequest`, `verifyEmail`, `usePresignDocument`, org `getMyJoinRequests`, file trùng `getJoinRequestsByOrg.ts`/`getMembersByOrg.ts` → không có UI sửa/xoá report hay quản lý media report |
 | `constants/gamification.ts > PAYOUT_METRIC_OPTIONS` | Không dùng |
 | `loading.tsx` trong nhiều thư mục | Dead code (router không dùng) |
