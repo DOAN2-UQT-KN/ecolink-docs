@@ -39,7 +39,7 @@
 | OTP (6 số) | Email | 10 phút, tối đa 5 lần sai | Mở đơn DRAFT và lấy tracking token | `organization-application-otp.service.ts` |
 | LINK token | Link trong email OTP | 10 phút | Xác định email trên form | `resolveEmailLink()` |
 | Tracking token (`?token=`) | Xác thực OTP thành công; kèm trong các email gửi người nộp | 180 ngày, dùng lại được | Xem, lưu nháp, tải giấy tờ, nộp, gửi lại lời mời, rút **mọi đơn có cùng `submitterEmail`** | `resolveTrackingToken()`, `loadForApplicant()` |
-| Token xác nhận owner (path `/owner-confirmations/:token`) | Email `ORG_OWNER_CONFIRMATION_REQUEST` tới từng owner (đơn NEW_ORG và đề xuất ADD_OWNER) | 14 ngày; gửi lại thì token cũ mất hiệu lực | Xem tóm tắt đơn, xác nhận, từ chối — **sở hữu hộp thư là bằng chứng đồng thuận**; lưu sha256 | `owner-confirmation.service.ts` |
+| Token xác nhận owner (path `/owner-confirmations/:token`) | Email `ORG_OWNER_CONFIRMATION_REQUEST` tới từng owner (đơn NEW_ORG, owner change ADD_OWNER và người nhận TRANSFER_OWNER) | 14 ngày; gửi lại thì token cũ mất hiệu lực | Xem tóm tắt đơn, xác nhận, từ chối — **sở hữu hộp thư là bằng chứng đồng thuận**; lưu sha256 | `owner-confirmation.service.ts` |
 | Token lời mời thành viên (path `/api/v1/organization-invitations/:token`) | Email `ORG_INVITATION` khi lời mời được duyệt (SENT) | 7 ngày (`ORG_INVITATION_TTL_DAYS`); lưu sha256 | Xem tóm tắt, chấp nhận (thành MEMBER), từ chối — không cần đăng nhập; JWT (nếu có) chỉ để cảnh báo `session_mismatch` | `INC/modules/organization/organization-invitation.service.ts` |
 
 ### 1.4 Token một lần khác
@@ -93,7 +93,7 @@ Cột:
 | Xin OTP, xác thực OTP | ✅ | ✅ | ✅ | Rate limit | `rate-limit.middleware.ts` |
 | Xem, lưu nháp, tải giấy tờ, nộp, gửi lại lời mời, rút | ⚠️ | ⚠️ | ⚠️ | Có tracking token của email đó; lưu / tải / nộp chỉ khi DRAFT hoặc NEEDS_REVISION | `loadForApplicant()` |
 | Xem tóm tắt, xác nhận, từ chối làm owner | ⚠️ | ⚠️ | ⚠️ | Có token xác nhận; JWT (nếu có) chỉ để cảnh báo lệch email | `owner-confirmation.service.ts`, `optionalAuthenticate()` |
-| Danh sách và chi tiết đơn, xem giấy tờ | ❌ | ❌ | ✅ | Không bao giờ thấy DRAFT / AWAITING_OWNER_CONFIRMATION | `organization-application-admin.controller.ts > requireAdmin()`, `HIDDEN_FROM_ADMIN_STATUSES` |
+| Danh sách và chi tiết đơn, xem giấy tờ | ❌ | ❌ | ✅ | Chỉ đơn `NEW_ORG`; không bao giờ thấy DRAFT / AWAITING_OWNER_CONFIRMATION hay owner change (BR-349) | `organization-application-admin.controller.ts > requireAdmin()`, `HIDDEN_FROM_ADMIN_STATUSES` |
 | Claim | ❌ | ❌ | ⚠️ | Chưa bị admin khác claim | `claim()` |
 | Yêu cầu bổ sung, duyệt, từ chối, cấp Blue Tick | ❌ | ❌ | ✅ | Chỉ khi PENDING_REVIEW; không yêu cầu phải claim trước | `requestMoreInfo()`, `decide()`, `loadPendingReview()` |
 
@@ -107,10 +107,16 @@ Cột:
 | `MEMBER_APPROVE` — xem và xử lý yêu cầu gia nhập, duyệt / từ chối lời mời | ✅ | ✅ | ❌ | ❌ |
 | `MEMBER_INVITE` — mời người có tài khoản làm MEMBER, tìm user | ✅ | ✅ | ✅ | ✅ |
 | `MEMBER_MANAGE` — đổi vai, gỡ thành viên | ✅ | ⚠️¹ | ❌ | ❌ |
-| `OWNER_PROPOSE` — đề xuất thêm owner (đơn ADD_OWNER) | ✅ | ❌ | ❌ | ❌ |
+| `OWNER_PROPOSE` — owner change: thêm owner, thu hồi owner khác, chuyển giao vai của mình; xem / đồng ý / từ chối owner change | ✅ | ❌ | ❌ | ❌ |
 | `CAMPAIGN_CREATE`, `CAMPAIGN_MANAGE_ANY` | ✅ | ✅ | chỉ `CAMPAIGN_CREATE` | ❌ |
 
-¹ `assignableRoles(actor)`: owner gán được `ADMIN`, `CAMPAIGN_MANAGER`, `MEMBER`; admin chỉ gán được `CAMPAIGN_MANAGER`, `MEMBER`. `canActOnMember(actor, target)`: không ai đổi vai / gỡ owner hoặc LR (phase 3), admin không tác động admin khác, không tự tác động chính mình (`INC/modules/organization/organization.service.ts > changeMemberRole(), removeMember()`).
+¹ `assignableRoles(actor)`: owner gán được `ADMIN`, `CAMPAIGN_MANAGER`, `MEMBER`; admin chỉ gán được `CAMPAIGN_MANAGER`, `MEMBER`. `canActOnMember(actor, target)`: không ai đổi vai / gỡ owner hoặc LR qua đây (vai owner chỉ đổi qua owner change được các owner khác đồng ý, hoặc owner tự rút lui), admin không tác động admin khác, không tự tác động chính mình (`INC/modules/organization/organization.service.ts > changeMemberRole(), removeMember()`).
+
+**Owner change** (BR-339..BR-348): quyết trong tổ chức, không qua admin nền tảng.
+- ADD_OWNER: từng người được đề xuất xác nhận qua email **và** mọi owner khác (trừ người đề xuất) đồng ý.
+- REMOVE_OWNER: mọi owner trừ người đề xuất và người bị thu hồi đồng ý; tổ chức có 2 owner thì có hiệu lực ngay. Người bị thu hồi không phủ quyết được.
+- TRANSFER_OWNER: chỉ cho thành viên hiện tại không phải owner; người nhận chấp nhận qua email là đủ, owner khác chỉ được báo.
+- Owner tự hạ vai / rời: có hiệu lực ngay khi còn owner khác.
 
 `CAMPAIGN_CREATE` / `CAMPAIGN_MANAGE_ANY` mới **khai báo** trong ma trận và trả trong `permissions`; `createCampaign()` vẫn chỉ cho owner và quyền quản lý campaign chưa theo vai — **[CHƯA HOÀN THIỆN] phase 4**.
 
@@ -133,9 +139,13 @@ Mọi response tổ chức có người xem (`GET /:id`, `/by-slug/:slug`, `/`, 
 | Huỷ lời mời đang mở | ❌ | ❌ | ✅ | ✅ | ⚠️ lời mời của mình | ❌ | `cancel()` |
 | Chấp nhận / từ chối lời mời (theo token) | ⚠️ | ⚠️ | | | | | Token lời mời (§1.3) |
 | Đổi vai, gỡ thành viên | ❌ | ❌ | ✅ (trừ owner) | ⚠️¹ | ❌ | ❌ | `MEMBER_MANAGE` + `canActOnMember()` |
-| Đề xuất thêm owner, xem / huỷ đề xuất, gửi lại lời xác nhận | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | `OWNER_PROPOSE` (`owner-proposal.service.ts`) |
-| Duyệt / từ chối đề xuất owner | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ (khi PENDING_REVIEW) | `approveAddOwner()` |
-| Rời tổ chức | ❌ | | ❌ (owner cuối cùng: DB chặn `ORG_MUST_HAVE_OWNER`) | ✅ | ✅ | | `leaveOrganization()` |
+| Tạo owner change (ADD_OWNER / REMOVE_OWNER / TRANSFER_OWNER), xem danh sách, gửi lại lời xác nhận | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | `OWNER_PROPOSE` (`owner-change.service.ts`) |
+| Đồng ý / từ chối owner change | ❌ | ❌ | ⚠️ chỉ owner được hỏi (approver PENDING) | ❌ | ❌ | ❌ | `owner-change.service.ts > answer()` (BR-339, BR-347) |
+| Huỷ owner change | ❌ | ❌ | ⚠️ chỉ người đề xuất | ❌ | ❌ | ❌ | `cancel()` |
+| Chấp nhận nhận thêm / nhận chuyển giao vai owner (theo token) | ⚠️ | ⚠️ | | | ⚠️ người nhận chuyển giao là member | | Token xác nhận owner (§1.3) |
+| Duyệt owner change | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ (admin nền tảng không còn duyệt ADD_OWNER; can thiệp trực tiếp vai owner là việc sau) | BR-349 |
+| Tự hạ vai (`PATCH /:id/members/me/role`) | ❌ | ❌ | ⚠️ còn owner khác | ❌ | ❌ | | `stepDown()` |
+| Rời tổ chức | ❌ | | ⚠️ còn owner khác (owner cuối: 409 `ORG_MUST_HAVE_OWNER`) | ✅ | ✅ | | `leaveOrganization()`, `ownerStepOut()` |
 | Xem danh sách thành viên (kèm `role`) | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | Không có guard — cần xác nhận có chủ ý công khai hay không (`listMembersForOwner()`) |
 
 ### 2.4 Báo cáo sự cố

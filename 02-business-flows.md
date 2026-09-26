@@ -29,7 +29,10 @@
 | F18 | Xin gia nhập, duyệt, huỷ, rời tổ chức | Tổ chức |
 | F18b | Mời thành viên (duyệt → chấp nhận qua email) | Tổ chức |
 | F18c | Đổi vai, gỡ thành viên (không phải owner) | Tổ chức |
-| F18d | Đề xuất thêm owner (đơn ADD_OWNER) | Tổ chức |
+| F18d | Đề xuất thêm owner (owner change ADD_OWNER) | Tổ chức |
+| F18e | Thu hồi owner khác (REMOVE_OWNER) | Tổ chức |
+| F18f | Chuyển giao vai owner (TRANSFER_OWNER) | Tổ chức |
+| F18g | Owner tự hạ vai / rời tổ chức | Tổ chức |
 | F19 | Tạo báo cáo sự cố (report) và phân tích AI | Sự cố |
 | F20 | Chủ report sửa, thêm ảnh, xoá ảnh, xoá report | Sự cố |
 | F21 | Admin duyệt hoặc ban report | Sự cố |
@@ -318,7 +321,7 @@ sequenceDiagram
   O->>INC: GET /owner-confirmations/:token
   alt Xác nhận
     O->>INC: POST /:token/confirm
-    INC->>INC: TX FOR UPDATE: CONFIRMED (+ PENDING_REVIEW nếu là người cuối)
+    INC->>INC: TX FOR UPDATE: CONFIRMED (+ PENDING_REVIEW nếu là người cuối của đơn NEW_ORG; owner change → tryFinalize sau commit)
   else Tôi không liên quan
     O->>INC: POST /:token/decline
     INC->>INC: DECLINED, đơn NEEDS_REVISION
@@ -329,7 +332,7 @@ sequenceDiagram
 
 ### F12 — Thẩm định và duyệt đơn: Blue Tick, tạo tổ chức, gắn vai owner
 - **Actor:** admin.
-- **Điều kiện tiên quyết:** đơn ở `PENDING_REVIEW` (admin không thấy DRAFT / AWAITING — BR-071).
+- **Điều kiện tiên quyết:** đơn `NEW_ORG` ở `PENDING_REVIEW` (admin không thấy DRAFT / AWAITING — BR-071; owner change không vào hàng đợi admin — BR-349).
 - **Luồng chính:**
   1. `GET /api/v1/admin/organization-applications` (loại DRAFT, AWAITING) và `GET /:id`: kèm `owners[]` với `confirm_ip`, `confirm_ua`, `account` (từ identity `lookup-by-emails`; lỗi thì để null), `active_owner_org_count`, `same_ip_cluster` (≥ 2 owner cùng IP trong 5 phút).
   2. **Claim** `PUT /:id/claim`: ghi `reviewerId`, không đổi status (BR-070).
@@ -428,7 +431,7 @@ sequenceDiagram
    - Duyệt: trong 1 transaction, request APPROVED (14) và `grantMembership` vai `MEMBER`, `source = JOIN_REQUEST`. Gửi `VOLUNTEER_APPROVED`.
    - Từ chối: request REJECTED (18). Gửi `VOLUNTEER_REJECTED`.
 3. Người xin: `DELETE /join-requests/cancel {requestId}` → xoá mềm (chỉ khi PENDING).
-4. Thành viên: `DELETE /:id/members/me` → xoá mềm membership. Người có vai owner không được rời (owner cuối cùng → 409 ORG_MUST_HAVE_OWNER, còn lại 400 — BR-088).
+4. Thành viên: `DELETE /:id/members/me` → xoá mềm membership. Owner rời được khi còn owner khác (F18g, BR-348); owner cuối cùng → 409 ORG_MUST_HAVE_OWNER (BR-088).
 - **Ý nghĩa của thành viên:** khi tổ chức tạo campaign, các thành viên nhận thông báo `CAMPAIGN_CREATED` (F25).
 - **File:** `INC/modules/organization/organization.service.ts > createJoinRequest(), processJoinRequest(), cancelJoinRequest(), leaveOrganization()`.
 
@@ -486,16 +489,53 @@ sequenceDiagram
 ### F18c — Đổi vai, gỡ thành viên
 - `PATCH /api/v1/organizations/:id/members/:userId/role {role}` (BR-331): cần `MEMBER_MANAGE`; `role ∈ assignableRoles(actor)`; `canActOnMember(actor, target)`; cập nhật `organization_members.role` (`changeMembershipRole()`); website `ORG_MEMBERSHIP_CHANGED` tới người bị đổi.
 - `DELETE /api/v1/organizations/:id/members/:userId` (BR-332): cùng giới hạn; xoá mềm; `ORG_MEMBERSHIP_CHANGED` (`removed`).
-- Owner / LR không đổi vai hay gỡ được qua đây — thu hồi / chuyển giao owner là phase 3 **[CHƯA HOÀN THIỆN]**.
+- Owner / LR không đổi vai hay gỡ được qua đây — vai owner chỉ đổi qua owner change (F18d–F18f) hoặc tự rút lui (F18g).
 - **File:** `organization.service.ts > changeMemberRole(), removeMember()`, `organization-membership.service.ts > changeMembershipRole()`.
 
 ### F18d — Đề xuất thêm owner (ADD_OWNER)
+Owner change được quyết **trong tổ chức**, không qua admin nền tảng. Ba loại ADD_OWNER / REMOVE_OWNER / TRANSFER_OWNER dùng chung bảng `organization_applications`, bảng approval `organization_owner_change_approvals` và `OwnerChangeExecutor` (BR-339..BR-347).
 1. Owner mở "Đề xuất thêm owner", mỗi dòng chọn tài khoản có sẵn (AutoComplete, email đầy đủ) hoặc gõ email chưa có tài khoản, kèm họ tên; một lý do chung.
-2. `POST /api/v1/organizations/:id/owner-proposals {owners:[{user_id?, email?, full_name}], reason}` (BR-319): tạo `organization_applications` `type = ADD_OWNER`, `organizationId`, `submitterEmail` = email JWT, `profile` = snapshot tổ chức (+ `proposalReason`), status AWAITING_OWNER_CONFIRMATION; mỗi người nhận `ORG_OWNER_CONFIRMATION_REQUEST` (`isAddOwner`).
-3. Người được đề xuất xác nhận / từ chối như F11. Từ chối hoặc hết hạn → đề xuất WITHDRAWN, người đề xuất nhận email kèm link trang tổ chức (BR-320). Đủ xác nhận → PENDING_REVIEW.
-4. Owner xem `GET /:id/owner-proposals`, huỷ (`POST .../:applicationId/cancel`), gửi lại (`POST .../owners/:candidateId/resend`) — BR-321.
-5. Admin nền tảng duyệt trong màn thẩm định: `approveAddOwner()` — `ensureUsers` (tạo tài khoản PENDING_ACTIVATION cho email mới), cấp / nâng vai `OWNER` dưới trần quota, outbox `ORG_OWNER_ONBOARD` như F12 bước 6 (BR-322). Từ chối như đơn thường; không có "yêu cầu bổ sung".
-- **File:** `INC/modules/organization_application/owner-proposal.{service,controller}.ts`, `owner-confirmation.service.ts`, `organization-application-admin.service.ts > approveAddOwner()`.
+2. `POST /api/v1/organizations/:id/owner-changes {type:"ADD_OWNER", owners:[{user_id?, email?, full_name}], reason}` (BR-319): tạo đơn `type = ADD_OWNER`, `organizationId`, `submitterEmail` = email JWT, `profile` = snapshot tổ chức (+ `proposalReason`, `proposerName`, `subjectNames`), status AWAITING_OWNER_CONFIRMATION; chốt approver = mọi owner trừ người đề xuất (hạn 14 ngày). Mỗi người được đề xuất nhận `ORG_OWNER_CONFIRMATION_REQUEST` (`isAddOwner`); mỗi approver nhận `ORG_OWNER_CHANGE_APPROVAL_REQUEST` (website + email).
+3. Người được đề xuất xác nhận / từ chối như F11. Từ chối hoặc hết hạn → WITHDRAWN, người đề xuất nhận email kèm link trang tổ chức (BR-320).
+4. Owner khác đồng ý / từ chối trên trang tổ chức: `POST .../owner-changes/:applicationId/approve` | `.../reject {note?}`. Một người từ chối → REJECTED (BR-341).
+5. Khi mọi candidate CONFIRMED và mọi approval APPROVED (hoặc void): `tryFinalize` — `ensureUsers` (tạo tài khoản PENDING_ACTIVATION cho email mới **lúc này**), khoá đơn + dòng owner, cấp / nâng vai `OWNER` dưới trần quota, outbox `ORG_OWNER_ONBOARD` như F12 bước 6 (BR-322, BR-345). Tổ chức chỉ có 1 owner → chỉ cần người được đề xuất xác nhận.
+6. `GET /:id/owner-changes` (danh sách + trạng thái từng candidate / approver), huỷ (`POST .../cancel`, chỉ người đề xuất), gửi lại (`POST .../owners/:candidateId/resend`) — BR-321, BR-347.
+- **File:** `INC/modules/organization_application/owner-change.{service,controller}.ts`, `owner-change-executor.ts`, `owner-change-notify.client.ts`, `owner-confirmation.service.ts`.
+
+```mermaid
+sequenceDiagram
+  participant P as Owner đề xuất
+  participant INC as incident-service
+  participant C as Người được đề xuất
+  participant O as Owner khác
+  P->>INC: POST /organizations/:id/owner-changes (ADD_OWNER)
+  INC-->>C: ORG_OWNER_CONFIRMATION_REQUEST (email)
+  INC-->>O: ORG_OWNER_CHANGE_APPROVAL_REQUEST (website + email)
+  C->>INC: POST /owner-confirmations/:token/confirm
+  O->>INC: POST /owner-changes/:appId/approve
+  INC->>INC: tryFinalize: ensureUsers → TX lock đơn + owner rows, quota, grant OWNER, APPROVED, outbox
+  INC-->>P: ORG_OWNER_CHANGE_DECIDED
+```
+
+### F18e — Thu hồi owner khác (REMOVE_OWNER)
+1. Owner mở menu trên dòng một owner khác → "Đề xuất thu hồi": chọn vai người đó giữ lại (ADMIN / MEMBER) hoặc gỡ khỏi tổ chức, nhập lý do.
+2. `POST /:id/owner-changes {type:"REMOVE_OWNER", target_user_id, demote_to, reason}` (BR-343): target phải là owner, khác mình; một REMOVE_OWNER mở mỗi target (BR-342). Approver = mọi owner trừ người đề xuất và target. Target nhận `ORG_OWNER_REMOVAL_PROPOSED` (website + email), không phủ quyết được.
+3. Không còn approver (tổ chức 2 owner) → áp dụng ngay trong request tạo. Còn approver → chờ tất cả đồng ý (một người từ chối → REJECTED; quá 14 ngày → WITHDRAWN).
+4. Áp dụng: target hạ xuống `demote_to` hoặc bị xoá mềm membership; nhận `ORG_MEMBERSHIP_CHANGED`; các owner nhận `ORG_OWNER_CHANGE_DECIDED`; `reconcileOpenChanges` (BR-346). Trigger `ORG_MUST_HAVE_OWNER` vẫn bảo vệ; hai owner thu hồi nhau cùng lúc thì dòng owner bị khoá nên chỉ một bên thắng, bên kia REJECTED ("Người đề xuất không còn là owner.").
+- **File:** `owner-change.service.ts > create()`, `owner-change-executor.ts > applyLocked(), demoteOrRemove()`.
+
+### F18f — Chuyển giao vai owner (TRANSFER_OWNER)
+1. Owner mở "Chuyển giao" trên dòng của mình: chọn người nhận trong các thành viên **không phải owner**, chọn vai mình giữ sau khi chuyển (ADMIN / MEMBER / rời), lý do.
+2. `POST /:id/owner-changes {type:"TRANSFER_OWNER", target_user_id, demote_to, reason}` (BR-344): kiểm người nhận là member không phải owner, trần 3 tổ chức; tạo 1 candidate với email người nhận, gửi `ORG_OWNER_CONFIRMATION_REQUEST` (`isTransfer`). Không có approver.
+3. Người nhận chấp nhận qua link (trang `/organizations/owner-confirm`). Sau commit → `tryFinalize`: trong một transaction, người nhận nhận đúng vai của người chuyển (OWNER hoặc LEGAL_REPRESENTATIVE, source `OWNER_TRANSFER`), người chuyển hạ vai / rời. Lỗi giữa chừng → rollback toàn bộ, tổ chức vẫn còn owner cũ.
+4. Người nhận nhận `ORG_MEMBERSHIP_CHANGED`; người chuyển và các owner nhận `ORG_OWNER_CHANGE_DECIDED`. Người nhận từ chối / hết hạn → WITHDRAWN.
+- **File:** `owner-change.service.ts > create()`, `owner-change-executor.ts > applyLocked()`, `owner-confirmation.service.ts > confirm()`.
+
+### F18g — Owner tự hạ vai / rời tổ chức
+1. `PATCH /api/v1/organizations/:id/members/me/role {role: ADMIN|MEMBER}` hoặc `DELETE /api/v1/organizations/:id/members/me` (BR-348).
+2. Transaction khoá các dòng owner của tổ chức (`FOR UPDATE`); chỉ còn mình là owner → 409 ORG_MUST_HAVE_OWNER (client gợi ý chuyển giao trước). Ngược lại cập nhật vai / xoá mềm ngay.
+3. Sau commit: `reconcileOpenChanges` — owner change do người này tạo bị huỷ, owner change đang chờ người này duyệt có thể được áp dụng; các owner còn lại nhận `ORG_OWNER_LEFT`.
+- **File:** `INC/modules/organization/organization.service.ts > leaveOrganization(), stepDown(), ownerStepOut()`.
 
 ---
 

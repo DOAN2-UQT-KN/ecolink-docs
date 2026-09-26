@@ -2,17 +2,24 @@
 
 Sep 26, 2026 · @Minh
 
-> **Trạng thái triển khai (2026-09-26): Phase 1 đã có trong code.** Tài liệu này thay thế mục 4.3 cũ và thiết kế "một tài khoản ORG duy nhất" trong `REFACTOR_ORG_CREATION_FLOW.md`. Mô tả as-is chi tiết: `ORG_CREATION_FLOW.md`, `02-business-flows.md` (F10–F14), `03-business-rules.md`, `04-state-machines.md` §7.
+> **Trạng thái triển khai (2026-09-26): Phase 1–3 đã có trong code.** Tài liệu này thay thế mục 4.3 cũ và thiết kế "một tài khoản ORG duy nhất" trong `REFACTOR_ORG_CREATION_FLOW.md`. Mô tả as-is chi tiết: `ORG_CREATION_FLOW.md`, `02-business-flows.md` (F10–F14), `03-business-rules.md`, `04-state-machines.md` §7.
 >
 > **Đã làm (Phase 1):** mô hình `OrgMembership` có `role`, bỏ tài khoản `accountType = ORG`, hồ sơ `NEW_ORG` nhiều owner, email xác nhận từng owner, nộp lại / rút, duyệt tạo membership, hai nhánh email (kích hoạt / "đã gắn vai"), tự gửi lại email kích hoạt từ trang đăng nhập.
 >
 > **Đã làm (Phase 2, 2026-09-26):** ma trận quyền quản lý tổ chức theo vai (`DC/org-permissions.ts`, `org-access.service.ts`, `permissions` trong response); đổi vai / gỡ thành viên không phải owner; **mời thành viên** (vai MEMBER); **đề xuất thêm owner** (`ADD_OWNER`); bộ chọn ngữ cảnh tổ chức ở client. Quyết định của chủ sản phẩm khác thiết kế gốc:
 > - Mời thành viên: **ai trong tổ chức cũng mời được**, nhưng lời mời phải được owner / admin duyệt rồi người được mời bấm chấp nhận qua email (7 ngày). Chỉ mời được **người đã có tài khoản**, chọn qua SelectList tìm theo tên / email với **email bị che bớt**. Không có "invitation nhẹ" cho ADMIN / CAMPAIGN_MANAGER: vai đó được gán bằng **đổi vai** sau khi đã là thành viên.
-> - Đề xuất owner: ô AutoComplete (chọn user có sẵn, hoặc gõ email chưa có tài khoản — tài khoản chỉ tạo lúc admin duyệt; owner thấy email đầy đủ). Người được đề xuất từ chối / hết hạn thì **huỷ đề xuất** (WITHDRAWN) như sơ đồ "Luồng thêm owner".
+> - Đề xuất owner: ô AutoComplete (chọn user có sẵn, hoặc gõ email chưa có tài khoản — tài khoản chỉ tạo lúc áp dụng — từ Phase 3 không còn admin duyệt; owner thấy email đầy đủ). Người được đề xuất từ chối / hết hạn thì **huỷ đề xuất** (WITHDRAWN) như sơ đồ "Luồng thêm owner".
 > - Endpoint tìm user đặt ở incident (`GET /organizations/:id/user-search`) để quyết định che email theo vai; identity chỉ có route nội bộ `/users/search`, `/users/lookup-by-ids`.
 > - `membershipVersion` vẫn **không cần**: không có ngữ cảnh tổ chức trong JWT, mọi kiểm tra đọc DB mỗi request; bộ chọn ngữ cảnh chỉ lưu ở client.
 >
-> **Còn lại [CHƯA HOÀN THIỆN]:** Phase 3 — gỡ / thu hồi / chuyển giao owner, owner tự rời. Phase 4 — quyền quản lý chiến dịch theo vai (`CAMPAIGN_CREATE`, `CAMPAIGN_MANAGE_ANY` mới khai báo), sửa các chỗ thiếu kiểm quyền campaign / SOS, lọc trang chiến dịch theo ngữ cảnh. Vòng đời riêng của dấu tích xanh.
+> **Đã làm (Phase 3, 2026-09-26):** luồng **đi ra** của owner và bỏ bước admin nền tảng duyệt thêm owner. Ba loại "owner change" (`ADD_OWNER`, `REMOVE_OWNER`, `TRANSFER_OWNER`) dùng chung `organization_applications`, bảng approval `organization_owner_change_approvals` và `owner-change-executor.ts` (chi tiết: `02-business-flows.md` F18d–F18g, `03-business-rules.md` BR-339..BR-349, `04-state-machines.md` §7b). Quyết định của chủ sản phẩm khác thiết kế gốc:
+> - **Thêm owner không cần admin nền tảng**: người được đề xuất xác nhận qua email **và** mọi owner khác đồng ý là áp dụng ngay (tài khoản cho email mới tạo lúc áp dụng).
+> - **Thu hồi owner khác**: mọi owner còn lại (trừ người đề xuất và người bị thu hồi) phải đồng ý; tổ chức 2 owner thì có hiệu lực ngay. Người bị thu hồi không phủ quyết.
+> - **Chuyển giao**: chỉ cho thành viên hiện tại không phải owner; người nhận chấp nhận qua email là đủ, owner khác chỉ được báo. Người nhận nhận đúng vai của người chuyển (kể cả người đại diện pháp lý).
+> - **Owner tự hạ vai / rời**: có hiệu lực ngay khi còn owner khác; owner cuối bị chặn `ORG_MUST_HAVE_OWNER`.
+> - Admin nền tảng can thiệp trực tiếp vai owner (tranh chấp, owner mất liên lạc): **để sau**.
+>
+> **Còn lại [CHƯA HOÀN THIỆN]:** Admin nền tảng can thiệp vai owner. Phase 4 — quyền quản lý chiến dịch theo vai (`CAMPAIGN_CREATE`, `CAMPAIGN_MANAGE_ANY` mới khai báo), sửa các chỗ thiếu kiểm quyền campaign / SOS, lọc trang chiến dịch theo ngữ cảnh. Vòng đời riêng của dấu tích xanh.
 >
 > **Điều chỉnh cho kiến trúc microservice** (tài liệu gốc viết như thể chỉ có một DB):
 > - `User` nằm ở identity-service; `Organization`, hồ sơ và membership nằm ở incident-service. `OrgMembership` = bảng `organization_members` sẵn có, thêm cột `role`.
