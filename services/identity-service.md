@@ -7,10 +7,10 @@
 - Đăng ký, đăng nhập bằng email + mật khẩu, cấp JWT access/refresh token, xoay vòng (rotate) refresh token, đăng xuất.
 - Đăng nhập bằng Google OAuth 2.0 (authorization code), tự tạo user mới nếu email chưa có.
 - Đổi mật khẩu (đã đăng nhập), yêu cầu/đặt lại mật khẩu bằng token một lần.
-- Tạo tài khoản đăng nhập cho tổ chức (ORG account) khi incident-service duyệt hồ sơ tổ chức, và kích hoạt tài khoản đó bằng link một lần (đặt mật khẩu đầu tiên).
+- Khi incident-service duyệt hồ sơ tổ chức: tìm hoặc tạo **tài khoản cá nhân** cho từng owner (chưa có thì tạo ở `PENDING_ACTIVATION`, không mật khẩu), phát link kích hoạt một lần; người dùng tự yêu cầu gửi lại link từ trang đăng nhập. Không còn tài khoản riêng cho tổ chức (`accountType = ORG`, role `ORG_OWNER` đã bị xoá).
 - Quản lý hồ sơ user (profile, vị trí, tuỳ chọn nhận thông báo), admin liệt kê user và ban user.
 - Quản lý Role, PermissionSet (RBAC). Lưu ý: middleware kiểm tra permission có tồn tại nhưng không route nào dùng (xem mục 9).
-- Cung cấp API nội bộ `/internal/v1/*` cho incident-service, notification-service, reward-service: tra email, tra user theo id, lọc user theo vị trí, lọc theo tuỳ chọn thông báo, token xác minh email liên hệ tổ chức, tạo ORG account.
+- Cung cấp API nội bộ `/internal/v1/*` cho incident-service, notification-service, reward-service: tra email, tra user theo id, lọc user theo vị trí, lọc theo tuỳ chọn thông báo, token xác minh email liên hệ tổ chức, tra / tạo user cho owner tổ chức, phát token kích hoạt.
 
 Bằng chứng: `ecolink-server/services/identity-service/src/index.ts` (mount các router), `ecolink-server/services/identity-service/package.json` (description "Identity service (auth + user + RBAC)").
 
@@ -20,14 +20,14 @@ Bằng chứng: `ecolink-server/services/identity-service/src/index.ts` (mount c
 ecolink-server/services/identity-service/
 ├── prisma/
 │   ├── schema.prisma             # User, AuthToken, Role, PermissionSet, RolePermissionSet
-│   ├── migrations/               # 11 migration, gồm seed role ADMIN/USER và ORG_OWNER
+│   ├── migrations/               # 12 migration, gồm seed role ADMIN/USER; `20260926100000_drop_org_accounts` xoá user ORG, cột account_type / provisioned_from_application_id và role ORG_OWNER
 │   └── seed.ts                   # upsert role ADMIN, USER và permission set BASIC_ACCESS
 ├── src/
 │   ├── index.ts                  # Express app, middleware toàn cục, mount router
 │   ├── tracer.ts, logger.ts      # Datadog dd-trace + pino
 │   ├── config/prisma.client.ts   # PrismaClient dùng thực tế
 │   ├── config/database.ts        # PrismaClient singleton khác, KHÔNG được import ở đâu
-│   ├── constants/                # AuthTokenType, UserStatus, AccountType, re-export @da2/constants
+│   ├── constants/                # AuthTokenType, UserStatus, re-export @da2/constants
 │   ├── middleware/
 │   │   ├── auth.middleware.ts                   # authenticate (JWT)
 │   │   ├── authorize.middleware.ts              # authorize(...Permission) (không dùng)
@@ -57,7 +57,7 @@ Quy ước body/response (`ecolink-server/services/identity-service/src/middlewa
 - `ecolink-server/services/identity-service/src/middleware/auth.middleware.ts > authenticate()`: lấy token từ header `Authorization: Bearer <token>`, nếu không có thì lấy cookie `accessToken`. Không có token → 401 `TOKEN_MISSING` ("Authentication token is required"). `jwt.verify` lỗi → 401 `TOKEN_INVALID` ("Invalid token"). Thành công: `req.user = { userId, email, role }`.
 - Middleware chỉ verify chữ ký và hạn. KHÔNG kiểm tra user còn tồn tại, bị xoá mềm hay bị ban.
 - Ký/verify: `ecolink-server/services/identity-service/src/utils/jwt.utils.ts > generateTokens()/verifyToken()`, HS256 mặc định của `jsonwebtoken`, secret `JWT_SECRET` (service throw khi khởi động nếu thiếu). Access token hết hạn theo `JWT_EXPIRES_IN` (mặc định trong code `30m`), refresh token theo `JWT_REFRESH_EXPIRES_IN` (mặc định `30d`). Cả hai token dùng CHUNG secret và CHUNG payload `{ userId, email, role }`, không có claim phân biệt loại token.
-- Claim `role`: lúc sign-in và Google login là tên role (`role.name`, fallback `"USER"`); lúc refresh là `user.roleId` (UUID). Xem mục 9.
+- Claim `role`: tên role (`role.name`, fallback `"USER"`) ở sign-in, Google login và refresh (refresh ghi `roleId` đã được sửa 2026-09-26).
 
 ### 3.2 Kiểm tra quyền admin
 - `ecolink-server/services/identity-service/src/modules/user/user.controller.ts > requireAdmin()`: so `req.user.role.toLowerCase() === 'admin'`. Sai → 403 "Only admin can perform this action". Chỉ dùng cho `GET /api/v1/users` và `PUT /api/v1/users/:id/ban`.
@@ -99,7 +99,8 @@ Mã lỗi chung: mọi handler bắt exception không nhận diện được →
 | POST | /api/v1/auth/update-password | JWT | Mọi user đăng nhập | body: `oldPassword` notEmpty; `newPassword` min 8 | 200 "Password updated successfully" | 400 VALIDATION_ERROR; 401; 400 "Invalid old password" (cả khi user không có password) | `AUTH_C > updatePassword` → `AUTH_S > updatePassword()` |
 | POST | /api/v1/auth/request-password-reset | Không | Public | body: `email` isEmail | 200 `data`: `{reset_token}` (token thô trả thẳng trong response) | 400 VALIDATION_ERROR (kèm `errors` array); 404 "User not found" | `AUTH_C > requestPasswordReset` → `AUTH_S > requestPasswordReset()` |
 | POST | /api/v1/auth/reset-password | Không | Public | body: `resetToken` notEmpty; `newPassword` min 8 | 200 "Password reset successfully" | 400 VALIDATION_ERROR; 400 "Invalid or expired reset token" | `AUTH_C > resetPassword` → `AUTH_S > resetPassword()` |
-| POST | /api/v1/auth/activate-org-account | Không (token một lần) | Public | body: `token` notEmpty; `newPassword` min 8 | 200 "Organization account activated" | 400 VALIDATION_ERROR; 400 "Invalid or expired activation token" | `AUTH_C > activateOrgAccount` → `AUTH_S > activateOrgAccount()` |
+| POST | /api/v1/auth/activate-account | Không (token một lần) | Public | body: `token` notEmpty; `newPassword` min 8 | 200 "Account activated" | 400 VALIDATION_ERROR; 400 "Invalid or expired activation token" (cả khi user không còn ở PENDING_ACTIVATION) | `AUTH_C > activateAccount` → `AUTH_S > activateAccount()` |
+| POST | /api/v1/auth/activation/resend | Không | Public | body: `email` isEmail | 200 "If this email has an account waiting for activation, a new link is on its way" (luôn như vậy, kể cả khi lỗi) | 400 VALIDATION_ERROR | `AUTH_C > resendActivation` → `AUTH_S > requestActivationResend()` → `account-activation-notify.client.ts > enqueueAccountActivationEmail()` |
 | GET | /api/v1/auth/me | JWT | Mọi user đăng nhập | — | 200 `data.user`: `{id,email,name,role_id,avatar,bio,phone_number,gender,date_of_birth,email_verified,created_at,updated_at,latitude,longitude,location_updated_at,detail_address,notification_preferences}` | 401; 404 "User not found" (đã xoá mềm) | `AUTH_C > me` → `AUTH_S > getMe()` |
 | POST | /api/v1/auth/logout | JWT | Mọi user đăng nhập | — | 200 "Logged out successfully"; xoá cookie `refreshToken`, `accessToken` | 401 | `AUTH_C > logout` → `AUTH_S > logout()` |
 
@@ -142,7 +143,9 @@ Mount tại `/internal/v1`, gateway KHÔNG proxy. Xác thực: header `x-interna
 |---|---|---|---|---|---|---|
 | POST | /internal/v1/organization-contact-email/tokens | incident-service `ecolink-server/services/incident-service/src/modules/organization/identity-organization-contact-email.client.ts > issueOrganizationContactEmailToken()`, gọi từ `ecolink-server/services/incident-service/src/modules/organization/organization.service.ts` | body: `organizationId` isUUID; `contactEmail` isEmail; `ownerUserId` isUUID | 201 `data`: `{token}` (token thô) | 400 "Owner user not found"; 500 | `INT` handler → `AUTH_S > createOrganizationContactEmailToken()` |
 | POST | /internal/v1/organization-contact-email/tokens/verify | incident-service `identity-organization-contact-email.client.ts > verifyAndConsumeOrganizationContactEmailToken()`, gọi từ `ecolink-server/services/incident-service/src/modules/organization/organization.controller.ts` | body: `token` isString notEmpty | 200 `data`: `{organization_id, contact_email}` | 404 "Invalid or expired token"; 500 | `AUTH_S > verifyAndConsumeOrganizationContactEmailToken()` |
-| POST | /internal/v1/users/provision-org-account | incident-service `ecolink-server/services/incident-service/src/modules/organization_application/identity-org-account.client.ts > provisionOrgAccount()`, gọi từ outbox publisher `organization-account-provision.publisher.ts > OrganizationAccountProvisionPublisher.publish()` | body: `applicationId` isUUID; `organizationId` isUUID; `email` isEmail; `displayName` notEmpty trim max 200 | 201 `data`: `{user_id, activation_token (null khi đã tạo trước đó), already_provisioned}` | 409 "An account already exists for this contact email"; 500 (vd. thiếu role ORG_OWNER) | `AUTH_S > provisionOrgAccount()` |
+| POST | /internal/v1/users/lookup-by-emails | incident-service `ecolink-server/services/incident-service/src/modules/organization_application/identity-owner.client.ts > lookupUsersByEmails()` (nộp đơn, xem chi tiết đơn ở admin) | body: `emails` mảng 1..20 isEmail | 200 `data`: `{users: [{id, email (lowercase), name, status, created_at}]}` (so không phân biệt hoa thường, bỏ user đã xoá) | 400; 500 | `AUTH_S > lookupUsersByEmails()` |
+| POST | /internal/v1/users/ensure | incident-service `identity-owner.client.ts > ensureUsers()` (duyệt đơn, trước transaction) | body: `users` mảng 1..20 `{email isEmail, fullName ≤200}` | 200 `data`: `{users: [...]}` như trên; email chưa có user thì tạo user role USER, `password=null`, status 3, `emailVerified=true` | 400; 500 (thiếu role USER) | `AUTH_S > ensureUsersForOwners()` |
+| POST | /internal/v1/users/:id/activation-token | incident-service `identity-owner.client.ts > issueActivationToken()`, gọi từ `organization-owner-onboard.publisher.ts` | param `id` isUUID | 200 `data`: `{activation_token (null nếu user không ở PENDING_ACTIVATION), expires_in_hours}` | 400; 500 | `AUTH_S > issueActivationToken()` |
 | POST | /internal/v1/users/nearby-ids | incident-service `ecolink-server/services/incident-service/src/modules/organization/identity-user.client.ts > fetchUserIdsNearPoint()`, gọi từ `ecolink-server/services/incident-service/src/modules/campaign/campaign.service.ts` | body: `latitude` float -90..90; `longitude` float -180..180; `radiusMeters` optional float 1..200000 (mặc định 5000); `excludeUserIds` optional array ≤500 UUID | 200 `data`: `{user_ids[]}` | 500 | `USER_S > findUserIdsNearPointForInternal()` |
 | POST | /internal/v1/users/distance-from-point | incident-service `identity-user.client.ts > fetchUsersWithDistanceFromPoint()` (hàm client có định nghĩa nhưng KHÔNG tìm thấy nơi gọi) | body: `latitude`, `longitude` như trên | 200 `data`: `{users:[{id,email,name,latitude,longitude,distance_meters}]}` (TẤT CẢ user chưa xoá, sắp theo khoảng cách) | 500 | `USER_S > findUsersWithDistanceFromPointForInternal()` |
 | POST | /internal/v1/users/by-ids | incident-service `identity-user.client.ts > fetchIdentityUsersWithContactByIds()`, `fetchOrganizationOwnersByUserIds()` (nhiều nơi: organization, campaign, campaign_manager, campaign_joining_request, report); reward-service `ecolink-server/services/reward-service/src/utils/identity-user.client.ts > fetchUsersByIds()` (user-points, gamification-leaderboard, gift) | body: `ids` array 1..100, mỗi phần tử isUUID | 200 `data`: `{users: UserResponse[]}` (không có vị trí) | 500 | `USER_S > getUsersByIds()` |
@@ -161,38 +164,43 @@ Mount tại `/internal/v1`, gateway KHÔNG proxy. Xác thực: header `x-interna
 ```mermaid
 stateDiagram-v2
     [*] --> ACTIVE: "sign-up / Google login lần đầu (status=1)"
-    [*] --> PENDING_ACTIVATION: "provision-org-account (status=3)"
-    PENDING_ACTIVATION --> ACTIVE: "activate-org-account"
+    [*] --> PENDING_ACTIVATION: "/internal/v1/users/ensure (status=3)"
+    PENDING_ACTIVATION --> ACTIVE: "activate-account"
     ACTIVE --> INACTIVE: "admin ban (status=2)"
     PENDING_ACTIVATION --> INACTIVE: "admin ban"
-    INACTIVE --> ACTIVE: "activate-org-account (nếu token còn hạn, không kiểm tra status)"
 ```
 
 Xoá mềm (`deletedAt`) là trục độc lập với `status`. Không có endpoint unban.
 
-#### 4.6.2 Tạo và kích hoạt tài khoản tổ chức
+#### 4.6.2 Tài khoản cho owner tổ chức và kích hoạt
 
 ```mermaid
 sequenceDiagram
-    participant Relay as "incident-service outbox relay"
+    participant INC as "incident-service"
     participant IS as "identity-service"
     participant DB as "identitydb"
-    participant NS as "notification (qua incident)"
-    participant Org as "Người vận hành tổ chức"
-    Relay->>IS: "POST /internal/v1/users/provision-org-account"
-    IS->>DB: "tìm user theo provisionedFromApplicationId"
-    alt đã có
-        IS-->>Relay: "201 already_provisioned=true, activation_token=null"
-    else chưa có
-        IS->>DB: "kiểm tra email, lấy role ORG_OWNER"
-        IS->>DB: "tạo User ORG, status=3, password=null"
-        IS->>DB: "revoke token cũ, tạo AuthToken ORG_ACCOUNT_ACTIVATION"
-        IS-->>Relay: "201 user_id, activation_token"
+    participant NS as "notification-service"
+    participant U as "Owner mới"
+    INC->>IS: "POST /internal/v1/users/ensure (trước transaction duyệt)"
+    IS->>DB: "tìm theo email (không phân biệt hoa thường)"
+    IS->>DB: "email chưa có: tạo User role USER, status=3, password=null"
+    IS-->>INC: "users"
+    INC->>IS: "(outbox relay) POST /internal/v1/users/:id/activation-token"
+    alt user status=3
+        IS->>DB: "revoke token cũ, tạo AuthToken ACCOUNT_ACTIVATION"
+        IS-->>INC: "activation_token"
+        INC->>NS: "email ACCOUNT_ACTIVATION"
+    else user đã active
+        IS-->>INC: "activation_token = null"
+        INC->>NS: "email ORG_OWNER_ATTACHED"
     end
-    Relay->>NS: "enqueue mail kích hoạt (chỉ khi có token)"
-    Org->>IS: "POST /api/v1/auth/activate-org-account token + newPassword"
-    IS->>DB: "set password, status=1, markUsed token, revoke REFRESH"
-    IS-->>Org: "200 Organization account activated"
+    U->>IS: "POST /api/v1/auth/activate-account token + newPassword"
+    IS->>DB: "kiểm tra status=3, set password, status=1, markUsed, revoke REFRESH"
+    opt Link hết hạn
+        U->>IS: "POST /api/v1/auth/activation/resend {email}"
+        IS->>DB: "status=3 và < 3 token/giờ → token mới"
+        IS->>NS: "POST /api/v1/notifications/jobs (ACCOUNT_ACTIVATION)"
+    end
 ```
 
 #### 4.6.3 Đăng nhập và refresh
@@ -216,10 +224,10 @@ sequenceDiagram
 
 ## 5. Event/Job phát ra và lắng nghe
 
-- identity-service KHÔNG dùng SQS/`@da2/queue`, không có outbox, không phát event, không gọi HTTP sang service nội bộ nào (`package.json` không có dependency queue/axios; grep `src/` không có `fetch` ngoài Google).
-- Chỉ gọi ra ngoài: Google OAuth (mục 7).
+- identity-service KHÔNG dùng SQS/`@da2/queue`, không có outbox, không phát event. Lời gọi HTTP nội bộ duy nhất: `POST {NOTIFICATION_SERVICE_URL}/api/v1/notifications/jobs` (dùng `fetch`, timeout 10s) khi gửi lại email kích hoạt (`src/modules/auth/account-activation-notify.client.ts`); thiếu cấu hình thì chỉ log cảnh báo.
+- Gọi ra ngoài: Google OAuth (mục 7).
 - Các luồng "gửi mail" liên quan identity đều do service khác làm:
-  - Mail kích hoạt ORG account: incident-service nhận `activation_token` từ `/internal/v1/users/provision-org-account` rồi tự enqueue mail (`ecolink-server/services/incident-service/src/modules/organization_application/organization-account-provision.publisher.ts > publish()` → `enqueueOrgAccountActivationEmail()`).
+  - Mail kích hoạt sau khi duyệt đơn: incident-service nhận token từ `/internal/v1/users/:id/activation-token` rồi tự enqueue mail (`ecolink-server/services/incident-service/src/modules/organization_application/organization-owner-onboard.publisher.ts > publish()`). Mail gửi lại do chính identity gửi (xem trên).
   - Mail xác minh email liên hệ tổ chức: incident-service lấy token từ `/internal/v1/organization-contact-email/tokens`.
   - Mail đặt lại mật khẩu: KHÔNG có. `requestPasswordReset` trả token trong response HTTP, không gửi mail (kind `RESET_PASSWORD` có trong `ecolink-server/shared/da2-constants/src/notification-preferences.ts` nhưng identity không dùng).
 
@@ -247,7 +255,10 @@ Không có. Không có job dọn `auth_tokens` hết hạn (bảng chỉ có ind
 | JWT_EXPIRES_IN | Hạn access token (code mặc định `30m`; .env.example đặt 30d) | .env.example, `utils/jwt.utils.ts` |
 | JWT_REFRESH_EXPIRES_IN | Hạn refresh token (mặc định `30d`) | .env.example, `utils/jwt.utils.ts` |
 | ORG_CONTACT_EMAIL_TOKEN_TTL_MS | Hạn token xác minh email liên hệ tổ chức (mặc định 72h) | .env.example (comment), `auth.service.ts` |
-| ORG_ACCOUNT_ACTIVATION_TTL_MS | Hạn link kích hoạt ORG account (mặc định 72h) | .env.example (comment), `auth.service.ts` |
+| ACCOUNT_ACTIVATION_TTL_MS | Hạn link kích hoạt (mặc định 72h); vẫn đọc `ORG_ACCOUNT_ACTIVATION_TTL_MS` làm dự phòng | .env.example (comment), `auth.service.ts` |
+| NOTIFICATION_SERVICE_URL, INTERNAL_NOTIFICATION_API_KEY | Gửi lại email kích hoạt qua notification-service | .env.example (comment), `account-activation-notify.client.ts` |
+| FRONTEND_APP_URL | Link `/activate-account?token=` trong email gửi lại | .env.example (comment), `account-activation-notify.client.ts` |
+| APP_NAME | Tên ứng dụng trong email (mặc định `DA2`) | `account-activation-notify.client.ts` |
 | PASSWORD_RESET_TTL_MS | Hạn token reset mật khẩu (mặc định 1h) | chỉ trong `auth.service.ts` (thiếu trong .env.example) |
 | CORS_ORIGIN | Danh sách origin, phân tách dấu phẩy; rỗng hoặc `*` = cho mọi origin | .env.example, `src/index.ts` |
 | GOOGLE_OAUTH_CLIENT_ID | Client id Google (mặc định chuỗi rỗng) | chỉ trong `google-oauth.factory.ts` |
@@ -273,14 +284,14 @@ Bảo mật (mức nghiêm trọng cao):
 10. API key nội bộ so sánh bằng `!==` (không constant-time); một key chung cho mọi service.
 
 Bug logic:
-11. Refresh đặt claim `role = user.roleId` (UUID) thay vì tên role → sau lần refresh đầu, admin bị `requireAdmin` từ chối (403), và service khác đọc `role` từ JWT sẽ thấy UUID. `auth.service.ts > refreshAccessToken()`.
+11. ~~Refresh đặt claim `role = user.roleId`~~ — đã sửa 2026-09-26 (`refreshAccessToken()` đọc role và ký tên role).
 12. `GET /api/v1/roles/permission-sets` bị `GET /:id` khai báo trước bắt mất → luôn 500 (id không phải UUID). `role.routes.ts`.
 13. `replacePermissionSetsForRole` xoá mềm liên kết cũ rồi `createMany` → gắn lại cùng permission set sẽ vi phạm unique `(roleId, permissionSetId)` → 500. `role.repository.ts > replacePermissionSetsForRole()`.
-14. Unique DB trên `users.email`, `roles.name`, `permission_sets.name`, `users.provisioned_from_application_id` không tính `deletedAt`, trong khi code kiểm tra trùng có lọc `deletedAt: null` → tạo lại cùng email/name sau khi xoá mềm → lỗi Prisma P2002 → 500. Với provision ORG account, lỗi này làm outbox retry mãi.
-15. Email không được chuẩn hoá khi sign-up/sign-in (so khớp chính xác, phân biệt hoa thường), nhưng Google login và provision thì lowercase → cùng một người có thể có 2 tài khoản; provision có thể không phát hiện email đã tồn tại khác hoa thường.
-16. Nếu identity tạo ORG account thành công nhưng transaction phía incident lỗi, lần retry nhận `activation_token = null` → incident không gửi mail kích hoạt. Không có endpoint cấp lại link kích hoạt (`issueOrgActivationToken` chỉ được gọi trong `provisionOrgAccount`), dù comment incident viết "organization can always ask for a new link". [CHƯA HOÀN THIỆN]
-17. `activateOrgAccount` không kiểm tra user đang ở `PENDING_ACTIVATION` → ORG account bị ban trước khi kích hoạt sẽ thành ACTIVE khi dùng link (và `rejectReason` không bị xoá).
-18. Hạn link kích hoạt: identity cấu hình được qua `ORG_ACCOUNT_ACTIVATION_TTL_MS`, còn incident hardcode `ACTIVATION_TTL_HOURS = 72` trong nội dung mail → có thể lệch.
+14. Unique DB trên `users.email`, `roles.name`, `permission_sets.name` không tính `deletedAt`, trong khi code kiểm tra trùng có lọc `deletedAt: null` → tạo lại cùng email/name sau khi xoá mềm → lỗi Prisma P2002 → 500. Với `/internal/v1/users/ensure`, email của user đã xoá mềm: tạo lỗi, đọc lại không thấy (đã xoá) → 500 và duyệt đơn trả 503.
+15. Email không được chuẩn hoá khi sign-up/sign-in (so khớp chính xác, phân biệt hoa thường), nhưng Google login và `ensure` lưu lowercase → cùng một người có thể có 2 tài khoản. `lookup-by-emails` / `ensure` so khớp không phân biệt hoa thường nên nhận ra tài khoản sign-up khác hoa thường.
+16. ~~Không có cách cấp lại link kích hoạt~~ — đã có `POST /api/v1/auth/activation/resend` và mỗi lần onboarding retry đều phát token mới. Duyệt đơn lỗi sau `ensure` để lại user status 3 không có membership; lần duyệt sau dùng lại.
+17. ~~Kích hoạt không kiểm tra status~~ — `activateAccount()` chỉ chấp nhận user đang `PENDING_ACTIVATION`.
+18. ~~Hạn link lệch giữa identity và incident~~ — identity trả `expires_in_hours` cho incident.
 19. `findActiveUserIdsNearPoint` có comment "Active users" nhưng chỉ lọc `deletedAt`, không lọc `status` → user bị ban/đang chờ kích hoạt vẫn được trả về.
 20. Google user mới được lưu `password = crypto.randomUUID()` KHÔNG hash. bcryptjs trả false vì độ dài khác 60 nên không đăng nhập được bằng chuỗi này, nhưng user Google không thể dùng `update-password` (sai old password), phải qua reset.
 21. Cookie `accessToken` `maxAge` cố định 15 phút, lệch với hạn JWT. Không set cookie `refreshToken` nhưng refresh/logout có dùng.
@@ -295,6 +306,6 @@ Bug logic:
 28. `emailVerified` + `verificationToken`: không có luồng xác minh email cho user thường (luôn `false` khi sign-up).
 29. `authorize()` middleware và enum `Permission` không được dùng cho route nào; permission trong seed (`READ_SELF`, `UPDATE_SELF`, `READ_ALL`, `WRITE_ALL`, `MANAGE_USERS`) không thuộc enum `Permission` (enum cũng không thể tạo các set này qua API).
 30. Không dùng: `config/database.ts`, `jwt.utils.ts > decodeToken()`, `role.repository.ts > linkPermissionSetToRole()/unlinkPermissionSetFromRole()`, `user.repository.ts > findAll()`.
-31. `prisma/seed.ts` không tạo role ORG_OWNER (chỉ migration `20260922100000_user_org_accounts` tạo). Seed SQL dùng hash mật khẩu giả (`$2b$10$seededhashedpasswordplaceholder`, không đủ 60 ký tự) → user seed không đăng nhập được bằng mật khẩu; seed refresh token hash là chuỗi giả.
-32. `.env.example` thiếu `GOOGLE_OAUTH_*`, `PASSWORD_RESET_TTL_MS`, `SWAGGER_SERVER_URL`, `LOG_LEVEL`, `DD_VERSION`.
+31. Seed SQL dùng hash mật khẩu giả (`$2b$10$seededhashedpasswordplaceholder`, không đủ 60 ký tự) → user seed không đăng nhập được bằng mật khẩu; seed refresh token hash là chuỗi giả.
+32. `.env.example` thiếu `GOOGLE_OAUTH_*`, `APP_NAME`, `PASSWORD_RESET_TTL_MS`, `SWAGGER_SERVER_URL`, `LOG_LEVEL`, `DD_VERSION`.
 33. Không có job dọn `auth_tokens` hết hạn/đã revoke.

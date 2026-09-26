@@ -4,7 +4,7 @@
 > - **Phần A**: report, vote, SOS, saved resource, media, organization, organization application, cùng auth và middleware dùng chung
 > - **Phần B**: campaign (task, join request, điểm danh, submission, hoàn thành), reward client, translation, background job, outbox, queue, resilience
 >
-> Tổng endpoint: **93** (phần A 54, phần B 39), cộng `/health` và Swagger.
+> Tổng endpoint: **96** (phần A 57, phần B 39), cộng `/health` và Swagger.
 > Mọi đường dẫn tính từ `/Users/ngoc/ecolink`. Tiền tố `IS/` = `ecolink-server/services/incident-service/`.
 
 **Mục lục:** [Phần A](#phan-a) · [Phần B](#phan-b)
@@ -24,8 +24,8 @@
 - **SOS**: tạo yêu cầu khẩn cấp gắn với một campaign đang ACTIVE (toạ độ lấy từ campaign), liệt kê (có lọc theo khoảng cách), đánh dấu đã xử lý.
 - **Saved resource**: lưu / bỏ lưu (toggle) report hoặc campaign, liệt kê danh sách đã lưu kèm dữ liệu chi tiết.
 - **Admin media**: admin đăng ký một URL ảnh (đã upload ở nơi khác) thành bản ghi `Media` loại `OTHER`. Không có chức năng kiểm duyệt media. Thư mục `src/modules/media` chỉ có thư mục `__tests__` rỗng.
-- **Organization**: danh sách / chi tiết tổ chức, cập nhật hồ sơ (chủ sở hữu), xác minh email liên hệ, admin verify/ban, yêu cầu tham gia (join request), duyệt/huỷ/rời tổ chức, liệt kê thành viên. Endpoint tạo tổ chức trực tiếp chỉ còn dùng nội bộ (`x-internal-api-key`).
-- **Organization application (đơn đăng ký tổ chức)**: form công khai không cần đăng nhập, xác thực hòm mail bằng OTP, upload giấy tờ vào Cloudinary chế độ `authenticated`, nộp / theo dõi / bổ sung / rút đơn bằng token; admin thẩm định (claim, request-info, approve/reject). Approve tạo `organizations` + `organization_channels` + outbox `ORG_ACCOUNT_PROVISION` trong một transaction; relay gọi identity-service tạo tài khoản ORG, gắn `ownerId`, gửi email kích hoạt.
+- **Organization**: danh sách / chi tiết tổ chức (kèm `owners[]`, `myRole`, `isOwner`), cập nhật hồ sơ (người có vai owner), xác minh email liên hệ, admin verify/ban, yêu cầu tham gia (join request), duyệt/huỷ/rời tổ chức, liệt kê thành viên. Endpoint tạo tổ chức trực tiếp chỉ còn dùng nội bộ (`x-internal-api-key`).
+- **Organization application (đơn đăng ký tổ chức)**: form công khai không cần đăng nhập. OTP mở đơn `DRAFT` và cấp tracking token; người nộp lưu nháp (kèm danh sách owner), upload giấy tờ vào Cloudinary chế độ `authenticated`, nộp, gửi lại lời mời, rút. Mỗi owner xác nhận / từ chối qua link riêng (không đăng nhập); sweeper mỗi giờ xử lý link hết hạn. Admin chỉ thấy đơn từ `PENDING_REVIEW`; approve gọi identity `ensure` rồi, trong một transaction, tạo `organizations` + `organization_channels` + membership vai owner (advisory lock cho trần 3 tổ chức) + outbox `ORG_OWNER_ONBOARD`; relay gửi email kích hoạt hoặc "đã gắn vai". Thiết kế: `docs/ORG_OWNERSHIP_FLOW.md`.
 - Ghi trường trust (Blue Tick): `orgType`, `kycStatus`, `trustTier`, `domainVerified`, `verifiedAt/By`, `verificationExpiresAt` chỉ được ghi đúng một lần, lúc approve đơn. Không có API nào sửa các trường này sau đó (xem mục 9). `orgType`, `kycStatus`, `trustTier`, `tickSuspended`, `verifiedAt`, `verificationExpiresAt` được trả ra (chỉ đọc) trong `OrganizationResponse`; `domainVerified`, `verifiedBy` không được trả ra.
 
 Bằng chứng mount router: `IS/src/index.ts` (các dòng `app.use(...)`).
@@ -56,17 +56,19 @@ ecolink-server/services/incident-service/
 │       ├── saved_resource/         # routes, controller, service, repository, dto
 │       ├── admin_media/            # routes, controller
 │       ├── media/                  # chỉ có __tests__/ rỗng
-│       ├── organization/           # routes, controller, service, 3 repository, identity-user.client,
+│       ├── organization/           # routes, controller, service, 3 repository, organization-membership.service, identity-user.client,
 │       │                           # identity-organization-contact-email.client, *-notify.client, *-urls
 │       └── organization_application/
 │           ├── organization-application.{routes,controller,service,repository,dto}.ts
 │           ├── organization-application-admin.{routes,controller,service}.ts
 │           ├── organization-application-otp.{service,repository}.ts
-│           ├── organization-account-provision.publisher.ts   # saga bước 2 (outbox handler)
-│           ├── identity-org-account.client.ts
+│           ├── owner-candidates.ts                # validateOwnerList, snapshot, token xác nhận
+│           ├── owner-confirmation.service.ts      # trang xác nhận, confirm, decline, expireOverdue
+│           ├── owner-confirmation-expiry.job.ts   # sweeper mỗi giờ (chạy trong worker.ts)
+│           ├── organization-owner-onboard.publisher.ts   # outbox ORG_OWNER_ONBOARD
+│           ├── identity-owner.client.ts           # lookup-by-emails, ensure, activation-token
 │           ├── organization-application-notify.client.ts
 │           ├── organization-application-urls.ts
-│           ├── submission-token.middleware.ts
 │           └── storage/{document-storage,cloudinary-document-storage}.ts
 ```
 
@@ -83,7 +85,7 @@ Quy ước dữ liệu:
 ### 3.1 JWT — `authenticate`
 - `IS/src/middleware/auth.middleware.ts > authenticate()`: lấy token từ header `Authorization: Bearer <token>`; nếu header không bắt đầu bằng `Bearer ` thì lấy cookie `accessToken`. Không có token → 401 `TOKEN_MISSING` ("Authentication token is required"). Verify lỗi (sai chữ ký, hết hạn, sai định dạng) → 401 `TOKEN_INVALID` ("Invalid token"); mã `TOKEN_EXPIRED` không được dùng.
 - `IS/src/utils/jwt.utils.ts > verifyToken()`: `jwt.verify(token, JWT_SECRET)` (thư viện `jsonwebtoken`, không truyền `algorithms`). Module throw ngay khi import nếu `JWT_SECRET` rỗng, nên cả API lẫn worker không khởi động được khi thiếu biến này.
-- Payload gắn vào `req.user`: `{ userId: string, email: string, role?: string }` (`TokenPayload`). Không kiểm tra user còn tồn tại, bị ban, hay `accountType`.
+- Payload gắn vào `req.user`: `{ userId: string, email: string, role?: string }` (`TokenPayload`). Không kiểm tra user còn tồn tại hay bị ban. `optionalAuthenticate()` (cùng file) gắn `req.user` nếu token hợp lệ, bỏ qua lỗi — dùng cho trang xác nhận owner.
 - `decodeToken()` (decode không verify) có nhưng không được dùng.
 - Token do identity-service ký với cùng `JWT_SECRET`. Ghi chú liên service: identity ký claim `role` = tên role khi sign-in (`ecolink-server/services/identity-service/src/modules/auth/auth.service.ts`, dòng `role: role?.name ?? "USER"`), nhưng khi refresh lại ký `role: user.roleId` (UUID). Mọi kiểm tra admin ở incident-service so sánh `role.toLowerCase() === "admin"`, nên admin dùng access token sinh từ refresh sẽ bị 403 (xem mục 9).
 
@@ -96,7 +98,7 @@ Không có middleware role. Mỗi controller tự so sánh `req.user.role?.toLow
 
 ### 3.3 Quyền chủ sở hữu (ownership)
 - Report: chỉ `report.userId === req.user.userId` được sửa/thêm ảnh/xoá ảnh/xoá report, và report không ở trạng thái banned (`IS/src/modules/report/report.service.ts > assertReporterMayEditReport()`).
-- Organization: chỉ `organization.ownerId === req.user.userId` (tài khoản ORG sau khi provisioning) được update, resend email, xem/duyệt join request (`IS/src/modules/organization/organization.service.ts`).
+- Organization: chỉ user có membership vai `LEGAL_REPRESENTATIVE` hoặc `OWNER` (`organization_member.repository.ts > isOwner()`, `organization.service.ts > assertOwner()`) được update, resend email, xem/duyệt join request. Một tổ chức có thể có nhiều owner; tổ chức không có tài khoản đăng nhập.
 
 ### 3.4 API key nội bộ của incident-service
 - `IS/src/middleware/internal-auth.middleware.ts > requireInternalIncidentApiKey()`: so sánh header `x-internal-api-key` với `INTERNAL_INCIDENT_API_KEY` bằng `!==`. Biến chưa cấu hình → 500 "INTERNAL_INCIDENT_API_KEY is not configured"; thiếu/sai key → 401 `UNAUTHORIZED` "Invalid internal API key". Chỉ dùng cho `POST /api/v1/organizations`.
@@ -107,15 +109,14 @@ Tất cả lưu dạng sha256 hex trong bảng `organization_application_otps` (
 
 | Purpose | Sinh ở | TTL mặc định (env) | Dùng một lần | Dùng để |
 | --- | --- | --- | --- | --- |
-| `OTP` (6 chữ số, `randomInt`) | `requestOtp()` | 10 phút (`APPLICATION_OTP_TTL_MS`) | Có (`usedAt`), tối đa `APPLICATION_OTP_MAX_ATTEMPTS`=5 lần sai | Đổi lấy submission token |
+| `OTP` (6 chữ số, `randomInt`) | `requestOtp()` | 10 phút (`APPLICATION_OTP_TTL_MS`) | Có (`usedAt`), tối đa `APPLICATION_OTP_MAX_ATTEMPTS`=5 lần sai | Mở đơn DRAFT + nhận tracking token |
 | `LINK` (32 byte base64url) | `requestOtp()` | bằng TTL của OTP | Không tiêu thụ, bị expire khi verify OTP thành công hoặc khi xin mã mới | Mở lại form với email khoá sẵn (`GET /email-otp/link`) |
-| `SUBMISSION` | `verifyOtp()` | 30 phút (`APPLICATION_SUBMISSION_TOKEN_TTL_MS`) | Có, burn khi nộp đơn thành công | Header `x-submission-token` cho presign và nộp đơn |
-| `TRACKING` | `issueTrackingToken()` lúc nộp đơn và lúc admin request-info | 180 ngày (`APPLICATION_TRACKING_TOKEN_TTL_MS`) | Không | Query `?token=` để xem / sửa / rút đơn / presign bổ sung |
+| `TRACKING` | `issueTrackingToken()` lúc verify OTP, lúc nộp lần đầu, lúc admin request-info, lúc owner từ chối / hết hạn | 180 ngày (`APPLICATION_TRACKING_TOKEN_TTL_MS`) | Không | Query `?token=` để xem / lưu nháp / presign / nộp / gửi lại lời mời / rút |
 
 Nguồn: `IS/src/modules/organization_application/organization-application-otp.service.ts`, `IS/src/modules/organization_application/organization-application-otp.repository.ts > OtpPurpose`.
 
-- `IS/src/modules/organization_application/submission-token.middleware.ts > requireSubmissionToken()`: đọc header `x-submission-token`; thiếu → 401 `SUBMISSION_TOKEN_INVALID`; resolve bằng `resolveSubmissionToken()` (không tiêu thụ); gắn `req.submissionEmail` và `req.submissionToken`.
-- Tracking token gắn với **email**, không gắn với đơn cụ thể: service chỉ kiểm tra `application.contactEmail === email` (`organization-application.service.ts > loadForApplicant()/getForApplicant()`).
+- Tracking token gắn với **email**, không gắn với đơn cụ thể: service chỉ kiểm tra `application.submitterEmail === email` (`organization-application.service.ts > loadForApplicant()/getForApplicant()`). Token sai / hết hạn → 401 `TRACKING_TOKEN_INVALID`.
+- **Token xác nhận owner** không nằm ở bảng này: 32 byte base64url, lưu sha256 ở `organization_application_owners.confirm_token_hash` (unique), hạn 14 ngày (`owner-candidates.ts > newConfirmToken()`); dùng trong path `/owner-confirmations/:token`.
 
 ### 3.6 Rate limit
 `IS/src/middleware/rate-limit.middleware.ts` (express-rate-limit, bộ nhớ trong tiến trình, fixed window):
@@ -136,7 +137,7 @@ Không qua `authenticate`: `GET /health`, `GET /api/v1/organizations/verify-cont
 
 Mọi prefix dưới đây đều được api-gateway proxy nguyên đường dẫn (`ecolink-server/api-gateway/src/index.ts`), riêng saved resource: gateway `/api/v1/incident/saved-resources` → upstream `/incident/saved-resources`. `POST /api/v1/organizations` vẫn đi qua gateway được nhưng cần `x-internal-api-key`.
 
-Chú thích cột Auth: **JWT** = `authenticate`; **Public** = không xác thực; **Key** = `x-internal-api-key`; **Sub** = `x-submission-token`; **Track** = query `token` (tracking token).
+Chú thích cột Auth: **JWT** = `authenticate`; **Public** = không xác thực; **Key** = `x-internal-api-key`; **Track** = query `token` (tracking token).
 
 ### 4.1 Report — `IS/src/modules/report/report.routes.ts` (prefix `/api/v1/reports`)
 
@@ -201,24 +202,24 @@ Validation chạy trước kiểm tra admin, nên user thường gửi body sai 
 
 | Method | Path | Auth | Role | Request | Response | Mã lỗi | Handler |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| POST | `/api/v1/organizations` | Key | Service nội bộ | Body `ownerId` UUID bắt buộc; `name` ≤200 bắt buộc; `description?`/`descriptionVi?`/`descriptionEn?` ≤5000; `lang?`; `logoUrl` URL ≤2048 bắt buộc; `backgroundUrl?` URL ≤2048; `contactEmail` email ≤320 bắt buộc | 201 `{ organization }` (status ACTIVE) | 400; 401 "Invalid internal API key"; 409 ORGANIZATION_ALREADY_EXISTS; 409 "Unable to allocate a unique slug"; 500 "INTERNAL_INCIDENT_API_KEY is not configured" | `IS/src/modules/organization/organization.controller.ts > createOrganization` → `organization.service.ts > createOrganization()` |
+| POST | `/api/v1/organizations` | Key | Service nội bộ | Body `ownerId` UUID bắt buộc; `name` ≤200 bắt buộc; `description?`/`descriptionVi?`/`descriptionEn?` ≤5000; `lang?`; `logoUrl` URL ≤2048 bắt buộc; `backgroundUrl?` URL ≤2048; `contactEmail` email ≤320 bắt buộc | 201 `{ organization }` (status ACTIVE; `ownerId` thành membership vai OWNER trong cùng transaction) | 400; 401 "Invalid internal API key"; 409 ORGANIZATION_ALREADY_EXISTS; 409 "Unable to allocate a unique slug"; 500 "INTERNAL_INCIDENT_API_KEY is not configured" | `IS/src/modules/organization/organization.controller.ts > createOrganization` → `organization.service.ts > createOrganization()` |
 | GET | `/api/v1/organizations/verify-contact-email` | Public | — | Query `token` bắt buộc | 302 → `FRONTEND_APP_URL/organizations/<slug>?verifiedEmail=1`; lỗi → `FRONTEND_APP_URL/organizations/email-verified?error=invalid_or_expired|mismatch|not_found` | Không trả JSON | `organization.controller.ts > verifyOrganizationContactEmail` → `identity-organization-contact-email.client.ts > verifyAndConsumeOrganizationContactEmailToken()` → `organization.service.ts > confirmOrganizationContactEmail()` |
-| GET | `/api/v1/organizations/join-requests/my` | JWT | Chính user | Query `organizationId?` UUID, `status?` int, `page?`, `limit?` ≤100 (10), `sortBy?` createdAt/updatedAt, `sortOrder?` | 200 `{ joinRequests: [{ id, organizationId, requesterId, requester, status, createdAt, updatedAt, organization? {id,name,ownerId} }], total, page, limit, totalPages }` | 400; 401 | `organization.controller.ts > getMyJoinRequests` → `getMyJoinRequests()` |
-| PUT | `/api/v1/organizations/join-requests/process` | JWT | Chủ tổ chức | Body `requestId` UUID, `approved` boolean | 200 `{ joinRequest }` | 400; 401; 403 "Only the organization owner can process join requests"; 404 JOIN_REQUEST_NOT_FOUND / "Organization not found"; 409 JOIN_REQUEST_ALREADY_PROCESSED | `organization.controller.ts > processJoinRequest` → `processJoinRequest()` |
+| GET | `/api/v1/organizations/join-requests/my` | JWT | Chính user | Query `organizationId?` UUID, `status?` int, `page?`, `limit?` ≤100 (10), `sortBy?` createdAt/updatedAt, `sortOrder?` | 200 `{ joinRequests: [{ id, organizationId, requesterId, requester, status, createdAt, updatedAt, organization? {id,name} }], total, page, limit, totalPages }` | 400; 401 | `organization.controller.ts > getMyJoinRequests` → `getMyJoinRequests()` |
+| PUT | `/api/v1/organizations/join-requests/process` | JWT | Owner (bất kỳ) | Body `requestId` UUID, `approved` boolean | 200 `{ joinRequest }` | 400; 401; 403 "Only an organization owner can process join requests"; 404 JOIN_REQUEST_NOT_FOUND / "Organization not found"; 409 JOIN_REQUEST_ALREADY_PROCESSED | `organization.controller.ts > processJoinRequest` → `processJoinRequest()` |
 | DELETE | `/api/v1/organizations/join-requests/cancel` | JWT | Người gửi yêu cầu | Body `requestId` UUID | 200 (không có data) | 400 validation / "Can only cancel pending requests"; 401; 403 "Cannot cancel another user's join request"; 404 JOIN_REQUEST_NOT_FOUND | `organization.controller.ts > cancelJoinRequest` → `cancelJoinRequest()` |
-| GET | `/api/v1/organizations/my` | JWT | Chính user | Query `search?`, `status?` (lặp/phẩy, số nguyên), `isEmailVerified`/`is_email_verified` (true/false/1/0), `requestStatus`/`request_status` (lặp/phẩy), `isOwner`/`is_owner`, `page?`, `limit?` ≤100 (10), `sortBy?` createdAt/updatedAt/name, `sortOrder?` | 200 `{ organizations[], total, page, limit, totalPages }`; mỗi item có `members` (đếm thành viên), `isMember?`, `requestStatus?`, `joinRequestId?` | 400; 401 | `organization.controller.ts > listMyOrganizations` → `listMyOrganizations()` |
+| GET | `/api/v1/organizations/my` | JWT | Chính user | Query `search?`, `status?` (lặp/phẩy, số nguyên), `isEmailVerified`/`is_email_verified` (true/false/1/0), `requestStatus`/`request_status` (lặp/phẩy), `isOwner`/`is_owner` (true: có vai owner; false: membership không phải owner), `page?`, `limit?` ≤100 (10), `sortBy?` createdAt/updatedAt/name, `sortOrder?` | 200 `{ organizations[], total, page, limit, totalPages }`; mỗi item có `members` (đếm mọi membership, kể cả owner), `isMember?`, `myRole`, `isOwner`, `requestStatus?`, `joinRequestId?` | 400; 401 | `organization.controller.ts > listMyOrganizations` → `listMyOrganizations()` |
 | GET | `/api/v1/organizations` | JWT | Mọi user | Như `/my` trừ `isOwner` | Như `/my`; trả mọi trạng thái (kể cả banned) nếu không lọc `status` | 400; 401 | `organization.controller.ts > listOrganizations` → `listOrganizations()` |
 | GET | `/api/v1/organizations/by-slug/:slug` | JWT | Mọi user | Param `slug` ≤220, regex `^[a-z0-9]+(?:-[a-z0-9]+)*$` | 200 `{ organization }` | 400; 401; 404 "Organization not found" (không tồn tại hoặc `status=INACTIVE`) | `organization.controller.ts > getOrganizationBySlug` → `getBySlug()` |
 | PUT | `/api/v1/organizations/:id/verify` | JWT | admin | Param `id` UUID; body `status` ∈ {1, 2}; `rejectReason` bắt buộc (không rỗng) khi status=2, chuỗi hoặc null, ≤5000 | 200 "Organization verified successfully" / "Organization banned successfully" `{ organization }` | 400 (validation, "Organization cannot be approved/banned from its current status", "reject_reason is required when banning an organization"); 401; 403 "Only admin can verify an organization"; 404 "Organization not found" | `organization.controller.ts > adminVerifyOrganization` → `adminVerifyOrganization()` |
-| PUT | `/api/v1/organizations/:id` | JWT | Chủ tổ chức | Param `id` UUID; body ít nhất một trong `name` (1..200), `description`/`descriptionVi`/`descriptionEn` (≤5000), `logoUrl` (URL ≤2048), `backgroundUrl` (URL ≤2048 hoặc `null` để xoá), `contactEmail` (email ≤320); `lang?` | 200 `{ organization }` | 400; 401; 403 "Only the organization owner can update this organization"; 404; 409 ORGANIZATION_ALREADY_EXISTS | `organization.controller.ts > updateOrganization` → `updateOrganization()` |
-| POST | `/api/v1/organizations/:id/resend-contact-email` | JWT | Chủ tổ chức | Param `id` UUID | 200 "Verification email sent" `{ organization }` | 400 "Organization has no contact email to verify" / "Contact email is already verified"; 401; 403 "Only the organization owner can resend the verification email"; 404; 502 "Failed to send verification email; try again later" | `organization.controller.ts > resendOrganizationContactEmail` → `resendOrganizationContactVerificationEmail()` |
+| PUT | `/api/v1/organizations/:id` | JWT | Owner | Param `id` UUID; body ít nhất một trong `name` (1..200), `description`/`descriptionVi`/`descriptionEn` (≤5000), `logoUrl` (URL ≤2048), `backgroundUrl` (URL ≤2048 hoặc `null` để xoá), `contactEmail` (email ≤320); `lang?` | 200 `{ organization }` | 400; 401; 403 "Only an organization owner can update this organization"; 404; 409 ORGANIZATION_ALREADY_EXISTS | `organization.controller.ts > updateOrganization` → `updateOrganization()` |
+| POST | `/api/v1/organizations/:id/resend-contact-email` | JWT | Owner | Param `id` UUID | 200 "Verification email sent" `{ organization }` | 400 "Organization has no contact email to verify" / "Contact email is already verified"; 401; 403 "Only an organization owner can resend the verification email"; 404; 502 "Failed to send verification email; try again later" | `organization.controller.ts > resendOrganizationContactEmail` → `resendOrganizationContactVerificationEmail()` |
 | GET | `/api/v1/organizations/:id` | JWT | Mọi user | Param `id` UUID | 200 `{ organization }` (kể cả tổ chức bị ban) | 400; 401; 404 NOT_FOUND | `organization.controller.ts > getOrganizationById` → `getById()` |
-| POST | `/api/v1/organizations/:id/join-requests` | JWT | User không phải chủ, chưa là thành viên | Param `id` UUID | 201 `{ joinRequest }` | 400 "Organization owner cannot request to join"; 401; 404 "Organization not found"; 409 "Already a member of this organization"; 409 JOIN_REQUEST_ALREADY_EXISTS | `organization.controller.ts > createJoinRequest` → `createJoinRequest()` |
-| GET | `/api/v1/organizations/:id/join-requests` | JWT | Chủ tổ chức | Param `id` UUID; query `status?` int, `requesterId?` UUID, `page?`, `limit?` ≤100, `sortBy?`, `sortOrder?` | 200 `{ joinRequests[], total, page, limit, totalPages }` | 400; 401; 403 "Only the organization owner can view join requests"; 404 | `organization.controller.ts > listJoinRequestsForOwner` → `listJoinRequestsForOwner()` |
-| DELETE | `/api/v1/organizations/:id/members/me` | JWT | Thành viên (không phải chủ) | Param `id` UUID | 200 (không có data) | 400 "Organization owners cannot leave; transfer ownership or delete the organization" / "You are not a member of this organization"; 401; 404 | `organization.controller.ts > leaveOrganization` → `leaveOrganization()` |
-| GET | `/api/v1/organizations/:id/members` | JWT | Mọi user (kiểm tra chủ sở hữu bị comment out) | Param `id` UUID; query `userId`/`user_id` UUID, `search?` (tên, lọc trong bộ nhớ), `page?`, `limit?` ≤100, `sortBy`/`sort_by`, `sortOrder`/`sort_order` | 200 `{ members: [{ organizationId, userId, user, createdAt }], total, page, limit, totalPages }` | 400; 401; 404 | `organization.controller.ts > listMembers` → `listMembersForOwner()` |
+| POST | `/api/v1/organizations/:id/join-requests` | JWT | User chưa có membership nào | Param `id` UUID | 201 `{ joinRequest }` | 401; 404 "Organization not found"; 409 "Already a member of this organization"; 409 JOIN_REQUEST_ALREADY_EXISTS | `organization.controller.ts > createJoinRequest` → `createJoinRequest()` |
+| GET | `/api/v1/organizations/:id/join-requests` | JWT | Owner | Param `id` UUID; query `status?` int, `requesterId?` UUID, `page?`, `limit?` ≤100, `sortBy?`, `sortOrder?` | 200 `{ joinRequests[], total, page, limit, totalPages }` | 400; 401; 403 "Only an organization owner can view join requests"; 404 | `organization.controller.ts > listJoinRequestsForOwner` → `listJoinRequestsForOwner()` |
+| DELETE | `/api/v1/organizations/:id/members/me` | JWT | Thành viên không có vai owner | Param `id` UUID | 200 (không có data) | 409 ORG_MUST_HAVE_OWNER (owner cuối cùng); 400 "Organization owners cannot leave yet; ownership changes go through the platform" / "You are not a member of this organization"; 401; 404 | `organization.controller.ts > leaveOrganization` → `leaveOrganization()` |
+| GET | `/api/v1/organizations/:id/members` | JWT | Mọi user (kiểm tra chủ sở hữu bị comment out) | Param `id` UUID; query `userId`/`user_id` UUID, `search?` (tên, lọc trong bộ nhớ), `page?`, `limit?` ≤100, `sortBy`/`sort_by`, `sortOrder`/`sort_order` | 200 `{ members: [{ organizationId, userId, role, user, createdAt }], total, page, limit, totalPages }` | 400; 401; 404 | `organization.controller.ts > listMembers` → `listMembersForOwner()` |
 
-`OrganizationResponse` (`IS/src/modules/organization/organization.service.ts > organizationCoreFromRow()`): `id, name, slug, description (luôn null), descriptionVi (= descriptionVi ?? description), descriptionEn, logoUrl, backgroundUrl, contactEmail, isEmailVerified, status, rejectReason, orgType|null, kycStatus, trustTier, tickSuspended, verifiedAt|null, verificationExpiresAt|null, ownerId, owner {id,name,avatar,bio}|null, createdAt, updatedAt` + tuỳ endpoint: `members`, `isMember`, `requestStatus` (chỉ PENDING 12 hoặc APPROVED 14 và đang là thành viên), `joinRequestId` (khi PENDING). Client hiện Blue Tick khi `trust_tier === "VERIFIED"` và `!tick_suspended` (`FE/components/ui/BlueTickBadge.tsx > isBlueTickVisible()`). **Không có** `domainVerified`, `verifiedBy`, `tickRevokedReason`, `address`, `latitude/longitude`, `channels`.
+`OrganizationResponse` (`IS/src/modules/organization/organization.service.ts > organizationCoreFromRow()`): `id, name, slug, description (luôn null), descriptionVi (= descriptionVi ?? description), descriptionEn, logoUrl, backgroundUrl, contactEmail, isEmailVerified, status, rejectReason, orgType|null, kycStatus, trustTier, tickSuspended, verifiedAt|null, verificationExpiresAt|null, owners [{id,name,avatar,bio,role}], createdAt, updatedAt` + tuỳ endpoint (có người xem): `members`, `myRole`, `isOwner`, `isMember`, `requestStatus` (chỉ PENDING 12 hoặc APPROVED 14 và đang là thành viên), `joinRequestId` (khi PENDING). Client hiện Blue Tick khi `trust_tier === "VERIFIED"` và `!tick_suspended` (`FE/components/ui/BlueTickBadge.tsx > isBlueTickVisible()`). **Không có** `domainVerified`, `verifiedBy`, `tickRevokedReason`, `address`, `latitude/longitude`, `channels`.
 
 ### 4.7 Organization application — công khai — `IS/src/modules/organization_application/organization-application.routes.ts` (prefix `/api/v1/organization-applications`)
 
@@ -226,29 +227,32 @@ Validation chạy trước kiểm tra admin, nên user thường gửi body sai 
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | POST | `/api/v1/organization-applications/email-otp` | Public, `otpPerIpLimiter` + `otpPerEmailLimiter` | Ẩn danh | Body `email` email ≤320 | 200 `{ sent: true, sentAt, expiresAt }` | 400; 429 (limiter hoặc bộ đếm DB); 503 "Could not send the verification code, please try again" | `IS/src/modules/organization_application/organization-application.controller.ts > requestOtp` → `organization-application-otp.service.ts > requestOtp()` |
 | GET | `/api/v1/organization-applications/email-otp/link` | Public, `applicationPublicLimiter` | Ẩn danh | Query `token` ≤128 | 200 `{ email, sentAt, expiresAt }` | 400 VALIDATION_ERROR; 400 OTP_INVALID "This link is invalid or has expired, please request a new code"; 429 | `…controller.ts > resolveEmailLink` → `resolveEmailLink()` |
-| POST | `/api/v1/organization-applications/email-otp/verify` | Public, limiter | Ẩn danh | Body `email`, `otp` (4..10 ký tự) | 200 `{ submissionToken, expiresAt }` | 400; 400 OTP_INVALID; 429 OTP_TOO_MANY_ATTEMPTS | `…controller.ts > verifyOtp` → `verifyOtp()` |
-| POST | `/api/v1/organization-applications/documents/presign` | Sub, limiter | Chủ hòm mail | Body `docType` ≤32, `fileName` ≤255, `mimeType` ≤100, `sizeBytes` int ≥1 | 201 `{ documentId, uploadUrl, fields, expiresAt }` | 400 VALIDATION_ERROR / INVALID_INPUT ("Unknown document type", "Only application/pdf, image/jpeg, image/png are accepted", "Each file must be at most 10 MB"); 401 SUBMISSION_TOKEN_INVALID; 422 ORGANIZATION_DOCUMENT_LIMIT; 500 (thiếu cấu hình Cloudinary) | `…controller.ts > presignDocument` → `organization-application.service.ts > presignDocument()` |
-| POST | `/api/v1/organization-applications` | Sub, limiter | Chủ hòm mail | Body `orgType` ≤32; `profile` object; `channels` mảng ≥1; `legalRepresentative?`; `documentIds?` mảng ≤5 UUID; `consent` boolean (xem rule chi tiết mục 4.9) | 201 `{ application (public), trackingToken }` | 400 VALIDATION_ERROR / INVALID_INPUT; 401 SUBMISSION_TOKEN_INVALID; 404 ORGANIZATION_DOCUMENT_NOT_FOUND; 409 ORGANIZATION_APPLICATION_ALREADY_OPEN; 409 "Unable to allocate a unique application code"; 422 ORGANIZATION_DOCUMENT_LIMIT / LEGAL_REP_LIMIT_EXCEEDED | `…controller.ts > createApplication` → `createApplication()` |
-| POST | `/api/v1/organization-applications/:id/documents/presign` | Track, limiter | Chủ hòm mail | Param `id` UUID; query `token`; body như presign | 201 như presign | 400; 401 SUBMISSION_TOKEN_INVALID (token tracking sai); 404 ORGANIZATION_APPLICATION_NOT_FOUND; 409 ORGANIZATION_APPLICATION_NOT_EDITABLE; 422 | `…controller.ts > presignDocumentForApplication` → `presignDocumentForApplication()` |
-| GET | `/api/v1/organization-applications/:id` | Track, limiter | Chủ hòm mail | Param `id` UUID; query `token` | 200 `{ application }` (public: không có `legal_rep_*`, `lane`, events) | 400; 401; 404 | `…controller.ts > getApplication` → `getForApplicant()` |
-| PUT | `/api/v1/organization-applications/:id` | Track (query `token` hoặc body `token`), limiter | Chủ hòm mail | Param `id` UUID; body optional `orgType`, `profile`, `channels` (≥1), `legalRepresentative`, `documentIds` (≤5 UUID), `removeDocumentIds` (≤5 UUID) | 200 `{ application }` (status SUBMITTED) | 400; 401; 404 ORGANIZATION_APPLICATION_NOT_FOUND / ORGANIZATION_DOCUMENT_NOT_FOUND; 409 ORGANIZATION_APPLICATION_NOT_EDITABLE; 422 | `…controller.ts > updateApplication` → `updateApplication()` |
+| POST | `/api/v1/organization-applications/email-otp/verify` | Public, limiter | Ẩn danh | Body `email`, `otp` (4..10 ký tự) | 200 `{ applicationId, trackingToken, resumed }` (mở đơn DRAFT hoặc trả đơn đang mở) | 400; 400 OTP_INVALID; 429 OTP_TOO_MANY_ATTEMPTS | `…controller.ts > verifyOtp` → `verifyOtp()` → `organization-application.service.ts > openDraftForEmail()` |
+| GET | `/api/v1/organization-applications/owner-confirmations/:token` | Public, limiter, `optionalAuthenticate` | Owner được mời | Param `token` ≤128 | 200 `{ confirmation: { status, applicationStatus, active, expired, expiresAt, applicationCode, organization {name, orgType, address, logoUrl, description}, submitterEmail, candidate, otherOwners[], sessionEmailMismatch } }` | 400; 404 OWNER_CONFIRMATION_NOT_FOUND | `…controller.ts > getOwnerConfirmation` → `owner-confirmation.service.ts > getSummary()` |
+| POST | `/api/v1/organization-applications/owner-confirmations/:token/confirm` | Public, limiter | Owner được mời | Param `token` | 200 `{ alreadyDone, remaining, applicationStatus }` | 404; 409 ALREADY_DECLINED / APPLICATION_NOT_ACTIVE; 410 CONFIRM_EXPIRED | `…controller.ts > confirmOwner` → `confirm()` |
+| POST | `/api/v1/organization-applications/owner-confirmations/:token/decline` | Public, limiter | Owner được mời | Param `token`; body `reason?` ≤1000, `blockFuture?` bool | 200 `{ applicationStatus }` | 404; 409 ALREADY_CONFIRMED / APPLICATION_NOT_ACTIVE | `…controller.ts > declineOwner` → `decline()` |
+| POST | `/api/v1/organization-applications/:id/documents/presign` | Track, limiter | Chủ hòm mail | Param `id` UUID; query `token`; body `docType` ≤32, `fileName` ≤255, `mimeType` ≤100, `sizeBytes` int ≥1 | 201 `{ documentId, uploadUrl, fields, expiresAt }` | 400 INVALID_INPUT ("Unknown document type", "Only application/pdf, image/jpeg, image/png are accepted", "Each file must be at most 10 MB"); 401 TRACKING_TOKEN_INVALID; 404; 409 ORGANIZATION_APPLICATION_NOT_EDITABLE; 422 ORGANIZATION_DOCUMENT_LIMIT; 500 (thiếu cấu hình Cloudinary) | `…controller.ts > presignDocumentForApplication` → `presignDocumentForApplication()` |
+| GET | `/api/v1/organization-applications/:id` | Track, limiter | Chủ hòm mail | Param `id` UUID; query `token` | 200 `{ application }` (public, xem dưới) | 400; 401; 404 | `…controller.ts > getApplication` → `getForApplicant()` |
+| PUT | `/api/v1/organization-applications/:id` | Track (query hoặc body `token`), limiter | Chủ hòm mail | Param `id` UUID; body optional `orgType`, `profile`, `channels` (≤10), `legalRepresentative {idType?, idNumber?, phone?, position?}`, `owners[]` (≤5, `{email, fullName, isLegalRep?, nationalIdDocumentId?}`), `documentIds` (≤5 UUID), `removeDocumentIds` (≤5 UUID), `consent?` | 200 `{ application }` (status giữ nguyên) | 400; 401; 404 ORGANIZATION_APPLICATION_NOT_FOUND / ORGANIZATION_DOCUMENT_NOT_FOUND; 409 ORGANIZATION_APPLICATION_NOT_EDITABLE; 422 TOO_MANY_OWNERS / DUPLICATE_OWNER_EMAIL / ORGANIZATION_DOCUMENT_LIMIT | `…controller.ts > saveDraft` → `saveDraft()` |
+| POST | `/api/v1/organization-applications/:id/submit` | Track, limiter | Chủ hòm mail | Param `id` UUID; body `consent?` | 200 `{ application }` (AWAITING_OWNER_CONFIRMATION hoặc PENDING_REVIEW) | 400; 401; 404; 409 NOT_EDITABLE; 422 AT_LEAST_ONE_OWNER / TOO_MANY_OWNERS / DUPLICATE_OWNER_EMAIL / SUBMITTER_MUST_BE_OWNER / EXACTLY_ONE_LEGAL_REP / OWNER_SUSPENDED / OWNER_QUOTA_EXCEEDED / TOO_MANY_PENDING_INVITES / OWNER_INVITE_BLOCKED / OWNER_DECLINED_MUST_BE_REPLACED; 503 identity lỗi | `…controller.ts > submitApplication` → `submitApplication()` |
+| POST | `/api/v1/organization-applications/:id/owners/:candidateId/resend` | Track, limiter | Chủ hòm mail | Param `id`, `candidateId` UUID | 200 `{ application }` | 401; 404; 409 APPLICATION_NOT_ACTIVE; 429 RESEND_LIMIT_REACHED / RESEND_TOO_SOON | `…controller.ts > resendOwnerInvite` → `resendOwnerInvite()` |
 | GET | `/api/v1/organization-applications/:id/documents/:docId/file` | Track (query `token`), limiter | Chủ hòm mail | Param `id`, `docId` UUID; query `token` | 200 stream file inline (`Cache-Control: no-store, private`), ghi event DOCUMENT_VIEWED (`actorId: null`, payload `viewer: "applicant"`) | 400; 401; 404 ORGANIZATION_APPLICATION_NOT_FOUND / ORGANIZATION_DOCUMENT_NOT_FOUND (khác hồ sơ hoặc đã purge) | `…controller.ts > openDocument` → `openDocumentForApplicant()` |
-| POST | `/api/v1/organization-applications/:id/withdraw` | Track (query hoặc body `token`), limiter | Chủ hòm mail | Param `id` UUID | 200 `{ application }` (status WITHDRAWN, `documents: []`) | 400; 401; 404; 409 ORGANIZATION_APPLICATION_ALREADY_DECIDED | `…controller.ts > withdrawApplication` → `withdrawApplication()` |
+| POST | `/api/v1/organization-applications/:id/withdraw` | Track (query hoặc body `token`), limiter | Chủ hòm mail | Param `id` UUID | 200 `{ application }` (WITHDRAWN) | 400; 401; 404; 409 ORGANIZATION_APPLICATION_ALREADY_DECIDED | `…controller.ts > withdrawApplication` → `withdrawApplication()` |
 
-`ApplicationPublicResponse` (`organization-application.service.ts > toPublicResponse()`): `id, code, orgType, status, profile, channels, documents [{ id, docType, fileName, mimeType, sizeBytes, purgedAt, createdAt }], reviewNote, rejectReason, organizationId, submittedAt (= createdAt), reviewedAt`.
+`ApplicationPublicResponse` (`organization-application.service.ts > toPublicResponse()`): `id, code, type, orgType|null, status, submitterEmail, contactEmail, profile, channels, documents [{ id, docType, fileName, mimeType, sizeBytes, purgedAt, createdAt }], owners [{ id, email, fullName, isLegalRep, nationalIdDocumentId, status, isSubmitter, respondedAt, expiresAt, sentAt, sentCount, resendsLeft, nextResendAt, declineReason }] (không gồm owner đã gỡ), confirmedCount, totalOwners, legalRepresentative { fullName, email, idType, idLast4, phone, position }, reviewNote, rejectReason, organizationId, consentedAt, createdAt, submittedAt, reviewedAt`.
 
 ### 4.8 Organization application — admin — `IS/src/modules/organization_application/organization-application-admin.routes.ts` (prefix `/api/v1/admin/organization-applications`)
 
 | Method | Path | Auth | Role | Request | Response | Mã lỗi | Handler |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| GET | `/api/v1/admin/organization-applications` | JWT | admin | Query `status`, `org_type`/`orgType`, `lane` (lặp/phẩy, tự upper-case), `q` (tìm `code`, `contactEmail`, `legalRepName`), `page?` ≥1 (1), `limit?` 1..100 (20) | 200 `{ applications[] (admin, events rỗng), total, page, limit, totalPages (≥1) }` sắp `createdAt desc` | 400; 401; 403 | `IS/src/modules/organization_application/organization-application-admin.controller.ts > listApplications` → `organization-application-admin.service.ts > list()` |
-| GET | `/api/v1/admin/organization-applications/:id` | JWT | admin | Param `id` UUID | 200 `{ application }` (admin đầy đủ + `events`; mỗi event có `actor_name` lấy từ identity, `null` với người nộp ẩn danh hoặc khi identity lỗi) | 400; 401; 403; 404 ORGANIZATION_APPLICATION_NOT_FOUND | `…admin.controller.ts > getApplication` → `getById()` |
+| GET | `/api/v1/admin/organization-applications` | JWT | admin | Query `status`, `org_type`/`orgType`, `lane` (lặp/phẩy, tự upper-case), `q` (tìm `code`, `submitterEmail`, `contactEmail`, họ tên / email owner), `page?` ≥1 (1), `limit?` 1..100 (20) | 200 `{ applications[] (admin, events rỗng, owners không có thông tin tài khoản), total, page, limit, totalPages (≥1) }` sắp `submittedAt desc, createdAt desc`; **luôn loại DRAFT và AWAITING_OWNER_CONFIRMATION** | 400; 401; 403 | `IS/src/modules/organization_application/organization-application-admin.controller.ts > listApplications` → `organization-application-admin.service.ts > list()` |
+| GET | `/api/v1/admin/organization-applications/:id` | JWT | admin | Param `id` UUID | 200 `{ application }` (admin đầy đủ + `events`; mỗi event có `actor_name` lấy từ identity; owners kèm `account` từ identity `lookup-by-emails`, `activeOwnerOrgCount`, `sameIpCluster`) | 400; 401; 403; 404 ORGANIZATION_APPLICATION_NOT_FOUND (kể cả đơn DRAFT / AWAITING) | `…admin.controller.ts > getApplication` → `getById()` |
 | GET | `/api/v1/admin/organization-applications/:id/documents/:docId/file` | JWT | admin | Param `id`, `docId` UUID | 200 stream file (`Content-Type` từ Cloudinary, `Cache-Control: no-store, private`, `Content-Disposition: inline`) ; ghi event `DOCUMENT_VIEWED` | 400; 401; 403; 404 ORGANIZATION_DOCUMENT_NOT_FOUND / "This document has been erased by the retention policy"; 500 | `…admin.controller.ts > openDocument` → `openDocument()` |
-| PUT | `/api/v1/admin/organization-applications/:id/claim` | JWT | admin | Param `id` UUID | 200 `{ application }` (UNDER_REVIEW) | 400; 401; 403; 404; 409 ORGANIZATION_APPLICATION_ALREADY_DECIDED; 409 ORGANIZATION_APPLICATION_CLAIMED | `…admin.controller.ts > claimApplication` → `claim()` |
-| PUT | `/api/v1/admin/organization-applications/:id/request-info` | JWT | admin | Param `id` UUID; body `message` không rỗng ≤5000 | 200 `{ application }` (NEEDS_MORE_INFO) | 400; 401; 403; 404; 409 ALREADY_DECIDED | `…admin.controller.ts > requestMoreInfo` → `requestMoreInfo()` |
-| PUT | `/api/v1/admin/organization-applications/:id/decision` | JWT | admin | Param `id` UUID; body `decision` (APPROVE/REJECT, không phân biệt hoa thường), `lane?` (A/B, bắt buộc khi approve), `documentsWaived?` bool, `documentsWaivedReason?` ≤5000, `rejectReason?` ≤5000 (bắt buộc khi reject), `grantBlueTick?` bool | 200 `{ application }` | 400 INVALID_INPUT "decision must be APPROVE or REJECT" / "lane must be A or B when approving"; 400 VALIDATION_ERROR "reject_reason is required when rejecting an application" / "documents_waived_reason is required when waiving the document requirement" / "This application has no documents; waive the requirement explicitly to approve it" / "The application profile is missing a name or logo"; 401; 403; 404; 409 ALREADY_DECIDED; 409 "Unable to allocate a unique slug" | `…admin.controller.ts > decideApplication` → `decide()` → `reject()` / `approve()` |
+| PUT | `/api/v1/admin/organization-applications/:id/claim` | JWT | admin | Param `id` UUID | 200 `{ application }` (status giữ PENDING_REVIEW) | 400; 401; 403; 404; 409 ALREADY_DECIDED / NOT_PENDING_REVIEW / ORGANIZATION_APPLICATION_CLAIMED | `…admin.controller.ts > claimApplication` → `claim()` |
+| PUT | `/api/v1/admin/organization-applications/:id/request-info` | JWT | admin | Param `id` UUID; body `message` không rỗng ≤5000 | 200 `{ application }` (NEEDS_REVISION) | 400; 401; 403; 404; 409 ALREADY_DECIDED / NOT_PENDING_REVIEW | `…admin.controller.ts > requestMoreInfo` → `requestMoreInfo()` |
+| PUT | `/api/v1/admin/organization-applications/:id/decision` | JWT | admin | Param `id` UUID; body `decision` (APPROVE/REJECT, không phân biệt hoa thường), `lane?` (A/B, bắt buộc khi approve), `documentsWaived?` bool, `documentsWaivedReason?` ≤5000, `rejectReason?` ≤5000 (bắt buộc khi reject), `grantBlueTick?` bool | 200 `{ application }` | 400 INVALID_INPUT "decision must be APPROVE or REJECT" / "lane must be A or B when approving"; 400 VALIDATION_ERROR "reject_reason is required when rejecting an application" / "documents_waived_reason is required when waiving the document requirement" / "This application has no documents; waive the requirement explicitly to approve it" / "The application profile is missing a name or logo"; 401; 403; 404; 409 ALREADY_DECIDED / NOT_PENDING_REVIEW / OWNERS_NOT_ALL_CONFIRMED; 409 "Unable to allocate a unique slug"; 422 OWNER_QUOTA_EXCEEDED / OWNER_SUSPENDED / AT_LEAST_ONE_OWNER; 503 identity lỗi | `…admin.controller.ts > decideApplication` → `decide()` → `reject()` / `approve()` |
 
-`ApplicationAdminResponse` = public + `lane, documentsWaived, documentsWaivedReason, contactEmail, legalRepresentative { fullName, idType, idLast4, phone, position, email }, submittedByUserId, emailVerifiedAt, consentedAt, reviewerId, claimedAt, accountProvisionedAt, purgedAt, events [{ id, eventType, actorId, payload, createdAt }]` (`organization-application-admin.service.ts > toAdminResponse()`).
+`ApplicationAdminResponse` = public (owners mở rộng thêm `confirmIp, confirmUa, resolvedUserId, account {userId, status, createdAt}|null, activeOwnerOrgCount, sameIpCluster`) + `lane, documentsWaived, documentsWaivedReason, submittedByUserId, emailVerifiedAt, reviewerId, claimedAt, purgedAt, events [{ id, eventType, actorId, actorName, payload, createdAt }]` (`organization-application-admin.service.ts > toAdminResponse()`).
 
 ### 4.9 Business rule và flow chính
 
@@ -330,6 +334,7 @@ Toggle (`saved_resource.service.ts > save()`): chưa có dòng → tạo (đã l
 ```mermaid
 sequenceDiagram
     participant U as Nguoi nop don
+    participant O as Owner duoc moi
     participant I as incident API
     participant CL as "Cloudinary (authenticated)"
     participant N as notification-service
@@ -339,84 +344,77 @@ sequenceDiagram
     U->>I: "POST /organization-applications/email-otp { email }"
     I->>N: "email ORG_APPLICATION_OTP (otp, applyUrl)"
     U->>I: "POST /email-otp/verify { email, otp }"
-    I-->>U: "submissionToken (30 phut)"
-    U->>I: "POST /documents/presign (x-submission-token)"
-    I-->>U: "documentId, uploadUrl, fields"
+    I-->>U: "applicationId + trackingToken (DRAFT)"
+    U->>I: "POST /:id/documents/presign?token="
     U->>CL: "upload file voi fields da ky"
-    U->>I: "POST /organization-applications (x-submission-token)"
-    I->>I: "tao application SUBMITTED, gan documents, event SUBMITTED, burn token"
-    I->>N: "email ORG_APPLICATION_RECEIVED (trackUrl)"
-    I-->>U: "201 { application, trackingToken }"
-    Adm->>I: "PUT /admin/.../:id/claim"
-    Adm->>I: "GET /admin/.../:id/documents/:docId/file"
+    U->>I: "PUT /:id?token= (profile, channels, owners, documentIds)"
+    U->>I: "POST /:id/submit?token="
+    I->>ID: "POST /internal/v1/users/lookup-by-emails"
+    I->>N: "ORG_OWNER_CONFIRMATION_REQUEST x n, ORG_APPLICATION_RECEIVED"
+    O->>I: "POST /owner-confirmations/:token/confirm"
+    I->>I: "owner cuoi cung: PENDING_REVIEW (cung transaction)"
     Adm->>I: "PUT /admin/.../:id/decision APPROVE"
-    I->>I: "transaction: organizations + organization_channels + application APPROVED + events + outbox ORG_ACCOUNT_PROVISION"
-    R->>ID: "POST /internal/v1/users/provision-org-account"
-    ID-->>R: "user_id, activation_token"
-    R->>I: "transaction: ownerId, organization_members, accountProvisionedAt, event ACCOUNT_PROVISIONED"
-    R->>N: "email ORG_ACCOUNT_ACTIVATION (activationUrl, 72h)"
+    I->>ID: "POST /internal/v1/users/ensure"
+    I->>I: "transaction: organizations + channels + memberships + application APPROVED + events + outbox ORG_OWNER_ONBOARD x n"
+    R->>ID: "POST /internal/v1/users/:id/activation-token"
+    R->>N: "ACCOUNT_ACTIVATION hoac ORG_OWNER_ATTACHED"
 ```
 
-Rule khi nộp (`organization-application.service.ts > createApplication()` và các hàm validate):
-- `consent` phải `true` → 400 INVALID_INPUT "Consent to personal data processing is required".
-- `orgType` ∈ `GOV, SCHOOL, CLUB, NGO, SOCIAL_ENTERPRISE` → "Unknown organization type".
-- `profile.name` và `profile.logoUrl` bắt buộc; `profile.contactEmail` (sau lower-case) phải bằng email đã xác thực → "profile.contact_email must match the verified email address"; `latitude` ∈ [-90, 90], `longitude` ∈ [-180, 180] nếu có (`validateProfile()`, `validateCoordinate()`). `logoUrl`, `backgroundUrl` không kiểm tra định dạng URL.
-- `channels` ≥ 1; `type` ∈ `FACEBOOK_PAGE, WEBSITE, ZALO_OA`; `url` bắt đầu `http://` hoặc `https://` (`validateChannels()`).
-- `legalRepresentative` tuỳ chọn; nếu có: `fullName`, `phone` bắt buộc; `idType` ∈ `CCCD, MSSV, PASSPORT, OTHER`; `idNumber` ≥ 4 ký tự; lưu `sha256(idNumber.toUpperCase())` và 4 ký tự cuối, bỏ số gốc (`validateLegalRepresentative()`).
-- Một email chỉ có một đơn ở `SUBMITTED | UNDER_REVIEW | NEEDS_MORE_INFO` → 409 ORGANIZATION_APPLICATION_ALREADY_OPEN (`findOpenByContactEmail()`); kiểm tra ở tầng ứng dụng, không có ràng buộc DB.
-- Hạn mức người đại diện: đếm đơn có cùng `legalRepIdHash` ở trạng thái mở hoặc APPROVED; hạn mức = max(`organizations.legalRepLimitOverride` của các tổ chức sinh từ đơn cùng hash) hoặc `DEFAULT_LEGAL_REP_ORG_LIMIT = 3`; `count >= limit` → 422 LEGAL_REP_LIMIT_EXCEEDED (`assertLegalRepUnderLimit()`).
-- `documentIds`: ≤ 5; mọi id phải tồn tại, chưa xoá và có `submissionEmail` = email đã xác thực → 404 ORGANIZATION_DOCUMENT_NOT_FOUND (`assertDocumentsOwnedBy()`).
-- Mã đơn `ORG-XXXXXXXX` (4 byte hex), thử lại tối đa 5 lần khi trùng (`createWithUniqueCode()`).
-- `emailVerifiedAt = consentedAt = now`; `submittedByUserId = req.user?.userId` (route không dùng `authenticate` nên luôn `null`).
+Rule lưu nháp (`organization-application.service.ts > saveDraft()`): chỉ DRAFT / NEEDS_REVISION (kiểm tra lại dưới row lock); chỉ kiểm tra hình thức: `orgType` hợp lệ nếu có; profile được merge vào bản cũ và trim (`sanitizeProfile()`: contactEmail hợp lệ nếu có, toạ độ trong khoảng); channels hợp lệ nếu có (không bắt buộc ≥ 1); KYC người đại diện (`sanitizeLegalRep()`: idType trong enum, idNumber ≥ 4 → `sha256(upper)` + 4 ký tự cuối, bỏ trống thì giữ); `owners` qua `normalizeOwnerInputs()` (≤ 5, email hợp lệ, họ tên 1..200, không trùng) rồi `syncOwners()` (thêm mới; gỡ = `removedAt` + event `OWNER_CANDIDATE_REMOVED`; thêm lại = về PENDING); `documentIds` phải do `submitterEmail` tải lên, tổng ≤ 5; `nationalIdDocumentId` phải là giấy tờ đang đính kèm; `consent=true` ghi `consentedAt`.
 
-Rule presign (`presignDocument()`): `docType` ∈ `ESTABLISHMENT_DECISION, BUSINESS_LICENSE, REP_ID_CARD, OTHER`; `mimeType` ∈ pdf/jpeg/png; `sizeBytes ≤ 10 MB`; số tài liệu chưa gắn đơn của email < 5 (422 ORGANIZATION_DOCUMENT_LIMIT). Tạo dòng `organization_application_documents` (`applicationId = null`) trước khi file được upload. Chữ ký Cloudinary gồm `folder = ecolink/organization-applications/<sha256(email)[0:16]>`, `public_id = <doctype>-<uuid>`, `timestamp`, `type = authenticated`; hết hạn sau 15 phút (`cloudinary-document-storage.ts > createSignedUpload()`).
+Rule nộp (`submitApplication()`):
+- Consent (đã lưu hoặc trong body); `orgType` bắt buộc; profile có name + logoUrl, contactEmail mặc định `submitterEmail` (`validateProfile()`); channels ≥ 1.
+- `validateOwnerList()` (1..5, không trùng, có người nộp, đúng 1 `isLegalRep`); owner DECLINED còn trong danh sách → 422.
+- `assertOwnersEligible()`: identity `lookup-by-emails` (lỗi → 503); user status 2 → OWNER_SUSPENDED; ≥ `OWNER_ORG_LIMIT` (3) membership vai owner → OWNER_QUOTA_EXCEEDED; email có tên ở ≥ 2 đơn khác đang AWAITING / PENDING_REVIEW / NEEDS_REVISION → TOO_MANY_PENDING_INVITES; email trong `owner_invite_blocks` (trừ người nộp) → OWNER_INVITE_BLOCKED. Message dạng `"<mô tả>: <email>"`.
+- Transaction (`lockForUpdate()` = `SELECT id … FOR UPDATE`): so `confirmationSnapshot.snapshot` với snapshot mới bằng JSON sắp key (`snapshotsDiffer()`); khác → owner CONFIRMED về PENDING + event `OWNER_CONFIRMATIONS_RESET`. Người nộp → CONFIRMED (IP từ `X-Forwarded-For` đầu tiên, UA). Owner EXPIRED, bị reset, hoặc PENDING không có token còn hạn → token mới (`sentCount++`, `expiresAt = +14 ngày`). Không còn owner chưa CONFIRMED → `PENDING_REVIEW` (+ event `READY_FOR_REVIEW`), ngược lại `AWAITING_OWNER_CONFIRMATION`. Ghi `submittedAt`, `confirmationSnapshot` (kèm fingerprint từng trường), xoá reviewer / reviewNote / rejectReason, event SUBMITTED (lần đầu) hoặc RESUBMITTED `{changedFields}`.
+- Sau commit: `ORG_OWNER_CONFIRMATION_REQUEST` cho từng token mới (fire-and-forget), lần đầu thêm `ORG_APPLICATION_RECEIVED`.
 
-Rule resubmit (`updateApplication()`): chỉ khi `NEEDS_MORE_INFO` (409 NOT_EDITABLE); đưa về `SUBMITTED`, xoá `reviewerId`, `claimedAt`, `reviewNote`; validate lại field được gửi; hạn mức người đại diện loại trừ chính đơn này; `removeDocumentIds` phải thuộc đơn (404); tổng tài liệu giữ lại + thêm mới ≤ 5 (422); ghi event `RESUBMITTED`.
+Rule presign (`presignDocumentForApplication()`): chỉ DRAFT / NEEDS_REVISION; `docType` ∈ `ESTABLISHMENT_DECISION, BUSINESS_LICENSE, REP_ID_CARD, OTHER`; `mimeType` ∈ pdf/jpeg/png; `sizeBytes ≤ 10 MB`; số tài liệu chưa gắn đơn của email < 5 (422 ORGANIZATION_DOCUMENT_LIMIT). Tạo dòng `organization_application_documents` (`applicationId = null`) trước khi file được upload; lần lưu nháp sau mới gắn. Chữ ký Cloudinary gồm `folder = ecolink/organization-applications/<sha256(email)[0:16]>`, `public_id = <doctype>-<uuid>`, `timestamp`, `type = authenticated`; hết hạn sau 15 phút (`cloudinary-document-storage.ts > createSignedUpload()`).
 
-Rule rút đơn (`withdrawApplication()`): từ mọi trạng thái trừ `APPROVED | REJECTED | WITHDRAWN` (409 ALREADY_DECIDED); ghi event `WITHDRAWN`.
+Rule xác nhận owner (`owner-confirmation.service.ts`): xem `03-business-rules.md` BR-308..BR-310. Gửi lại (`resendOwnerInvite()`): đơn AWAITING / NEEDS_REVISION, owner PENDING, `sentCount < 1 + 3`, `sentAt + 1h ≤ now`.
+
+Rule rút đơn (`withdrawApplication()`): từ DRAFT / AWAITING / PENDING_REVIEW / NEEDS_REVISION (409 ALREADY_DECIDED ngược lại); owner PENDING bị đặt `expiresAt = now` (giữ hash); event `WITHDRAWN`; sau commit gửi `ORG_APPLICATION_WITHDRAWN_NOTICE` cho owner CONFIRMED khác người nộp.
 
 Rule admin (`organization-application-admin.service.ts`):
-- `loadOpen()`: đơn đã `APPROVED | REJECTED | WITHDRAWN` → 409 ALREADY_DECIDED cho claim, request-info, decision.
-- `claim()`: 409 CLAIMED chỉ khi đơn đang `UNDER_REVIEW` với `reviewerId` khác người gọi; đặt `UNDER_REVIEW`, `reviewerId`, `claimedAt`, event `CLAIMED`.
-- `requestMoreInfo()`: `NEEDS_MORE_INFO`, `reviewerId`, `reviewNote = message`, event `INFO_REQUESTED`, phát tracking token mới, email `ORG_APPLICATION_NEEDS_INFO`.
-- `reject()`: bắt buộc `rejectReason`; `REJECTED`, `reviewedAt`, event `REJECTED`, email `ORG_APPLICATION_REJECTED`.
-- `approve()`: `lane` A/B bắt buộc; miễn giấy tờ phải có lý do; không miễn thì phải có ≥ 1 tài liệu chưa xoá; profile phải có name + logo; `grantBlueTick` mặc định `true` với lane A, `false` với lane B; slug cấp ngoài transaction. Trong transaction tạo organization với: `status=ACTIVE`, `isEmailVerified = Boolean(emailVerifiedAt)`, `orgType` của đơn, `kycStatus=APPROVED`, `trustTier = VERIFIED | NONE`, `domainVerified = (lane A && documentsWaived)`, `verifiedAt=now`, `verifiedBy=admin`, `verificationExpiresAt = now + 365 ngày` nếu lane B (null nếu lane A), `description = descriptionVi = profile.description`, `address`, `latitude/longitude`, `applicationId`, `ownerId=null`; tạo `organization_channels`; cập nhật đơn `APPROVED`, `lane`, `documentsWaived(+Reason)`, `reviewedAt`, `organizationId`; event `APPROVED` (+ `DOCUMENTS_WAIVED`); outbox `ORG_ACCOUNT_PROVISION`.
-- Không có yêu cầu phải claim trước khi request-info hoặc decision, và không kiểm tra người quyết định có phải `reviewerId` (xem mục 9).
+- `loadPendingReview()`: đơn DRAFT / AWAITING → 404; đã quyết định → 409 ALREADY_DECIDED; khác PENDING_REVIEW → 409 NOT_PENDING_REVIEW. Áp cho claim, request-info, decision.
+- `claim()`: 409 CLAIMED khi đã có `reviewerId` khác người gọi; chỉ ghi `reviewerId`, `claimedAt`, event `CLAIMED`.
+- `requestMoreInfo()`: NEEDS_REVISION, `reviewerId`, `reviewNote = message`, event `INFO_REQUESTED`, tracking token mới, email `ORG_APPLICATION_NEEDS_INFO` tới `submitterEmail`.
+- `reject()`: bắt buộc `rejectReason`; transaction khoá đơn, kiểm lại PENDING_REVIEW; `REJECTED`, `reviewedAt`, event `REJECTED`, email `ORG_APPLICATION_REJECTED`.
+- `approve()`: `lane` A/B bắt buộc; miễn giấy tờ phải có lý do; không miễn thì phải có ≥ 1 tài liệu; profile phải có name + logo; `grantBlueTick` mặc định theo lane A; slug cấp ngoài transaction. Trước transaction: identity `ensure` (lỗi → 503; user status 2 → OWNER_SUSPENDED). Trong transaction: khoá đơn, kiểm lại PENDING_REVIEW và mọi owner CONFIRMED; tạo organization (`status=ACTIVE`, `isEmailVerified = emailVerifiedAt && contactEmail === submitterEmail`, `kycStatus=APPROVED`, `trustTier`, `domainVerified`, `verifiedAt/By`, `verificationExpiresAt` lane B +365 ngày, `applicationId`); `organization_channels`; mỗi owner: `organization-membership.service.ts > assertOwnerQuota()` (`pg_advisory_xact_lock(hashtextextended(userId,0))` + đếm) và `grantMembership()` (vai `LEGAL_REPRESENTATIVE` / `OWNER`, `source = APPLICATION_APPROVAL`, `sourceRef = applicationId`; chặn tổ chức không ACTIVE), `resolvedUserId`, outbox `ORG_OWNER_ONBOARD` (dedup theo candidate); đơn APPROVED; event `APPROVED {ownerUserIds}` (+ `DOCUMENTS_WAIVED`). COMMIT chạy trigger `ORG_MUST_HAVE_OWNER`.
+- Không yêu cầu claim trước khi request-info hoặc decision.
 
-Saga bước 2 (`IS/src/modules/organization_application/organization-account-provision.publisher.ts > publish()`), chạy trong outbox relay qua `RoutingOutboxPublisher` (`IS/src/outbox/outbox-relay.bootstrap.ts > buildPublisher()`):
-1. Kiểm payload đủ `applicationId, organizationId, email, displayName` (thiếu → throw).
-2. `POST {IDENTITY_SERVICE_URL}/internal/v1/users/provision-org-account` với `{ applicationId, organizationId, email, displayName }` (`identity-org-account.client.ts > provisionOrgAccount()`, circuit identity).
-3. Transaction: `organizations.ownerId = userId`; upsert `organization_members (organizationId, userId)`; `accountProvisionedAt = now`; event `ACCOUNT_PROVISIONED { userId, alreadyProvisioned }`.
-4. Có `activationToken` → email `ORG_ACCOUNT_ACTIVATION` tới `payload.email` với `FRONTEND_APP_URL/activate-organization?token=…`, `expiresInHours: 72`. Replay (không có token) → dừng, không gửi mail.
-Lỗi ở bất kỳ bước nào → throw, relay giữ event và retry (cơ chế retry ở part B).
+Onboarding (`organization-owner-onboard.publisher.ts > publish()`), chạy trong outbox relay qua `RoutingOutboxPublisher` (`IS/src/outbox/outbox-relay.bootstrap.ts > buildPublisher()`):
+1. Kiểm payload đủ `applicationId, candidateId, organizationId, userId, email` (thiếu → throw).
+2. `POST {IDENTITY_SERVICE_URL}/internal/v1/users/:userId/activation-token` (`identity-owner.client.ts > issueActivationToken()`, circuit identity).
+3. Có token → email `ACCOUNT_ACTIVATION` (`FRONTEND_APP_URL/activate-account?token=…`, `expiresInHours` do identity trả); không có (user đã active) → email `ORG_OWNER_ATTACHED` (`FRONTEND_APP_URL/organizations/<slug>`).
+4. Event `OWNER_ATTACHED`. Lỗi ở bất kỳ bước nào → throw, relay retry; lần retry phát token mới (token cũ bị thu hồi).
+
+Sweeper hết hạn (`owner-confirmation-expiry.job.ts`, khởi động trong `IS/src/worker.ts`): chạy ngay khi start rồi mỗi `OWNER_CONFIRMATION_EXPIRY_INTERVAL_MS` (mặc định 1 giờ); tắt bằng `OWNER_CONFIRMATION_EXPIRY_ENABLED=false`; không chạy chồng (`running` flag).
 
 #### 4.9.7 Vòng đời đơn đăng ký (`organization_applications.status`)
 
+Xem sơ đồ đầy đủ (kèm trạng thái owner) ở `docs/04-state-machines.md` §7.
+
 ```mermaid
 stateDiagram-v2
-    [*] --> SUBMITTED: "POST /organization-applications"
-    SUBMITTED --> UNDER_REVIEW: "admin claim"
-    NEEDS_MORE_INFO --> UNDER_REVIEW: "admin claim"
-    UNDER_REVIEW --> UNDER_REVIEW: "admin claim lai (cung admin hoac chua co reviewer)"
-    SUBMITTED --> NEEDS_MORE_INFO: "admin request-info"
-    UNDER_REVIEW --> NEEDS_MORE_INFO: "admin request-info"
-    NEEDS_MORE_INFO --> NEEDS_MORE_INFO: "admin request-info"
-    NEEDS_MORE_INFO --> SUBMITTED: "nguoi nop resubmit"
-    SUBMITTED --> APPROVED: "admin decision APPROVE"
-    UNDER_REVIEW --> APPROVED: "admin decision APPROVE"
-    NEEDS_MORE_INFO --> APPROVED: "admin decision APPROVE"
-    SUBMITTED --> REJECTED: "admin decision REJECT"
-    UNDER_REVIEW --> REJECTED: "admin decision REJECT"
-    NEEDS_MORE_INFO --> REJECTED: "admin decision REJECT"
-    SUBMITTED --> WITHDRAWN: "nguoi nop rut"
-    UNDER_REVIEW --> WITHDRAWN: "nguoi nop rut"
-    NEEDS_MORE_INFO --> WITHDRAWN: "nguoi nop rut"
+    [*] --> DRAFT: "POST /email-otp/verify"
+    DRAFT --> AWAITING_OWNER_CONFIRMATION: "submit"
+    DRAFT --> PENDING_REVIEW: "submit (chi co nguoi nop)"
+    AWAITING_OWNER_CONFIRMATION --> PENDING_REVIEW: "owner cuoi cung xac nhan"
+    AWAITING_OWNER_CONFIRMATION --> NEEDS_REVISION: "owner tu choi / het han"
+    PENDING_REVIEW --> NEEDS_REVISION: "admin request-info"
+    NEEDS_REVISION --> AWAITING_OWNER_CONFIRMATION: "submit lai"
+    NEEDS_REVISION --> PENDING_REVIEW: "submit lai (moi owner van CONFIRMED)"
+    PENDING_REVIEW --> APPROVED: "admin decision APPROVE"
+    PENDING_REVIEW --> REJECTED: "admin decision REJECT"
+    DRAFT --> WITHDRAWN: "nguoi nop rut"
+    AWAITING_OWNER_CONFIRMATION --> WITHDRAWN: "nguoi nop rut"
+    PENDING_REVIEW --> WITHDRAWN: "nguoi nop rut"
+    NEEDS_REVISION --> WITHDRAWN: "nguoi nop rut"
     APPROVED --> [*]
     REJECTED --> [*]
     WITHDRAWN --> [*]
 ```
-
-`DRAFT` có trong enum nhưng không có code nào tạo đơn ở trạng thái này [CHƯA HOÀN THIỆN].
 
 #### 4.9.8 Trạng thái Organization (`organizations.status`) và join request
 
@@ -425,7 +423,7 @@ stateDiagram-v2
   - status=1: nếu đang ACTIVE → no-op; cho phép từ `DRAFT(4) | INACTIVE(2) | INREVIEW(9) | PENDING(12)` → ACTIVE, `rejectReason = reason || null`, thông báo `ORGANIZATION_APPROVED`; trạng thái khác → 400.
   - status=2: bắt buộc lý do; nếu đang INACTIVE: cùng lý do → no-op, khác lý do → chỉ cập nhật lý do (không thông báo); cho phép từ `DRAFT | PENDING | INREVIEW | ACTIVE` → INACTIVE, thông báo `ORGANIZATION_REJECTED`.
   - Không đụng tới `trustTier`, `kycStatus`, `tickSuspended`.
-- Join request (`organization_joining_requests.status`): tạo `PENDING(12)`; chủ duyệt → `APPROVED(14)` + upsert thành viên (transaction) hoặc `REJECTED(18)`; người gửi huỷ khi PENDING → xoá mềm. Rời tổ chức → xoá mềm `organization_members` (join request APPROVED cũ giữ nguyên; `requestStatus` bị ẩn khi user không còn là thành viên — `joinRequestStatusForOrganizationDetail()`).
+- Join request (`organization_joining_requests.status`): tạo `PENDING(12)`; owner duyệt → `APPROVED(14)` + upsert thành viên vai `MEMBER` (transaction) hoặc `REJECTED(18)`; người gửi huỷ khi PENDING → xoá mềm. Rời tổ chức → xoá mềm `organization_members` (join request APPROVED cũ giữ nguyên; `requestStatus` bị ẩn khi user không còn là thành viên — `joinRequestStatusForOrganizationDetail()`).
 - Email liên hệ (flow cũ vẫn chạy cho `POST /organizations` và khi đổi `contactEmail`): incident gọi identity `POST /internal/v1/organization-contact-email/tokens` lấy token, gửi email `ORGANIZATION_CONTACT_VERIFY` với link `PUBLIC_INCIDENT_API_URL/api/v1/organizations/verify-contact-email?token=…`; khi mở link, incident gọi identity `…/tokens/verify` rồi đặt `isEmailVerified=true` nếu email khớp (`queueOrganizationContactVerificationEmail()`, `confirmOrganizationContactEmail()`).
 - Tên + email liên hệ phải là duy nhất trong các tổ chức chưa xoá và không bị ban (tên so sánh không phân biệt hoa thường) → 409 ORGANIZATION_ALREADY_EXISTS (`assertUniqueNameAndContactEmail()`); chỉ áp dụng cho `POST /organizations` và `PUT /:id`, không áp dụng khi approve đơn.
 - Slug: `slugifyOrganizationName()` (bỏ dấu, `đ→d`, ký tự khác `[a-z0-9]` thành `-`, rỗng → `organization`), trùng thì `-2`, `-3`… tới 10000 (`DC/src/organization-slug.ts`); tính cả tổ chức đã xoá mềm; không đổi khi đổi tên.
@@ -438,27 +436,32 @@ stateDiagram-v2
 | `TRANSLATE_TEXT` | SQS job (`SQS_INCIDENT_TRANSLATION_QUEUE_URL`) | `{ resourceType: "REPORT" \| "ORGANIZATION", resourceId, translations: [{ sourceText, viField?, enField? }] }` | Tạo/sửa report; tạo/sửa tổ chức khi thiếu một ngôn ngữ | `IS/src/queue/worker/translation-worker.ts` (part B) | `report.service.ts > enqueueReportTranslationJob()`, `organization.service.ts > enqueueOrganizationTranslationJob()` |
 | `REPORT_COMPLETION_GREEN_POINTS` | Outbox → SQS reward intake | `{ reportId, userId, points }` (`points = REPORT_COMPLETION_GREEN_POINTS` env, mặc định 0); dedup `REPORT_COMPLETION_GREEN_POINTS:<reportId>` | Admin mark-done report có `userId` | reward-service (qua relay, part B) | `report.service.ts > adminMarkReportDone()` |
 | `REPORT_VOTE_MILESTONE_GREEN_POINTS` | Outbox → SQS reward intake | `{ reportId, reportCreatorUserId, voteCount }`; dedup theo `reportId:voteCount` | Upvote report thành giá trị 1 | reward-service | `vote.service.ts > emitReportVoteMilestoneIfNeeded()` |
-| `ORG_ACCOUNT_PROVISION` | Outbox → handler nội bộ (không qua SQS) | `{ applicationId, organizationId, email, displayName, legalRepEmail }`; dedup `ORG_ACCOUNT_PROVISION:<applicationId>` | Admin approve đơn | `organization-account-provision.publisher.ts > publish()` → identity-service | `organization-application-admin.service.ts > approve()` |
+| `ORG_OWNER_ONBOARD` | Outbox → handler nội bộ (không qua SQS) | `{ applicationId, candidateId, organizationId, organizationName, organizationSlug, userId, email, fullName, isLegalRep }`; dedup `ORG_OWNER_ONBOARD:<candidateId>` | Admin approve đơn (mỗi owner một event) | `organization-owner-onboard.publisher.ts > publish()` → identity-service + notification-service | `organization-application-admin.service.ts > approve()` |
 | Notification website `REPORT_STATUS` | HTTP `POST {NOTIFICATION_SERVICE_URL}/api/v1/notifications/jobs` `{ type:"website", kind, userId, payload }` | `{ reportId, reportTitle, status: "COMPLETED" }` | Mark-done | notification-service | `report-status-notify.client.ts > enqueueReportStatusWebsiteNotification()` |
 | Notification website `REPORT_APPROVED` | HTTP như trên | `{ reportId, reportTitle }` | Admin verify | notification-service | `enqueueReportApprovedWebsiteNotification()` |
 | Notification website `REPORT_REJECTED` | HTTP như trên | `{ reportId, reportTitle, rejectReason }` | Admin ban (lần đầu) | notification-service | `enqueueReportRejectedWebsiteNotification()` |
-| Notification website `ORGANIZATION_APPROVED` / `ORGANIZATION_REJECTED` | HTTP | `{ organizationName, organizationId, organizationSlug?, rejectReason? }` | Admin verify/ban tổ chức (có `ownerId`) | notification-service | `IS/src/modules/campaign/notification-jobs.client.ts` (gọi từ `organization.service.ts > notifyOwnerOfOrganizationVerified()`) |
-| Notification website `VOLUNTEER_REQUEST` | HTTP | `{ volunteerName, reportTitle (= tên tổ chức), organizationId, organizationSlug }` | User gửi join request (tổ chức có `ownerId`) | chủ tổ chức | `organization.service.ts > notifyOrganizationOwnerOfJoinRequest()` |
-| Notification website `VOLUNTEER_APPROVED` / `VOLUNTEER_REJECTED` | HTTP | `{ reportTitle, organizationId, organizationSlug? }` | Chủ duyệt / từ chối join request | người gửi yêu cầu | `organization.service.ts > processJoinRequest()` |
+| Notification website `ORGANIZATION_APPROVED` / `ORGANIZATION_REJECTED` | HTTP | `{ organizationName, organizationId, organizationSlug?, rejectReason? }` | Admin verify/ban tổ chức (gửi mọi owner) | notification-service | `IS/src/modules/campaign/notification-jobs.client.ts` (gọi từ `organization.service.ts > notifyOwnerOfOrganizationVerified()`) |
+| Notification website `VOLUNTEER_REQUEST` | HTTP | `{ volunteerName, reportTitle (= tên tổ chức), organizationId, organizationSlug }` | User gửi join request | mọi owner | `organization.service.ts > notifyOrganizationOwnerOfJoinRequest()` |
+| Notification website `VOLUNTEER_APPROVED` / `VOLUNTEER_REJECTED` | HTTP | `{ reportTitle, organizationId, organizationSlug? }` | Owner duyệt / từ chối join request | người gửi yêu cầu | `organization.service.ts > processJoinRequest()` |
 | Email `ORGANIZATION_CONTACT_VERIFY` | HTTP `{ type:"email", kind, payload }` | `{ toEmail, organizationName, verifyUrl, appName, organizationId, ownerUserId }` | Tạo tổ chức nội bộ; đổi contactEmail; resend | notification-service | `organization-contact-email-notify.client.ts` |
 | Email `ORG_APPLICATION_OTP` | HTTP | `{ toEmail, otp, expiresInMinutes, applyUrl, locale:"vi", appName }` | Xin mã OTP | notification-service | `organization-application-notify.client.ts > enqueueApplicationOtpEmail()` |
-| Email `ORG_APPLICATION_RECEIVED` | HTTP | `{ toEmail, organizationName, applicationCode, trackUrl, locale, appName }` | Nộp đơn | notification-service | `enqueueApplicationReceivedEmail()` |
+| Email `ORG_APPLICATION_RECEIVED` | HTTP | `{ toEmail, organizationName, applicationCode, trackUrl, locale, appName }` | Nộp đơn lần đầu | notification-service | `enqueueApplicationReceivedEmail()` |
 | Email `ORG_APPLICATION_NEEDS_INFO` | HTTP | `{ toEmail, organizationName, applicationCode, message, trackUrl, locale, appName }` | Request-info | notification-service | `enqueueApplicationNeedsInfoEmail()` |
 | Email `ORG_APPLICATION_REJECTED` | HTTP | `{ toEmail, organizationName, applicationCode, rejectReason, locale, appName }` | Reject đơn | notification-service | `enqueueApplicationRejectedEmail()` |
-| Email `ORG_ACCOUNT_ACTIVATION` | HTTP | `{ toEmail, organizationName, activationUrl, expiresInHours:"72", locale, appName }` | Saga bước 2 lần đầu | notification-service | `enqueueOrgAccountActivationEmail()` |
+| Email `ORG_OWNER_CONFIRMATION_REQUEST` | HTTP | `{ toEmail, candidateName, organizationName, orgType, address, submitterEmail, otherOwners, isLegalRep, confirmUrl, expiresAt, expiresInDays, locale, appName }` | Nộp / nộp lại / gửi lại | notification-service | `enqueueOwnerConfirmationRequestEmail()` (qua `owner-candidates.ts > sendConfirmationEmails()`) |
+| Email `ORG_OWNER_DECLINED` | HTTP | `{ toEmail, organizationName, ownerEmail, reason, trackUrl, … }` | Owner từ chối | người nộp | `enqueueOwnerDeclinedEmail()` |
+| Email `ORG_OWNER_CONFIRMATION_EXPIRED` | HTTP | `{ toEmail, organizationName, ownerEmails, trackUrl, … }` | Sweeper đặt owner EXPIRED | người nộp | `enqueueOwnerConfirmationExpiredEmail()` |
+| Email `ORG_APPLICATION_WITHDRAWN_NOTICE` | HTTP | `{ toEmail, organizationName, submitterEmail, … }` | Rút đơn | owner đã xác nhận | `enqueueApplicationWithdrawnNoticeEmail()` |
+| Email `ACCOUNT_ACTIVATION` | HTTP | `{ toEmail, fullName, organizationName, activationUrl, expiresInHours, locale, appName }` | Onboarding, user còn PENDING_ACTIVATION | owner mới | `enqueueAccountActivationEmail()` |
+| Email `ORG_OWNER_ATTACHED` | HTTP | `{ toEmail, fullName, organizationName, isLegalRep, manageUrl, … }` | Onboarding, user đã active | owner đã có tài khoản | `enqueueOwnerAttachedEmail()` |
 
 Thông báo website đều lọc qua tuỳ chọn người dùng: `POST {IDENTITY_SERVICE_URL}/internal/v1/users/notification-prefs/filter` (`identity-user.client.ts > filterUserIdsForNotificationKind()`), lỗi thì fail-open (gửi cho tất cả). Thiếu `NOTIFICATION_SERVICE_URL`/`INTERNAL_NOTIFICATION_API_KEY` → bỏ qua (log warn). Mọi thông báo phía report/organization là best-effort (lỗi không ảnh hưởng response). Riêng OTP: lỗi gửi → xoá dòng OTP/LINK vừa tạo và trả 503.
 
 ## 6. Job nền, cron, worker
 
-- `IS/src/worker.ts`: `startAllQueues()` (ANALYZE_REPORT, TRANSLATE_TEXT) và `startOutboxRelay()`; SIGINT/SIGTERM → dừng relay, disconnect Prisma, `process.exit(0)`. Cấu hình queue/relay ở part B.
+- `IS/src/worker.ts`: `startAllQueues()` (ANALYZE_REPORT, TRANSLATE_TEXT), `startOutboxRelay()` và `startOwnerConfirmationExpiryJob()` (sweeper owner hết hạn, mỗi giờ); SIGINT/SIGTERM → dừng sweeper, dừng relay, disconnect Prisma, `process.exit(0)`. Cấu hình queue/relay ở part B.
 - `IS/src/index.ts` có `import "./worker";` nên tiến trình API cũng khởi động poller SQS và outbox relay (ngoài tiến trình `npm run worker`). Xem mục 9.
-- Không có cron nào trong phần A. Không có job retention/purge cho `purgedAt` của đơn và tài liệu, không có sweep Blue Tick hoặc hết hạn `verificationExpiresAt` [CHƯA HOÀN THIỆN].
+- Ngoài sweeper owner hết hạn, không có cron nào trong phần A. Không có job retention/purge cho `purgedAt` của đơn và tài liệu, không có sweep Blue Tick hoặc hết hạn `verificationExpiresAt` [CHƯA HOÀN THIỆN].
 
 ## 7. Phụ thuộc vào service khác và dịch vụ bên ngoài (phần A)
 
@@ -468,7 +471,7 @@ Thông báo website đều lọc qua tuỳ chọn người dùng: `POST {IDENTIT
 | identity-service | `POST /internal/v1/users/notification-prefs/filter` `{ userIds ≤500/lô, kind }` | Lọc người nhận thông báo | `filterUserIdsForNotificationKind()` |
 | identity-service | `POST /internal/v1/users/distance-from-point`, `POST /internal/v1/users/nearby-ids` | Được định nghĩa ở client này, dùng bởi campaign (part B) | `fetchUsersWithDistanceFromPoint()`, `fetchUserIdsNearPoint()` |
 | identity-service | `POST /internal/v1/organization-contact-email/tokens`, `POST /internal/v1/organization-contact-email/tokens/verify` | Token xác minh email liên hệ | `IS/src/modules/organization/identity-organization-contact-email.client.ts` |
-| identity-service | `POST /internal/v1/users/provision-org-account` | Tạo tài khoản ORG (idempotent theo `applicationId` theo comment) | `IS/src/modules/organization_application/identity-org-account.client.ts > provisionOrgAccount()` |
+| identity-service | `POST /internal/v1/users/lookup-by-emails`, `POST /internal/v1/users/ensure`, `POST /internal/v1/users/:id/activation-token` | Kiểm tra owner lúc nộp; tìm hoặc tạo user lúc duyệt; token kích hoạt khi onboarding | `IS/src/modules/organization_application/identity-owner.client.ts > lookupUsersByEmails(), ensureUsers(), issueActivationToken()` |
 | notification-service | `POST /api/v1/notifications/jobs` | Mọi email/in-app ở mục 5 | `report-status-notify.client.ts`, `organization-contact-email-notify.client.ts`, `organization-application-notify.client.ts`, `campaign/notification-jobs.client.ts` |
 | AI predict (bên ngoài) | `POST AI_PREDICT_URL` `{ image_urls }`, timeout 45s | Nhận diện rác trong ảnh report | `report-ai-analysis.service.ts > analyzeReport()` |
 | ai-service | `POST {AI_SERVICE_URL}/api/v1/recommendations/report` `{ image_urls, results }`, timeout 45s | Gợi ý xử lý (LLM) | `report-ai-analysis.service.ts > analyzeReport()` |
@@ -512,8 +515,8 @@ Lời gọi identity và notification chạy qua circuit breaker dùng chung the
 1. **Liệt kê thành viên không kiểm tra quyền**: kiểm tra chủ sở hữu trong `IS/src/modules/organization/organization.service.ts > listMembersForOwner()` và tham số `userId` ở `organization.controller.ts > listMembers` bị comment out. Mọi user đăng nhập xem được danh sách thành viên của bất kỳ tổ chức nào, trong khi route comment ghi "owner only" [CHƯA HOÀN THIỆN].
 2. **SOS**: bất kỳ user đăng nhập nào cũng đánh dấu solved được mọi SOS (`sos.service.ts > solveSos()`), và `GET /api/v1/sos` trả số điện thoại của mọi SOS cho mọi user.
 3. **Report chưa duyệt / bị ban vẫn lộ**: `/search`, `/my`, `/by-ids`, saved list không lọc `status`; chỉ `GET /:id` ẩn report bị ban. `GET /:id/background-jobs/status` không kiểm tra quyền sở hữu.
-4. **Admin check dựa trên claim `role`**: identity ký `role = user.roleId` (UUID) khi refresh token (`ecolink-server/services/identity-service/src/modules/auth/auth.service.ts`), nên sau khi refresh, admin sẽ bị 403 ở mọi endpoint admin của incident. Cần xác nhận.
-5. `authenticate` không kiểm tra user bị ban / tài khoản ORG `PENDING_ACTIVATION`; không phân biệt `accountType`.
+4. ~~**Admin check dựa trên claim `role`**: identity ký `role = user.roleId` khi refresh token.~~ Đã sửa 2026-09-26: refresh ký tên role như login.
+5. `authenticate` không kiểm tra user bị ban / `PENDING_ACTIVATION`.
 6. `requireInternalIncidentApiKey` so sánh key bằng `!==` (không constant-time).
 7. Upload giấy tờ: chữ ký Cloudinary không ràng buộc kích thước hay định dạng file; `mimeType`, `sizeBytes` do client tự khai. Presign tạo dòng tài liệu trước khi có file, approve chỉ đếm dòng nên có thể approve đơn mà file chưa từng được upload.
 8. `AI_PREDICT_URL` có giá trị mặc định cứng là địa chỉ IP công khai (`report-ai-analysis.service.ts`); ảnh report được gửi tới đó khi thiếu biến môi trường. Lời gọi AI không có header xác thực.
@@ -525,37 +528,37 @@ Lời gọi identity và notification chạy qua circuit breaker dùng chung the
 12. `adminMarkReportDone()` không kiểm tra trạng thái nguồn (PENDING, banned vẫn mark-done được và vẫn ghi event cộng điểm).
 13. Route `GET /api/v1/reports/all` ghi "ACTIVE" nhưng code lọc `status = TODO(21)` (`report.repository.ts > findAllToDo()`).
 14. `GET/PUT/DELETE /api/v1/reports/:id`, `POST /:id/media` không validate UUID → id sai định dạng gây lỗi Prisma và trả 500 thay vì 404.
-15. Provisioning: nếu gửi email kích hoạt thất bại sau khi identity đã tạo tài khoản, relay retry nhận `alreadyProvisioned` không có token và bỏ qua gửi mail, nên email kích hoạt bị mất (`organization-account-provision.publisher.ts > publish()`).
-16. Provisioning thêm owner vào `organization_members` (comment ghi "role OWNER" nhưng bảng không có cột role), trái với comment schema "owner is not duplicated here" và logic `members` / `listMembers` ("owner is not in this list"): số `members` sẽ tính cả owner, owner xuất hiện trong danh sách thành viên và có `isMember=true`.
+15. ~~Email kích hoạt bị mất khi provisioning retry.~~ Không còn áp dụng: onboarding phát token mới ở mỗi lần retry; ngoài ra người dùng tự gửi lại được từ trang đăng nhập. Nếu ghi event `OWNER_ATTACHED` lỗi sau khi email đã đi, retry gửi email lần hai.
+16. Owner là membership có `role`, nên `members` đếm cả owner, owner xuất hiện trong `GET /:id/members` (kèm `role`) và có `isMember=true`; client lọc owner ra khỏi danh sách thành viên thường.
 17. `organizationCoreFromRow()` luôn trả `description: null`.
 18. `getById()` trả tổ chức bị ban, `getBySlug()` trả 404 cho tổ chức bị ban; `GET /organizations` trả cả tổ chức bị ban.
-19. `createApplication()` đọc `req.user?.userId` nhưng route không dùng `authenticate`, nên `submittedByUserId` luôn null.
-20. Nộp đơn không nằm trong transaction (tạo đơn → gắn tài liệu → event → burn token là các lệnh rời). Rule "một đơn mở cho mỗi email" không có ràng buộc DB, hai request đồng thời có thể tạo hai đơn.
+19. `submittedByUserId` không còn được ghi ở đâu (luôn null).
+20. Rule "một đơn mở cho mỗi email" không có ràng buộc DB: hai lần verify OTP đồng thời có thể tạo hai DRAFT. Kiểm tra chặn sớm lúc nộp (`assertOwnersEligible()`) chạy ngoài transaction nên hai đơn nộp cùng lúc có thể cùng vượt cap chống spam (trần 3 tổ chức vẫn được kiểm lại có khoá lúc duyệt).
 21. `assertDocumentsOwnedBy()` không kiểm tra `applicationId IS NULL`; tài liệu đã gắn vào đơn khác (cùng email) có thể bị chuyển sang đơn mới qua `attachDocuments()`.
 22. Approve cấp slug ngoài transaction và không kiểm tra rule tên + email duy nhất như `createOrganization`; không enqueue dịch mô tả nên `descriptionEn` luôn null với tổ chức sinh từ đơn.
-23. Claim chỉ mang tính gợi ý: `requestMoreInfo()` và `decide()` không yêu cầu đã claim, không kiểm tra `reviewerId`; claim đơn đang `NEEDS_MORE_INFO` của admin khác được phép và làm người nộp mất quyền sửa.
-24. `ACTIVATION_TTL_HOURS = 72` cứng trong incident, trong khi TTL thật do identity quyết định.
-25. `updateOrganization()` đổi `contactEmail` chỉ reset `isEmailVerified` và gửi link xác minh; không đổi email đăng nhập của tài khoản ORG và không đụng trust fields.
+23. Claim chỉ mang tính gợi ý: `requestMoreInfo()` và `decide()` không yêu cầu đã claim, không kiểm tra `reviewerId`.
+24. ~~`ACTIVATION_TTL_HOURS = 72` cứng trong incident.~~ Đã bỏ: `expiresInHours` do identity trả.
+25. `updateOrganization()` đổi `contactEmail` chỉ reset `isEmailVerified` và gửi link xác minh; không đụng trust fields.
 26. Vote: upvote chạy trong transaction, downvote thì không; có thể tự upvote report của mình để kích hoạt event điểm mốc; vote được trên report PENDING/banned.
 27. Rate limit bằng bộ nhớ trong tiến trình (reset khi deploy, riêng từng instance); comment trong code đã thừa nhận, có bộ đếm DB bổ sung cho OTP.
 28. `IS/src/index.ts` import `./worker`, nên API process cũng chạy poller SQS và outbox relay; khi deploy riêng worker thì có hai nơi cùng poll (cần part B xác nhận relay có an toàn khi chạy song song). SIGINT/SIGTERM handler trong `worker.ts` gọi `process.exit(0)` cho cả API.
 
 ### 9.3 [CHƯA HOÀN THIỆN]
-29. Trust / Blue Tick: `tickSuspended`, `tickRevokedReason`, `profileCompleteness`, `successfulCampaignCount`, `violationCount`, `legalRepLimitOverride` không có writer; bảng `organization_violations` không có writer; `TrustTier.BASIC`, `KycStatus.EXPIRED/REVOKED` không được gán ở đâu; không có API nào trả các trường trust cho client.
+29. Trust / Blue Tick: `tickSuspended`, `tickRevokedReason`, `profileCompleteness`, `successfulCampaignCount`, `violationCount` không có writer; bảng `organization_violations` không có writer; `TrustTier.BASIC`, `KycStatus.EXPIRED/REVOKED` không được gán ở đâu; không có API nào trả các trường trust cho client.
 30. `organization_channels` chỉ được ghi lúc approve; không có API đọc/sửa kênh.
 31. Không có job purge (`purgedAt` trên đơn và tài liệu), `DocumentStorage.remove()` không được gọi. Tài liệu presign không gắn đơn (orphan) không bao giờ bị dọn.
-32. `ApplicationStatus.DRAFT` không được dùng.
+32. `ApplicationType.ADD_OWNER`, vai `ADMIN` / `CAMPAIGN_MANAGER` trong `OrgMemberRole`, luồng thu hồi / chuyển giao owner chưa có (Phase 2 của `ORG_OWNERSHIP_FLOW.md`). `membershipVersion` chưa làm.
 33. `src/modules/media` chỉ có thư mục test rỗng; không có chức năng kiểm duyệt media. Model `ReportIssue` không được code nào dùng.
 34. `sosService.resolveAllByCampaignId()`, `sosService.listNearby()`, `reportService.getReportById()`, `updateReportStatus()`, `isReporter()` không được gọi; SOS `contentVi/contentEn` không bao giờ được ghi.
 35. `.env.example` thiếu `AI_PREDICT_URL`, `REPORT_COMPLETION_GREEN_POINTS`, `ANALYZE_REPORT_CONCURRENCY`, `SWAGGER_SERVER_URL`.
 
 ### 9.4 Lệch giữa tài liệu cũ (`docs/ORG_CREATION_FLOW.md`, `docs/REFACTOR_ORG_CREATION_FLOW.md`) và code
-36. Tài liệu ghi email kích hoạt "CC email cá nhân người đại diện nếu có"; code đưa `legalRepEmail` vào payload outbox nhưng publisher không dùng, không CC.
-37. Tài liệu ghi admin nâng hạn mức qua `organizations.legalRepLimitOverride`; code chỉ đọc cột này, không có endpoint ghi.
+36. ~~CC email người đại diện~~ không còn áp dụng: mỗi owner nhận email riêng.
+37. ~~`legalRepLimitOverride`~~ đã bỏ (cột bị xoá); trần 3 tổ chức cố định theo user, không có ngoại lệ.
 38. ~~`ORG_CREATION_FLOW.md` mô tả `BlueTickBadge` dựa trên `trust_tier` và ẩn khi `tick_suspended`; không endpoint nào của incident trả hai trường này.~~ Đã khớp từ 2026-09-24: `organizationCoreFromRow()` trả `trustTier`, `tickSuspended` nên badge hiển thị đúng.
-39. Bảng API trong `ORG_CREATION_FLOW.md` thiếu `GET /email-otp/link` và `POST /:id/documents/presign`.
-40. `REFACTOR_ORG_CREATION_FLOW.md` (to-be) mô tả: approve và cấp Blue Tick là hai endpoint riêng (code: một endpoint `decision` với `grantBlueTick`); xem file qua `signed-url` TTL 5 phút (code: stream proxy); cron `org-account-provision-retry` (code: dùng outbox relay); user ORG role `ORG_OWNER` và member role `OWNER` (incident không có cột role); S3 private bucket (code: Cloudinary `authenticated`); đổi `contactEmail` → `tickSuspended` và ban → `trustTier = NONE` (code không làm); vòng đời có `DRAFT → SUBMITTED` (code không có DRAFT).
-41. Tài liệu mô tả luồng "claim → UNDER_REVIEW → decision"; code cho phép decision và request-info trực tiếp từ `SUBMITTED` và từ `NEEDS_MORE_INFO`.
+39. ~~Bảng API thiếu endpoint~~ — `ORG_CREATION_FLOW.md` đã viết lại 2026-09-26.
+40. `REFACTOR_ORG_CREATION_FLOW.md` (to-be) mô tả: approve và cấp Blue Tick là hai endpoint riêng (code: một endpoint `decision` với `grantBlueTick`); xem file qua `signed-url` TTL 5 phút (code: stream proxy); cron `org-account-provision-retry` (code: dùng outbox relay); user ORG role `ORG_OWNER` (đã bị thay bằng membership có `role`, xem `ORG_OWNERSHIP_FLOW.md`); S3 private bucket (code: Cloudinary `authenticated`); đổi `contactEmail` → `tickSuspended` và ban → `trustTier = NONE` (code không làm); vòng đời `DRAFT → SUBMITTED` (code: `DRAFT → AWAITING_OWNER_CONFIRMATION → PENDING_REVIEW`).
+41. `UNDER_REVIEW` không còn tồn tại; claim không đổi status.
 
 
 ---
@@ -576,7 +579,7 @@ Lời gọi identity và notification chạy qua circuit breaker dùng chung the
 - Khi admin duyệt hoàn thành: đổi trạng thái campaign, report, sos sang COMPLETED và **ghi sự kiện outbox** `CAMPAIGN_COMPLETION_GREEN_POINTS` để reward-service cộng điểm xanh cho những tình nguyện viên đã được duyệt **và** đã điểm danh.
 - Gọi **reward-service** (HTTP nội bộ) để lấy bậc độ khó (`difficulty`): số điểm xanh và giới hạn tình nguyện viên.
 - **Dịch nội dung** bất đồng bộ: API đẩy job `TRANSLATE_TEXT` vào SQS; worker gọi ai-service và ghi kết quả vào các cột `*Vi` / `*En`.
-- Hạ tầng dùng chung của service: **transactional outbox relay** (đẩy sự kiện sang SQS của reward, hoặc gọi identity để provisioning tài khoản org), **queue runner** (SQS worker cho `ANALYZE_REPORT` và `TRANSLATE_TEXT`), **circuit breaker** cho các HTTP client (identity, reward, notification) và cho đường publish của outbox.
+- Hạ tầng dùng chung của service: **transactional outbox relay** (đẩy sự kiện sang SQS của reward, hoặc gọi identity + notification để onboarding owner sau khi duyệt đơn), **queue runner** (SQS worker cho `ANALYZE_REPORT` và `TRANSLATE_TEXT`), **circuit breaker** cho các HTTP client (identity, reward, notification) và cho đường publish của outbox.
 
 ## 2. Cấu trúc thư mục / module chính
 
@@ -648,7 +651,7 @@ Tất cả handler nằm trong `ecolink-server/services/incident-service/src/mod
 
 | Method | Path | Auth | Role được phép | Request (validation) | Response | Mã lỗi | Handler |
 |---|---|---|---|---|---|---|---|
-| POST | `/api/v1/campaigns` | JWT | Chủ sở hữu Organization (`org.ownerId === userId`) | body: `organizationId` UUID (bắt buộc); `title` bắt buộc; `banner?` ≤2048; `description?`; `titleVi?/titleEn?/descriptionVi?/descriptionEn?` (không validate); `startDate?/endDate?` ISO8601; `detailAddress?` ≤255; `latitude?` [-90,90]; `longitude?` [-180,180]; `radiusKm?` ≥0; `difficulty` int ≥1 (bắt buộc); `reportIds?` mảng UUID | 201 `{campaign}` (status=12 PENDING) | 400 validation; 404 "Organization not found"; 403 "Only the organization owner can create campaigns"; 400 "Invalid campaign difficulty; no matching tier in reward service"; 400 "One or more reportIds are invalid"; 500 nếu link report bị race ("Some reports could not be linked…"); 401 | `campaign/campaign.controller.ts > createCampaign` → `campaign.service.ts > createCampaign()` |
+| POST | `/api/v1/campaigns` | JWT | Owner của Organization (membership vai `LEGAL_REPRESENTATIVE` / `OWNER`, `organizationMemberRepository.isOwner()`) | body: `organizationId` UUID (bắt buộc); `title` bắt buộc; `banner?` ≤2048; `description?`; `titleVi?/titleEn?/descriptionVi?/descriptionEn?` (không validate); `startDate?/endDate?` ISO8601; `detailAddress?` ≤255; `latitude?` [-90,90]; `longitude?` [-180,180]; `radiusKm?` ≥0; `difficulty` int ≥1 (bắt buộc); `reportIds?` mảng UUID | 201 `{campaign}` (status=12 PENDING) | 400 validation; 404 "Organization not found"; 403 "Only the organization owner can create campaigns"; 400 "Invalid campaign difficulty; no matching tier in reward service"; 400 "One or more reportIds are invalid"; 500 nếu link report bị race ("Some reports could not be linked…"); 401 | `campaign/campaign.controller.ts > createCampaign` → `campaign.service.ts > createCampaign()` |
 | GET | `/api/v1/campaigns` | JWT | Mọi user | query: `search?`, `status?` int, `statuses?` danh sách int phân cách bằng dấu phẩy, `createdBy?` UUID, `managerId?` UUID, `organizationId?` UUID, `latitude?`, `longitude?`, `radiusKm?`, `difficulty?` ≥1, `greenPointsFrom?`/`greenPointsTo?` ≥0, `page?` ≥1, `limit?` 1..100 (mặc định 10), `sortBy?` createdAt/updatedAt/title, `sortOrder?`, `lang?` hoặc Accept-Language | 200 `{campaigns,total,page,limit,totalPages}`; **loại trừ** campaign mà user tạo, quản lý hoặc đã được duyệt tham gia; mỗi item có `votes`, `completionVerification`, `saved`, `requestStatus?`, `canManageCampaign`, `owner`, `Organization`, `reports`, `managers` (có tên và avatar) | 400; 500 | `campaign/campaign.controller.ts > getCampaigns` → `campaign.service.ts > getCampaigns()` |
 | GET | `/api/v1/campaigns/all` | JWT | Mọi user | — | 200 `{campaigns}`: toàn bộ campaign ACTIVE, không phân trang, sắp theo createdAt desc | 500 | `campaign/campaign.controller.ts > getAllActiveCampaigns` |
 | GET | `/api/v1/campaigns/by-ids` | JWT | Mọi user | query `campaignIds` (bắt buộc, UUID, tối đa 100, phân cách bằng dấu phẩy hoặc lặp key) | 200 `{campaigns}` theo thứ tự id truyền vào, bỏ qua id không tồn tại; không lọc theo status | 400 "campaignIds is required" hoặc "campaignIds must be valid UUIDs…"; 500 | `campaign/campaign.controller.ts > getCampaignsByIds` |
@@ -721,7 +724,7 @@ Tất cả handler nằm trong `ecolink-server/services/incident-service/src/mod
 |---|---|---|---|---|---|
 | `CAMPAIGN_COMPLETION_GREEN_POINTS` | `ecolink-server/services/incident-service/src/modules/campaign/campaign.service.ts > adminFinalizeCampaignCompletion()` (cùng transaction Serializable với việc đổi status) | Admin approve completion, và chỉ khi có ít nhất 1 volunteer đã được duyệt **và** đã check-in | `{ campaignId, credits: [{ userId, points: tier.greenPoints }] }` | `CAMPAIGN_COMPLETION_GREEN_POINTS:<campaignId>` | Relay → SQS `SQS_REWARD_INTAKE_QUEUE_URL` → reward-service (intake queue, `ecolink-server/services/reward-service/src/queue/green-point-queue.bootstrap.ts`) |
 | `CAMPAIGN_FACEBOOK_RECOGNITION` | [CHƯA HOÀN THIỆN] code emit đã bị comment ("TODO: re-enable Facebook recognition outbox event") | — | — | — | — |
-| `REPORT_COMPLETION_GREEN_POINTS`, `REPORT_VOTE_MILESTONE_GREEN_POINTS`, `ORG_ACCOUNT_PROVISION` | Phần A (report.service, vote.service, organization-application-admin.service) | — | — | — | Relay dùng chung: `ORG_ACCOUNT_PROVISION` → `organizationAccountProvisionPublisher` (gọi identity); các loại còn lại → SQS reward intake |
+| `REPORT_COMPLETION_GREEN_POINTS`, `REPORT_VOTE_MILESTONE_GREEN_POINTS`, `ORG_OWNER_ONBOARD` | Phần A (report.service, vote.service, organization-application-admin.service) | — | — | — | Relay dùng chung: `ORG_OWNER_ONBOARD` → `organizationOwnerOnboardPublisher` (gọi identity, notification); các loại còn lại → SQS reward intake |
 
 Envelope gửi lên SQS: `{ jobId: <outbox id>, version: 1, jobType: eventType, createdAt, payload }` (`ecolink-server/services/incident-service/src/outbox/outbox-publisher.ts > SqsOutboxPublisher.publish()`).
 
@@ -822,7 +825,7 @@ Các hàm `enqueueCampaignSubmissionPendingReviewNotification`, `enqueueCampaign
 7. `add-managers`: không kiểm tra user có tồn tại hoặc thuộc organization không; manager bất kỳ đều thêm được manager khác.
 8. Token QR: không gắn với thời gian diễn ra (`startDate/endDate`) hay vị trí; ai có ảnh QR trong 1 giờ đều check-in từ xa được. Token dùng chung `JWT_SECRET` với access token (được phân biệt bằng `purpose`).
 9. `POST /:id/completion-verification`: mọi user (kể cả manager, volunteer, người ở xa) đều vote được; kết quả vote không ảnh hưởng tới việc admin duyệt.
-10. Tạo campaign không kiểm tra trạng thái organization (org bị ban hay chưa active vẫn tạo được); chỉ kiểm tra `deletedAt` và `ownerId`.
+10. Tạo campaign không kiểm tra trạng thái organization (org bị ban hay chưa active vẫn tạo được); chỉ kiểm tra `deletedAt` và membership vai owner.
 
 **Logic / bug**
 11. `markCampaignDone`: khi status không phải ACTIVE/INREVIEW, message "Campaign must be active before requesting completion approval" không khớp chuỗi nào trong controller nên trả **500**. Các chuỗi "must be in review", "not awaiting initial admin verification", "Reward service enqueue failed" (→502) là mã chết. Nếu campaign đã WAITING_CONFIRMED thì trả về ngay **trước** khi kiểm tra quyền manager.

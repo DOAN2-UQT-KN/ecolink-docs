@@ -4,6 +4,13 @@
 > tổ chức trên Ecolink. Đi kèm với `ORG_CREATION_FLOW.md` (bản as-is).
 > Mọi đường dẫn file được ghi tương đối từ thư mục gốc `ecolink/`.
 
+> ⚠️ **Đã bị thay thế một phần (2026-09-26).** Mọi nội dung về **"một tài khoản ORG duy nhất"**
+> (`accountType = ORG`, role `ORG_OWNER`, `organizations.ownerId`, saga `provision-org-account`,
+> email kích hoạt tới email liên hệ, 2FA cho acc ORG) **không còn đúng**. Thay bằng mô hình nhiều
+> owner — mỗi owner là một user cá nhân có membership `LEGAL_REPRESENTATIVE` / `OWNER`, phải tự
+> xác nhận trước khi admin duyệt — trong `ORG_OWNERSHIP_FLOW.md` (thiết kế) và `ORG_CREATION_FLOW.md`
+> (as-is). Các phần khác (5 trục trạng thái, lane A/B, giấy tờ private, Blue Tick) vẫn là to-be tham khảo.
+
 ---
 
 ## 📌 Tóm tắt thay đổi so với as-is
@@ -12,7 +19,7 @@
 | --- | --- | --- |
 | Ai tạo được tổ chức | Mọi user đã đăng nhập, tạo trực tiếp | Nộp **application**, admin duyệt mới sinh tổ chức |
 | Bảng `organizations` | Chứa cả bản ghi chờ duyệt (`PENDING`) | **Chỉ chứa tổ chức đã được duyệt** |
-| Tài khoản quản lý | User cá nhân của người tạo | **Tài khoản riêng** `accountType = ORG`, do hệ thống sinh |
+| Tài khoản quản lý | User cá nhân của người tạo | ~~**Tài khoản riêng** `accountType = ORG`, do hệ thống sinh~~ → **thay thế:** nhiều owner là user cá nhân (xem `ORG_OWNERSHIP_FLOW.md`) |
 | Trạng thái | 2 trục (`status`, `isEmailVerified`) | **5 trục** độc lập (xem §1) |
 | Hồ sơ pháp lý | Không có | `organization_applications` + file ở **private bucket** |
 | Xuất bản chiến dịch | Luôn chờ admin duyệt | Org có **Blue Tick** → auto-publish + hậu kiểm *(phase sau)* |
@@ -291,6 +298,8 @@ WITHDRAWN ← user tự rút, từ bất kỳ trạng thái mở nào
 ```
 
 ### P4 — Provisioning: sinh Organization + tài khoản ORG
+
+> ⚠️ **Đã bị thay thế** bởi `ORG_OWNERSHIP_FLOW.md` §Bước 4: duyệt tạo membership cho từng owner đã xác nhận, không tạo tài khoản ORG.
 
 Đây là chỗ dễ vỡ nhất vì ghi vào **hai database khác nhau** (incident-service và
 identity-service, không có FK xuyên service). Thứ tự bắt buộc:

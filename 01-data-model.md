@@ -69,7 +69,7 @@ erDiagram
 | id | uuid | PK | |
 | email | text | **unique** (không phân biệt deletedAt; có phân biệt hoa thường) | Sign-up lưu nguyên văn; Google và ensure-users (duyệt đơn tổ chức) lưu lowercase |
 | name | text | NOT NULL | |
-| password | text? | | Hash bcrypt cost 10. NULL với tài khoản tổ chức chưa kích hoạt. Với user tạo qua Google là UUID dạng plaintext |
+| password | text? | | Hash bcrypt cost 10. NULL với tài khoản owner chưa kích hoạt (status 3). Với user tạo qua Google là UUID dạng plaintext |
 | avatar, bio | text? | | Avatar phải là URL http(s) |
 | emailVerified | bool | default false | |
 | verificationToken | text? | | Không được dùng |
@@ -96,7 +96,7 @@ erDiagram
 | metadata | json? | | `{organizationId, contactEmail}` hoặc `{organizationId, applicationId}` |
 
 ### Role (`roles`), PermissionSet (`permission_sets`), RolePermissionSet (`role_permission_sets`)
-- `Role.name` là **unique**. Các role có sẵn: `ADMIN`, `USER` (migration 0731 và seed), `ORG_OWNER` (migration 0922).
+- `Role.name` là **unique**. Các role có sẵn: `ADMIN`, `USER` (migration 0731 và seed). `ORG_OWNER` (migration 0922) đã bị xoá bởi `20260926100000_drop_org_accounts`.
 - `PermissionSet.permissions` là mảng text thuộc enum `Permission` (USER_READ/WRITE/DELETE, ROLE_*, PERMISSION_SET_*) (`identity-service/src/modules/role/permission.enum.ts`). **Không có tác dụng phân quyền** vì middleware `authorize()` không được dùng ở route nào.
 - `RolePermissionSet` có unique (roleId, permissionSetId); unique này không tính deletedAt.
 

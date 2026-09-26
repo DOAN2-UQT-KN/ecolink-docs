@@ -19,7 +19,7 @@
 ```
 notification-service/
 ├─ prisma/schema.prisma            # Notification, NotificationJob, enum NotificationType/NotificationKind
-├─ prisma/migrations/              # 16 migration (init → org_application_kinds)
+├─ prisma/migrations/              # 17 migration (init → notification_org_owner_kinds)
 ├─ templates/notifications/<KIND>/ # Handlebars: website.title|body[.vi].hbs, email.subject|text|html[.vi].hbs
 ├─ src/index.ts                    # Express app (API) — đồng thời import "./worker" nên API process cũng chạy worker
 ├─ src/worker.ts                   # entry của worker: startAllQueues()
@@ -85,14 +85,14 @@ Luồng outbox: `createJob` ghi `notification_jobs` với status `12 (_STATUS_PE
 
 ### 5.3 Ai gọi vào notification-service (các "trigger thông báo")
 
-Chỉ **incident-service** gọi `POST /api/v1/notifications/jobs` (grep toàn repo: identity-service và reward-service không gọi). Mọi lời gọi đi qua circuit breaker `HTTP_CIRCUIT_NOTIFICATION = "http->notification"`, timeout 10s, và nếu thiếu `NOTIFICATION_SERVICE_URL` hoặc `INTERNAL_NOTIFICATION_API_KEY` thì **chỉ log warning rồi bỏ qua** (`IS/src/resilience/http-circuit.ts`).
+**incident-service** gọi `POST /api/v1/notifications/jobs` cho mọi kind; **identity-service** gọi duy nhất kind `ACCOUNT_ACTIVATION` khi người dùng tự yêu cầu gửi lại link kích hoạt (`ID/src/modules/auth/account-activation-notify.client.ts`, `fetch`, không circuit breaker); reward-service không gọi. Lời gọi từ incident đi qua circuit breaker `HTTP_CIRCUIT_NOTIFICATION = "http->notification"`, timeout 10s, và nếu thiếu `NOTIFICATION_SERVICE_URL` hoặc `INTERNAL_NOTIFICATION_API_KEY` thì **chỉ log warning rồi bỏ qua** (`IS/src/resilience/http-circuit.ts`).
 
 Lọc theo preferences: các client dùng `enqueueWebsiteNotificationsToUsers()` / `postReportWebsiteNotification()` gọi trước `IS/src/modules/organization/identity-user.client.ts > filterUserIdsForNotificationKind()` → identity `POST /internal/v1/users/notification-prefs/filter` (tối đa 500 id/lần). Nếu identity lỗi hoặc thiếu env thì **trả lại toàn bộ userIds** (fail-open). Luật map kind → preference key nằm ở `ecolink-server/shared/da2-constants/src/notification-preferences.ts > notificationKindToPreferenceKey()`.
 
 | # | Kind | Kênh | Người nhận | Trigger (file > hàm) | Client gọi NS | Lọc preference |
 |---|---|---|---|---|---|---|
 | 1 | `ORGANIZATION_CONTACT_VERIFY` | email (`toEmail`) | Email liên hệ của tổ chức | `IS/src/modules/organization/organization.service.ts > createOrganization()`, `updateOrganization()`, `resendOrganizationContactVerificationEmail()` → `queueOrganizationContactVerificationEmail()` | `IS/src/modules/organization/organization-contact-email-notify.client.ts > enqueueOrganizationContactVerificationEmail()` | Không |
-| 2 | `ORGANIZATION_APPROVED` | website | Owner tổ chức (nếu đã có `ownerId`) | `organization.service.ts > adminVerifyOrganization()` → `notifyOwnerOfOrganizationVerified("approved")` | `IS/src/modules/campaign/notification-jobs.client.ts > enqueueOrganizationApprovedWebsiteNotification()` | Có gọi filter, nhưng kind là admin-only → luôn bật |
+| 2 | `ORGANIZATION_APPROVED` | website | Mọi owner tổ chức | `organization.service.ts > adminVerifyOrganization()` → `notifyOwnerOfOrganizationVerified("approved")` | `IS/src/modules/campaign/notification-jobs.client.ts > enqueueOrganizationApprovedWebsiteNotification()` | Có gọi filter, nhưng kind là admin-only → luôn bật |
 | 3 | `ORGANIZATION_REJECTED` | website | Owner tổ chức | `adminVerifyOrganization()` → `notifyOwnerOfOrganizationVerified("banned", reason)` | `notification-jobs.client.ts > enqueueOrganizationRejectedWebsiteNotification()` | Như trên |
 | 4 | `VOLUNTEER_REQUEST` | website | Owner tổ chức | `organization.service.ts > createJoinRequest()` → `notifyOrganizationOwnerOfJoinRequest()` | `notification-jobs.client.ts > enqueueVolunteerRequestWebsiteNotification()` | `volunteerRequest` |
 | 5 | `VOLUNTEER_REQUEST` | website | Các manager của chiến dịch (trừ chính người xin) | `IS/src/modules/campaign/campaign_joining_request/campaign_joining_request.service.ts > createJoinRequest()` → `notifyCampaignManagersOfVolunteerRequest()` | như trên | `volunteerRequest` |
@@ -108,10 +108,15 @@ Lọc theo preferences: các client dùng `enqueueWebsiteNotificationsToUsers()`
 | 15 | `REPORT_STATUS` (payload `status: "COMPLETED"`) | website | Người gửi report | `IS/src/modules/report/report.service.ts > adminMarkReportDone()` | `IS/src/modules/report/report-status-notify.client.ts > enqueueReportStatusWebsiteNotification()` | `reportStatus` |
 | 16 | `REPORT_APPROVED` / `REPORT_REJECTED` | website | Người gửi report | `report.service.ts > adminVerifyReport()` → `notifyOwnerOfReportModeration()` | `enqueueReportApprovedWebsiteNotification()` / `enqueueReportRejectedWebsiteNotification()` | Có gọi filter, kind admin-only → luôn bật |
 | 17 | `ORG_APPLICATION_OTP` | email (`toEmail`) | Email người nộp hồ sơ | `IS/src/modules/organization_application/organization-application-otp.service.ts > requestOtp()` | `IS/src/modules/organization_application/organization-application-notify.client.ts > enqueueApplicationOtpEmail()` | Không |
-| 18 | `ORG_APPLICATION_RECEIVED` | email | Người nộp hồ sơ | `organization-application.service.ts > createApplication()` | `enqueueApplicationReceivedEmail()` | Không |
+| 18 | `ORG_APPLICATION_RECEIVED` | email | Người nộp hồ sơ | `organization-application.service.ts > submitApplication()` (lần nộp đầu) | `enqueueApplicationReceivedEmail()` | Không |
 | 19 | `ORG_APPLICATION_NEEDS_INFO` | email | Người nộp hồ sơ | `organization-application-admin.service.ts > requestMoreInfo()` | `enqueueApplicationNeedsInfoEmail()` | Không |
 | 20 | `ORG_APPLICATION_REJECTED` | email | Người nộp hồ sơ | `organization-application-admin.service.ts > reject()` | `enqueueApplicationRejectedEmail()` | Không |
-| 21 | `ORG_ACCOUNT_ACTIVATION` | email | Email tổ chức vừa được cấp tài khoản ORG | Outbox event `ORG_ACCOUNT_PROVISION` (phát trong `organization-application-admin.service.ts > approve()`) → `IS/src/outbox/outbox-relay.bootstrap.ts` → `organization-account-provision.publisher.ts > OrganizationAccountProvisionPublisher.publish()` (chỉ khi có `activationToken` mới) | `enqueueOrgAccountActivationEmail()` | Không |
+| 21 | `ACCOUNT_ACTIVATION` (đổi tên từ `ORG_ACCOUNT_ACTIVATION`) | email | Owner được duyệt chưa có tài khoản (user `PENDING_ACTIVATION`) | Outbox event `ORG_OWNER_ONBOARD` (phát trong `organization-application-admin.service.ts > approve()`) → `organization-owner-onboard.publisher.ts > publish()` khi identity trả token; hoặc identity `POST /api/v1/auth/activation/resend` | IS `enqueueAccountActivationEmail()`; ID `account-activation-notify.client.ts > enqueueAccountActivationEmail()` | Không |
+| 22 | `ORG_OWNER_CONFIRMATION_REQUEST` | email | Owner được ghi tên trong hồ sơ | `organization-application.service.ts > submitApplication()`, `resendOwnerInvite()` qua `owner-candidates.ts > sendConfirmationEmails()` | `enqueueOwnerConfirmationRequestEmail()` | Không |
+| 23 | `ORG_OWNER_DECLINED` | email | Người nộp hồ sơ | `owner-confirmation.service.ts > decline()` | `enqueueOwnerDeclinedEmail()` | Không |
+| 24 | `ORG_OWNER_CONFIRMATION_EXPIRED` | email | Người nộp hồ sơ | `owner-confirmation.service.ts > expireOverdue()` (sweeper) | `enqueueOwnerConfirmationExpiredEmail()` | Không |
+| 25 | `ORG_APPLICATION_WITHDRAWN_NOTICE` | email | Owner đã xác nhận (trừ người nộp) | `organization-application.service.ts > withdrawApplication()` | `enqueueApplicationWithdrawnNoticeEmail()` | Không |
+| 26 | `ORG_OWNER_ATTACHED` | email | Owner được duyệt đã có tài khoản active | `organization-owner-onboard.publisher.ts > publish()` khi identity không trả token | `enqueueOwnerAttachedEmail()` | Không |
 
 Các client của organization_application tự thêm `appName` (env `APP_NAME` của IS, mặc định `"DA2"`) và `locale` (mặc định `"vi"`) vào payload.
 
@@ -127,9 +132,10 @@ Các client của organization_application tự thêm `appName` (env `APP_NAME` 
   4. `NotificationSendWorker.process()` kiểm tra `type ∈ {email, website}` và `kind` là string → `NotificationProcessor.process()`: kiểm tra kind hợp lệ → `getChannel(type)` → `normalizePayload` (mọi giá trị thành string, null/undefined thành `""`) → `channel.deliver()`.
   5. Thành công: xoá message, `markSucceeded` (17 COMPLETED, `processedAt`).
   6. Lỗi: nếu `receiveCount >= 5` → xoá message, `markFailed` (23). Ngược lại đổi visibility = `min(900, 30 * 2^(receiveCount-1))` giây và `markRetryScheduled` (12).
-- **Kênh email** (`email.channel.ts > deliver()`): xác định người nhận (`payload.toEmail` chỉ cho phép với 6 kind ở `direct-email-kinds.ts`; ngược lại tra identity theo `userId`), `locale` = `vi` nếu `payload.locale == "vi"` ngược lại `en`, render `email.subject/text/html` → gửi SMTP → ghi `Notification` (EMAIL). Nếu `SMTP_HOST` rỗng: không gửi, vẫn ghi DB, log `smtp_not_configured`.
+- **Kênh email** (`email.channel.ts > deliver()`): xác định người nhận (`payload.toEmail` chỉ cho phép với 11 kind ở `direct-email-kinds.ts`; ngược lại tra identity theo `userId`), `locale` = `vi` nếu `payload.locale == "vi"` ngược lại `en`, render `email.subject/text/html` → gửi SMTP → ghi `Notification` (EMAIL). Nếu `SMTP_HOST` rỗng: không gửi, vẫn ghi DB, log `smtp_not_configured`.
 - **Kênh in-app** (`in-app.channel.ts > deliver()`): bắt buộc `userId`, render `website.title/body` cho cả `en` và `vi`, lưu `title/body` bản `en`, và `payload.locales = { en: {title, body}, vi: {title, body} }`.
 - **Template engine** (`NS/src/modules/templates/notification-template.engine.ts`): tìm file theo thứ tự `.vi.hbs` → `.en.hbs` → `.hbs` (locale vi) hoặc `.en.hbs` → `.hbs` (locale en); thiếu file → throw (job sẽ retry rồi FAILED). Với kênh website, biến `fooEn`/`fooVi` trong payload được dùng để điền `foo` theo locale (`payloadForLocale()`); kênh email **không** áp dụng cơ chế này. Template compile được cache trong bộ nhớ. Thư mục template tính theo `process.cwd()/templates/notifications`.
+- Template của 6 kind thêm ngày 2026-09-26 (`ACCOUNT_ACTIVATION`, `ORG_OWNER_*`, `ORG_APPLICATION_WITHDRAWN_NOTICE`) dùng `{{{…}}}` (không escape) trong `email.subject` và `email.text` để tên tổ chức / danh sách owner dạng `Tên <email>` không bị biến thành `&lt;…&gt;`; bản HTML vẫn escape. Template cũ vẫn dùng `{{…}}` ở mọi nơi.
 - **Không có cron** nào trong service.
 
 Ma trận template hiện có (thư mục `NS/templates/notifications/`):
@@ -138,7 +144,7 @@ Ma trận template hiện có (thư mục `NS/templates/notifications/`):
 |---|---|---|
 | CAMPAIGN_CREATED, CAMPAIGN_DONE, CAMPAIGN_COMPLETION_PENDING_ADMIN, CAMPAIGN_COMPLETION_REJECTED_BY_ADMIN, REPORT_STATUS, REPORT_READY, TASK_ASSIGNED, VOLUNTEER_REQUEST, VOLUNTEER_APPROVED, VOLUNTEER_REJECTED, RESET_PASSWORD, GENERIC | có | có |
 | CAMPAIGN_COMPLETION_APPROVED_BY_ADMIN, CAMPAIGN_VERIFY_INVITE, CAMPAIGN_COMPLETION_VERIFY_INVITE, ORGANIZATION_APPROVED, ORGANIZATION_REJECTED, REPORT_APPROVED, REPORT_REJECTED | có | **không** |
-| ORGANIZATION_CONTACT_VERIFY, ORG_APPLICATION_OTP, ORG_APPLICATION_RECEIVED, ORG_APPLICATION_NEEDS_INFO, ORG_APPLICATION_REJECTED, ORG_ACCOUNT_ACTIVATION | **không** | có |
+| ORGANIZATION_CONTACT_VERIFY, ORG_APPLICATION_OTP, ORG_APPLICATION_RECEIVED, ORG_APPLICATION_NEEDS_INFO, ORG_APPLICATION_REJECTED, ACCOUNT_ACTIVATION, ORG_OWNER_CONFIRMATION_REQUEST, ORG_OWNER_DECLINED, ORG_OWNER_CONFIRMATION_EXPIRED, ORG_APPLICATION_WITHDRAWN_NOTICE, ORG_OWNER_ATTACHED | **không** | có |
 | CAMPAIGN_SUBMISSION_PENDING_REVIEW, CAMPAIGN_SUBMISSION_APPROVED | **không** | **không** |
 
 ## 7. Phụ thuộc vào service khác và dịch vụ bên ngoài
@@ -178,7 +184,7 @@ Ma trận template hiện có (thư mục `NS/templates/notifications/`):
 2. **Gửi email trùng khi retry**: kênh email gửi SMTP **trước** rồi mới `prisma.notification.create`. Nếu ghi DB lỗi → job retry → email gửi lại. `markProcessing` cho phép status 22 nên message được nhận lại vẫn xử lý lại (at-least-once).
 3. **Kind thiếu template** → job luôn thất bại sau 5 lần: `CAMPAIGN_SUBMISSION_PENDING_REVIEW`, `CAMPAIGN_SUBMISSION_APPROVED` (cả 2 kênh); kênh email cho các kind chỉ có template website (ví dụ `REPORT_APPROVED`); kênh website cho các kind chỉ có email (ví dụ `ORG_APPLICATION_OTP`). Controller không kiểm tra trước.
 4. **Kind không có trigger** [CHƯA HOÀN THIỆN]: `RESET_PASSWORD` (identity-service `auth.controller.ts > requestPasswordReset` trả thẳng `resetToken` trong response thay vì gửi email: nên xác nhận với identity), `REPORT_READY`, `TASK_ASSIGNED`, `GENERIC`, hai kind `CAMPAIGN_SUBMISSION_*`. Nhiều hàm client ở `IS/src/modules/campaign/notification-jobs.client.ts` là code chết: `enqueueCampaignCreatedWebsiteNotification`, `enqueueCampaignDoneWebsiteNotification`, `enqueueCampaignCompletionRejectedByAdminWebsiteNotification`, `enqueueCampaignCompletionApprovedByAdminWebsiteNotification`, `enqueueCampaignVerifyInviteNotification`, `enqueueCampaignCompletionVerifyInviteNotification`, `enqueueCampaignSubmission*`.
-5. **`POST /jobs` lộ qua gateway** (`/api/v1/notifications/*` proxy toàn bộ). Chỉ còn API key bảo vệ; so sánh bằng `!==` (không constant-time). Ai có key có thể gửi email tới bất kỳ địa chỉ nào qua 6 kind cho phép `toEmail`.
+5. **`POST /jobs` lộ qua gateway** (`/api/v1/notifications/*` proxy toàn bộ). Chỉ còn API key bảo vệ; so sánh bằng `!==` (không constant-time). Ai có key có thể gửi email tới bất kỳ địa chỉ nào qua 11 kind cho phép `toEmail`.
 6. **Validation `type` lỏng**: controller chỉ kiểm `isString().notEmpty()`. Giá trị như `"sms"` được nhận (202) rồi worker ném "Invalid notification payload" → retry 5 lần mới FAILED. Tương tự `in-app`/`inapp` bị worker từ chối dù `InAppNotificationChannel.supports()` nhận được. Controller chỉ bắt buộc `userId` khi `type === "website"` (không so sánh không phân biệt hoa thường).
 7. **`payload` không kiểm kiểu giá trị**: chỉ `isObject()`; object lồng nhau bị `String(v)` thành `"[object Object]"`. Không giới hạn kích thước.
 8. **Không kiểm tra `userId` tồn tại** khi tạo thông báo website.

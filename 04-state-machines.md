@@ -40,7 +40,7 @@ stateDiagram-v2
 
 ```mermaid
 stateDiagram-v2
-  [*] --> PENDING_12: owner tổ chức tạo
+  [*] --> PENDING_12: owner tổ chức tạo (membership vai owner)
   PENDING_12 --> ACTIVE_1: admin duyệt
   PENDING_12 --> INACTIVE_2: admin ban
   ACTIVE_1 --> INACTIVE_2: admin ban
@@ -129,25 +129,26 @@ stateDiagram-v2
 | 1 → 17 | **User đăng nhập bất kỳ** | — | `solveSos()` |
 | 1 → 17 | Admin, gián tiếp | Duyệt hoàn thành campaign | `adminFinalizeCampaignCompletion()` |
 
-## 7. Đơn đăng ký tổ chức (`organization_applications.status`)
+## 7. Đơn đăng ký tổ chức (`organization_applications.status`) và owner (`organization_application_owners.status`)
+
+Thiết kế: [ORG_OWNERSHIP_FLOW.md](ORG_OWNERSHIP_FLOW.md). Điểm then chốt: **`PENDING_REVIEW` chỉ đạt được khi mọi owner (chưa bị gỡ) đã CONFIRMED**, và admin không thấy đơn trước trạng thái đó.
 
 ```mermaid
 stateDiagram-v2
-  [*] --> SUBMITTED: nộp đơn (sau OTP)
-  SUBMITTED --> UNDER_REVIEW: admin claim
-  SUBMITTED --> NEEDS_MORE_INFO: admin yêu cầu bổ sung
-  UNDER_REVIEW --> NEEDS_MORE_INFO: admin yêu cầu bổ sung
-  NEEDS_MORE_INFO --> SUBMITTED: người nộp sửa và nộp lại
-  NEEDS_MORE_INFO --> UNDER_REVIEW: admin claim
-  SUBMITTED --> APPROVED: admin duyệt
-  UNDER_REVIEW --> APPROVED: admin duyệt
-  NEEDS_MORE_INFO --> APPROVED: admin duyệt
-  SUBMITTED --> REJECTED: admin từ chối
-  UNDER_REVIEW --> REJECTED: admin từ chối
-  NEEDS_MORE_INFO --> REJECTED: admin từ chối
-  SUBMITTED --> WITHDRAWN: người nộp rút
-  UNDER_REVIEW --> WITHDRAWN: người nộp rút
-  NEEDS_MORE_INFO --> WITHDRAWN: người nộp rút
+  [*] --> DRAFT: OTP đúng (mở nháp)
+  DRAFT --> AWAITING_OWNER_CONFIRMATION: nộp (còn owner chưa xác nhận)
+  DRAFT --> PENDING_REVIEW: nộp (người nộp là owner duy nhất)
+  AWAITING_OWNER_CONFIRMATION --> PENDING_REVIEW: owner cuối cùng xác nhận
+  AWAITING_OWNER_CONFIRMATION --> NEEDS_REVISION: owner từ chối / hết hạn
+  PENDING_REVIEW --> NEEDS_REVISION: admin yêu cầu bổ sung
+  NEEDS_REVISION --> AWAITING_OWNER_CONFIRMATION: nộp lại
+  NEEDS_REVISION --> PENDING_REVIEW: nộp lại (mọi owner vẫn CONFIRMED)
+  PENDING_REVIEW --> APPROVED: admin duyệt
+  PENDING_REVIEW --> REJECTED: admin từ chối
+  DRAFT --> WITHDRAWN: người nộp rút
+  AWAITING_OWNER_CONFIRMATION --> WITHDRAWN: người nộp rút
+  PENDING_REVIEW --> WITHDRAWN: người nộp rút
+  NEEDS_REVISION --> WITHDRAWN: người nộp rút
   APPROVED --> [*]
   REJECTED --> [*]
   WITHDRAWN --> [*]
@@ -155,18 +156,40 @@ stateDiagram-v2
 
 | Từ → sang | Ai | Điều kiện | Side effect | File |
 |---|---|---|---|---|
-| (mới) → SUBMITTED | Người nộp ẩn danh (submission token) | BR-055..BR-065 | Event SUBMITTED; burn token; tracking token; email ORG_APPLICATION_RECEIVED | `INC/modules/organization_application/organization-application.service.ts > createApplication()` |
-| SUBMITTED / NEEDS_MORE_INFO / UNDER_REVIEW (cùng reviewer) → UNDER_REVIEW | Admin | BR-070 | reviewerId, claimedAt; event CLAIMED | `organization-application-admin.service.ts > claim()` |
-| mở → NEEDS_MORE_INFO | Admin (không cần claim) | Có message | reviewNote; event INFO_REQUESTED; tracking token mới; email NEEDS_INFO | `requestMoreInfo()` |
-| NEEDS_MORE_INFO → SUBMITTED | Người nộp (tracking token) | Validate lại | Reset reviewer; xoá mềm giấy tờ bị bỏ; event RESUBMITTED (payload `changedFields` — chỉ tên trường đã sửa, không lưu giá trị — cùng `addedDocumentIds`, `removedDocumentIds`) | `updateApplication()` |
-| mở → APPROVED | Admin (không cần claim) | BR-074..BR-076 | Tạo organization (trust fields) và channels; outbox ORG_ACCOUNT_PROVISION; event APPROVED (và DOCUMENTS_WAIVED nếu có) | `approve()` |
-| mở → REJECTED | Admin | Có lý do | Email ORG_APPLICATION_REJECTED; event REJECTED | `reject()` |
-| mở → WITHDRAWN | Người nộp | — | Event WITHDRAWN | `withdrawApplication()` |
-| APPROVED (accountProvisionedAt null → có giá trị) | Outbox relay | identity trả user | organization.ownerId, member; event ACCOUNT_PROVISIONED; email ORG_ACCOUNT_ACTIVATION | `organization-account-provision.publisher.ts > publish()` |
+| (mới) → DRAFT | Người nộp ẩn danh (OTP) | Email chưa có đơn mở (có rồi thì trả đơn đó) | Code `ORG-…`; owner đầu tiên = người nộp; tracking token | `INC/modules/organization_application/organization-application.service.ts > openDraftForEmail()` |
+| DRAFT / NEEDS_REVISION → AWAITING_OWNER_CONFIRMATION hoặc PENDING_REVIEW | Người nộp (tracking token) | BR-057..BR-060, BR-069, BR-300..BR-303; row lock | Người nộp CONFIRMED; token 14 ngày cho owner cần link; reset xác nhận nếu snapshot đổi (BR-306); event SUBMITTED / RESUBMITTED (`changedFields`), OWNER_CONFIRMATIONS_RESET, READY_FOR_REVIEW; email ORG_OWNER_CONFIRMATION_REQUEST (+ ORG_APPLICATION_RECEIVED lần đầu) | `submitApplication()` |
+| AWAITING → PENDING_REVIEW | Hệ thống, trong transaction của lần xác nhận cuối | Không còn owner nào khác CONFIRMED | event OWNER_CONFIRMED, READY_FOR_REVIEW; `submittedAt` | `owner-confirmation.service.ts > confirm()` |
+| AWAITING / NEEDS_REVISION → NEEDS_REVISION | Hệ thống (owner bấm "Tôi không liên quan") | Owner đang PENDING / EXPIRED | reviewNote; event OWNER_DECLINED; email ORG_OWNER_DECLINED | `decline()` |
+| AWAITING → NEEDS_REVISION | Sweeper mỗi giờ | Owner PENDING có `expiresAt < now` | event OWNER_EXPIRED; email ORG_OWNER_CONFIRMATION_EXPIRED | `expireOverdue()`, `owner-confirmation-expiry.job.ts` |
+| PENDING_REVIEW → NEEDS_REVISION | Admin | Có message | reviewNote; event INFO_REQUESTED; email ORG_APPLICATION_NEEDS_INFO | `organization-application-admin.service.ts > requestMoreInfo()` |
+| PENDING_REVIEW (claim) | Admin | reviewerId trống hoặc là chính mình (BR-070) | reviewerId, claimedAt; event CLAIMED; **không đổi status** | `claim()` |
+| PENDING_REVIEW → APPROVED | Admin | BR-074..BR-076, BR-312 | Tổ chức + channels + membership từng owner; outbox ORG_OWNER_ONBOARD mỗi owner; event APPROVED (+ DOCUMENTS_WAIVED) | `approve()` |
+| PENDING_REVIEW → REJECTED | Admin | Có lý do | Email ORG_APPLICATION_REJECTED; event REJECTED | `reject()` |
+| mở → WITHDRAWN | Người nộp | — | Link chưa trả lời hết hạn ngay; email ORG_APPLICATION_WITHDRAWN_NOTICE cho owner đã xác nhận; event WITHDRAWN | `withdrawApplication()` |
 
-`DRAFT` có trong enum nhưng không có đường tạo.
+**Owner (`OwnerCandidateStatus`)**
 
-## 8. Tổ chức (`organizations.status`, `trustTier`, `isEmailVerified`, `ownerId`)
+```mermaid
+stateDiagram-v2
+  [*] --> PENDING: thêm vào danh sách
+  PENDING --> CONFIRMED: bấm xác nhận / là người nộp (lúc nộp)
+  PENDING --> DECLINED: "Tôi không liên quan"
+  PENDING --> EXPIRED: quá 14 ngày (sweeper)
+  EXPIRED --> DECLINED: "Tôi không liên quan"
+  EXPIRED --> PENDING: nộp lại (link mới)
+  CONFIRMED --> PENDING: nộp lại khi snapshot đổi (reset)
+```
+
+| Từ → sang | Ai | Ghi chú | File |
+|---|---|---|---|
+| (mới) → PENDING | Người nộp (lưu nháp) | Chưa có link cho tới khi nộp | `syncOwners()` |
+| PENDING → CONFIRMED | Owner / hệ thống (người nộp) | Lưu `respondedAt`, `confirmIp`, `confirmUa` | `confirm()`, `submitApplication()` |
+| PENDING / EXPIRED → DECLINED | Owner | Tuỳ chọn `owner_invite_blocks` | `decline()` |
+| PENDING → EXPIRED | Sweeper | Giữ hash để link cũ báo "hết hạn" | `expireOverdue()` |
+| bất kỳ → gỡ (`removedAt`) | Người nộp (lưu nháp) | Không xoá bản ghi; event OWNER_CANDIDATE_REMOVED; thêm lại thì về PENDING | `syncOwners()` |
+| CONFIRMED / EXPIRED → PENDING | Người nộp (nộp lại) | Reset do BR-306, hoặc cấp link mới cho EXPIRED | `submitApplication()` |
+
+## 8. Tổ chức (`organizations.status`, `trustTier`, `isEmailVerified`) và owner
 
 ```mermaid
 stateDiagram-v2
@@ -177,45 +200,46 @@ stateDiagram-v2
 
 | Trục | Từ → sang | Ai | Điều kiện | Side effect | File |
 |---|---|---|---|---|---|
-| status | (mới) → ACTIVE 1 | Admin (qua duyệt đơn) hoặc service nội bộ | — | Email xác minh (chỉ với luồng nội bộ); TRANSLATE_TEXT (chỉ với luồng nội bộ) | `approve()`, `organization.service.ts > createOrganization()` |
-| status | 4 / 2 / 9 / 12 → ACTIVE 1 | Admin | — | Thông báo ORGANIZATION_APPROVED (nếu có owner) | `adminVerifyOrganization()` |
-| status | 4 / 12 / 9 / 1 → INACTIVE 2 | Admin | Có lý do | Thông báo ORGANIZATION_REJECTED | `adminVerifyOrganization()` |
+| status | (mới) → ACTIVE 1 | Admin (qua duyệt đơn) hoặc service nội bộ | Phải có ≥ 1 membership vai owner lúc COMMIT (trigger) | Membership owner; email xác minh và TRANSLATE_TEXT (chỉ với luồng nội bộ) | `approve()`, `organization.service.ts > createOrganization()`, `organization.repository.ts > create()` |
+| status | 4 / 2 / 9 / 12 → ACTIVE 1 | Admin | — | Thông báo ORGANIZATION_APPROVED tới mọi owner | `adminVerifyOrganization()` |
+| status | 4 / 12 / 9 / 1 → INACTIVE 2 | Admin | Có lý do | Thông báo ORGANIZATION_REJECTED tới mọi owner | `adminVerifyOrganization()` |
 | trustTier | (mới) → VERIFIED hoặc NONE | Admin (khi duyệt đơn) | `grant_blue_tick` / lane A | — | `approve()` |
 | trustTier | VERIFIED → ? | — | **Không có code gỡ hoặc tạm dừng Blue Tick**, không có job xử lý hết hạn | — | [CHƯA HOÀN THIỆN] |
 | kycStatus | NOT_SUBMITTED → APPROVED | Admin (khi duyệt đơn) | — | — | `approve()` |
+| isEmailVerified | (mới) → true | Admin (khi duyệt đơn) | contactEmail = submitterEmail đã qua OTP | — | `approve()` |
 | isEmailVerified | false → true | Người click link | Token hợp lệ, email khớp | — | `confirmOrganizationContactEmail()` |
 | isEmailVerified | true → false | Owner | Đổi contactEmail | Gửi link mới | `updateOrganization()` |
-| ownerId | null → userId | Outbox relay | Provision thành công | Upsert member | `publish()` |
+| owner | (mới) → membership `LEGAL_REPRESENTATIVE` / `OWNER` | Admin (duyệt đơn) | Trần 3 tổ chức dưới advisory lock | Outbox ORG_OWNER_ONBOARD | `organization-membership.service.ts > grantMembership()` |
+| owner | owner cuối cùng → rời / xoá | — | **DB chặn** (`ORG_MUST_HAVE_OWNER`); chưa có luồng thu hồi / chuyển giao | — | trigger `organization_members_owner_guard` [CHƯA HOÀN THIỆN] |
 
 ## 9. Yêu cầu gia nhập tổ chức (`organization_joining_requests.status`) và thành viên
 
 | Từ → sang | Ai | Điều kiện | Side effect | File |
 |---|---|---|---|---|
-| (mới) → PENDING 12 | User (không phải owner hay thành viên) | BR-085 | VOLUNTEER_REQUEST cho owner | `organization.service.ts > createJoinRequest()` |
-| 12 → APPROVED 14 | Owner | — | Upsert organization_members; VOLUNTEER_APPROVED | `processJoinRequest()` |
-| 12 → REJECTED 18 | Owner | — | VOLUNTEER_REJECTED | `processJoinRequest()` |
+| (mới) → PENDING 12 | User chưa có membership | BR-085 | VOLUNTEER_REQUEST cho mọi owner | `organization.service.ts > createJoinRequest()` |
+| 12 → APPROVED 14 | Owner bất kỳ | — | Upsert organization_members vai MEMBER; VOLUNTEER_APPROVED | `processJoinRequest()` |
+| 12 → REJECTED 18 | Owner bất kỳ | — | VOLUNTEER_REJECTED | `processJoinRequest()` |
 | 12 → xoá mềm | Người xin | — | — | `cancelJoinRequest()` |
-| Thành viên: đang hoạt động → xoá mềm | Chính thành viên (không phải owner) | — | — | `leaveOrganization()` |
+| Thành viên: đang hoạt động → xoá mềm | Chính thành viên (không có vai owner) | BR-088 | — | `leaveOrganization()` |
 
 ## 10. Tài khoản người dùng (`users.status`)
 
 ```mermaid
 stateDiagram-v2
   [*] --> ACTIVE_1: đăng ký / Google
-  [*] --> PENDING_ACTIVATION_3: provision tài khoản tổ chức
+  [*] --> PENDING_ACTIVATION_3: duyệt đơn tổ chức (owner chưa có tài khoản)
   PENDING_ACTIVATION_3 --> ACTIVE_1: kích hoạt (đặt mật khẩu)
   ACTIVE_1 --> INACTIVE_2: admin ban
   PENDING_ACTIVATION_3 --> INACTIVE_2: admin ban
-  INACTIVE_2 --> ACTIVE_1: kích hoạt bằng token còn hạn (bug)
 ```
 
 | Từ → sang | Ai | Điều kiện | Side effect | File |
 |---|---|---|---|---|
 | (mới) → 1 | Khách | Email chưa có | — | `ID/modules/auth/auth.service.ts > signup()`, `google.service.ts > handleCallback()` |
-| (mới) → 3 | Service nội bộ (incident) | applicationId chưa được provision | Token kích hoạt | `provisionOrgAccount()` |
-| 3 → 1 | Người cầm token kích hoạt | Token còn hạn | Đặt password; revoke REFRESH | `activateOrgAccount()` |
+| (mới) → 3 | Service nội bộ (incident, ensure-users) | Email chưa có user | Không mật khẩu; token kích hoạt phát sau qua outbox | `ensureUsersForOwners()`, `issueActivationToken()` |
+| 3 → 1 | Người cầm token kích hoạt | Token `ACCOUNT_ACTIVATION` còn hạn **và** user đang 3 | Đặt password; revoke REFRESH | `activateAccount()` |
 | 1 / 3 → 2 | Admin | Không ban chính mình | Revoke REFRESH | `ID/modules/user/user.service.ts > adminBanUser()` |
-| 2 → 1 | — | Không có API gỡ ban. Tài khoản tổ chức bị ban khi đang ở 3 vẫn có thể chuyển về 1 qua kích hoạt (99) | — | — |
+| 2 → 1 | — | Không có API gỡ ban. Kích hoạt kiểm tra status nên tài khoản bị ban khi đang ở 3 không còn chuyển về 1 được | — | — |
 | → xoá mềm | **User đăng nhập bất kỳ** (`DELETE /users/:id`) | — | Không revoke token | `user.service.ts > deleteUser()` |
 
 ## 11. Đơn đổi quà (`gift_redemptions.status`)

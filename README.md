@@ -16,8 +16,9 @@ Toàn bộ nội dung được viết dựa trên source code của [`ecolink-se
 | [05-permissions.md](05-permissions.md) | Xác thực và ma trận phân quyền |
 | [06-frontend.md](06-frontend.md) | Web client: route, màn hình → API, state, xử lý lỗi |
 | [BUSINESS-OVERVIEW.md](BUSINESS-OVERVIEW.md) | Bản tổng hợp cho người không làm kỹ thuật |
-| [ORG_CREATION_FLOW.md](ORG_CREATION_FLOW.md) | Luồng tạo tổ chức (as-is) |
-| [REFACTOR_ORG_CREATION_FLOW.md](REFACTOR_ORG_CREATION_FLOW.md) | Luồng xác thực tổ chức & Blue Tick (to-be) |
+| [ORG_CREATION_FLOW.md](ORG_CREATION_FLOW.md) | Luồng tạo tổ chức (as-is, nhiều owner) |
+| [ORG_OWNERSHIP_FLOW.md](ORG_OWNERSHIP_FLOW.md) | Thiết kế luồng đăng ký tổ chức nhiều owner và gán vai (Phase 1 đã triển khai) |
+| [REFACTOR_ORG_CREATION_FLOW.md](REFACTOR_ORG_CREATION_FLOW.md) | Luồng xác thực tổ chức & Blue Tick (to-be; phần tài khoản ORG đã bị thay thế) |
 | [services/](services/) | Tài liệu từng service: api-gateway, identity, incident, notification, reward, translation-worker, ai |
 
 > `99-open-issues.md` (vấn đề mở, nghi bug, lỗ hổng) chỉ lưu nội bộ và không có trong repo này — các liên kết tới file đó sẽ không mở được.

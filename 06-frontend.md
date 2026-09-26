@@ -88,10 +88,10 @@ Nguồn: `ecolink-client/src/routes/index.tsx > router`. Tổng: **45 route entr
 | `/incidents/:id` | `app/(pages)/(main)/incidents/[id]/page.tsx` | Main | Tuỳ server `GET /reports/:id` | — | Không |
 | `/organizations` | `app/(pages)/(main)/organizations/(search)/page.tsx` | Main | Tab explore: tuỳ server; tab `mine` gọi `/organizations/my` | — | Không |
 | `/organizations/create` | `<Navigate to="/organizations/apply" replace />` | Main | — | — | Redirect (comment trong router: chỉ lập tổ chức qua pipeline hồ sơ) |
-| `/organizations/apply` | `app/(pages)/(main)/organizations/apply/page.tsx` | Main | **Không** (xác thực bằng OTP email → `x-submission-token`) | — | Không |
-| `/organizations/apply/submitted` | `.../organizations/apply/submitted/page.tsx` | Main | Không (dùng `?id=&token=` tracking) | — | Không |
+| `/organizations/apply` | `app/(pages)/(main)/organizations/apply/page.tsx` | Main | **Không** (cổng OTP email; xác thực xong chuyển sang `/apply/edit/:id?token=`) | — | Không |
 | `/organizations/apply/status/:id` | `.../organizations/apply/status/page.tsx > ApplicationStatusPage` | Main | Không (`?token=` tracking) | — | Không |
-| `/organizations/apply/edit/:id` | `.../organizations/apply/edit/page.tsx > ApplicationEditPage` | Main | Không (`?token=`); chỉ cho sửa khi `status === "NEEDS_MORE_INFO"` | — | Kiểm tra status ngay trong page |
+| `/organizations/owner-confirm` | `.../organizations/owner-confirm/page.tsx > OwnerConfirmPage` | Main | Không (`?token=` xác nhận owner; JWT nếu có chỉ để cảnh báo lệch email) | — | Không |
+| `/organizations/apply/edit/:id` | `.../organizations/apply/edit/page.tsx > ApplicationEditPage` | Main | Không (`?token=`); trình soạn nháp, chỉ khi status ∈ `EDITABLE_APPLICATION_STATUSES` (DRAFT, NEEDS_REVISION) | — | Kiểm tra status trong page; context tự `replace` sang trang theo dõi nếu status đổi |
 | `/organizations/email-verified` | `.../organizations/email-verified/page.tsx` | Main | Không; chỉ hiển thị lỗi theo `?error=` | — | Không |
 | `/organizations/me` | `.../organizations/me/page.tsx` | Main | Có (qua API 401) | — | Không |
 | `/organizations/:slug` | `.../organizations/[id]/page.tsx` | Main | Tuỳ server `GET /organizations/by-slug/:slug` | Tab/nút theo owner/member | Không |
@@ -117,7 +117,7 @@ Nguồn: `ecolink-client/src/routes/index.tsx > router`. Tổng: **45 route entr
 | `/sign-up` | `.../sign-up/page.tsx` | Không | Không |
 | `/authenticate` | `.../authenticate/page.tsx` (landing chọn đăng ký/đăng nhập) | Không | Không |
 | `/reset-password` | `.../reset-password/page.tsx` (`?reset_token=`) | Không | Không |
-| `/activate-organization` | `.../activate-organization/page.tsx` (`?token=`) | Không | Không |
+| `/activate-account` | `.../activate-account/page.tsx > ActivateAccountPage` (`?token=`) | Không | Không |
 | `/request-reset-password` | `.../request-reset-password/page.tsx` | Không | Không |
 | `/google-callback` | `.../google-callback/page.tsx` → `GoogleCallbackView` | Không | Không |
 | `/auth/oauth/google/callback` | `.../auth/oauth/google/callback/page.tsx` → cùng `GoogleCallbackView` | Không | Không |
@@ -171,7 +171,8 @@ Ghi chú: `(hook)` = hàm trong `apis/`, path là path gửi tới `VITE_API_URL
 | `/sign-up` | `useSignUp` (`apis/auth/signUp.ts`) | POST `/api/v1/auth/sign-up` → thành công push `/sign-in` |
 | `/request-reset-password` | `useRequestPasswordReset` (`apis/auth/requestPasswordReset.ts`) | POST `/api/v1/auth/request-password-reset` |
 | `/reset-password` | `useResetPassword` (`apis/auth/resetPassword.ts`) | POST `/api/v1/auth/reset-password` body `{ resetToken, newPassword }` |
-| `/activate-organization` | `useActivateOrgAccount` (`apis/auth/activateOrgAccount.ts`) | POST `/api/v1/auth/activate-org-account` body `{ token, newPassword }` |
+| `/activate-account` | `useActivateAccount` (`apis/auth/activateAccount.ts`) | POST `/api/v1/auth/activate-account` body `{ token, newPassword }` |
+| `/sign-in` (lỗi `ACCOUNT_PENDING_ACTIVATION`) | `useResendActivation` (`apis/auth/activateAccount.ts`) | POST `/api/v1/auth/activation/resend` body `{ email }` |
 | `/authenticate` | — (nút "Sign up with Google" **không có onClick** → [CHƯA HOÀN THIỆN]) | — |
 | `/` (homepage) | `getMe` | GET `/api/v1/auth/me` (chỉ khi store có `accessToken`) |
 
@@ -230,16 +231,14 @@ Ghi chú: `(hook)` = hàm trong `apis/`, path là path gửi tới `VITE_API_URL
 | | `useResendContactEmail` (owner, khi email chưa verify) | POST `/api/v1/organizations/:id/resend-contact-email` |
 | | `useUpdateOrganization` (owner — "Edit group", `UpdateOrganizationPopover`) + `uploadToCloudinary` | PUT `/api/v1/organizations/:id` |
 | `/organizations/me` | `useGetMyOrganizations` (`is_owner: true`), `useLeaveOrganization`, `useUpdateOrganization` | GET `/api/v1/organizations/my`; DELETE `/api/v1/organizations/:id/members/me`; PUT `/api/v1/organizations/:id` |
-| `/organizations/apply` (bước email) | `useRequestApplicationOtp`, `useVerifyApplicationOtp` (`apis/organization-application/emailOtp.ts`) | POST `/api/v1/organization-applications/email-otp`; POST `/api/v1/organization-applications/email-otp/verify` → nhận `submission_token` |
+| `/organizations/apply` (bước email) | `useRequestApplicationOtp`, `useVerifyApplicationOtp` (`apis/organization-application/emailOtp.ts`) | POST `/api/v1/organization-applications/email-otp`; POST `/api/v1/organization-applications/email-otp/verify` → nhận `{application_id, tracking_token, resumed}` rồi push `/organizations/apply/edit/:id?token=` |
 | | `useResolveApplicationEmailLink` (khi URL có `?t=`) | GET `/api/v1/organization-applications/email-otp/link?token=` |
-| (bước documents) | `uploadApplicationDocument` → `presignDocument` (`apis/organization-application/presignDocument.ts`) | POST `/api/v1/organization-applications/documents/presign` (header `x-submission-token`) → POST `upload_url` (storage, axios thô) |
-| (submit) | `uploadToCloudinary` (logo, background) → `useCreateApplication` (`apis/organization-application/createApplication.ts`) | POST `/api/v1/organization-applications` (header `x-submission-token`) → push `/organizations/apply/submitted?id=&token=` |
-| `/organizations/apply/submitted` | `useGetApplication` (`apis/organization-application/getApplication.ts`) | GET `/api/v1/organization-applications/:id?token=` |
-| `/organizations/apply/status/:id` | `useGetApplication`, `useWithdrawApplication` | GET `/api/v1/organization-applications/:id?token=`; POST `/api/v1/organization-applications/:id/withdraw?token=` |
-| Xem giấy tờ (status, submitted, edit — file đã nộp) | `buildApplicantDocumentUrl` (`apis/organization-application/getApplication.ts`) → link mở tab mới | GET `/api/v1/organization-applications/:id/documents/:docId/file?token=` |
+| `/organizations/apply/status/:id` | `useGetApplication`, `useWithdrawApplication` (confirm dialog), `useResendOwnerInvite` (`_components/OwnerConfirmations.tsx`) | GET `/api/v1/organization-applications/:id?token=`; POST `/:id/withdraw?token=`; POST `/:id/owners/:candidateId/resend?token=` |
+| `/organizations/owner-confirm` | `useGetOwnerConfirmation`, `useConfirmOwner`, `useDeclineOwner` (`apis/organization-application/ownerConfirmation.ts`) | GET `/api/v1/organization-applications/owner-confirmations/:token`; POST `…/:token/confirm`; POST `…/:token/decline` body `{ reason, block_future }` |
+| Xem giấy tờ (status, edit — file đã nộp) | `buildApplicantDocumentUrl` (`apis/organization-application/getApplication.ts`) → link mở tab mới | GET `/api/v1/organization-applications/:id/documents/:docId/file?token=` |
 | Xem giấy tờ vừa chọn (form Apply / file mới ở edit) | `ApplicationContext > openDocumentPreview` (object URL của file trên máy, không gọi API) | — |
 | Icon loại file của giấy tờ | `components/ui/FileTypeIcon.tsx` chọn icon theo `mime_type` (PDF đỏ, JPG/PNG xanh; không có MIME thì theo đuôi file). Dùng ở `StepDocuments`, `StepReview`, `ApplicationDetails`, modal Review của admin; file vừa chọn lấy `mimeType` từ `File.type` (chỉ để hiển thị, không gửi API) | — |
-| `/organizations/apply/edit/:id` | `useGetApplication`, `presignDocumentForApplication`, `useUpdateApplication` | GET như trên; POST `/api/v1/organization-applications/:id/documents/presign?token=`; PUT `/api/v1/organization-applications/:id?token=` (kèm `remove_document_ids`) |
+| `/organizations/apply/edit/:id` | `useGetApplication`, `uploadApplicationDocument` → `presignDocumentForApplication`, `uploadToCloudinary` (logo, background, trước mỗi lần lưu), `useSaveApplication`, `useSubmitApplication` (`apis/organization-application/saveApplication.ts`) | GET như trên; POST `/:id/documents/presign?token=` → POST `upload_url` (axios thô); PUT `/:id?token=` (lưu nháp mỗi lần "Continue" / "Save draft", kèm `owners`, `document_ids`, `remove_document_ids`); POST `/:id/submit?token=` → push trang theo dõi |
 | `/organizations/email-verified` | — (không gọi API) | — |
 
 ### 3.6 Gifts, profile, maps
@@ -272,7 +271,7 @@ Ghi chú: `(hook)` = hàm trong `apis/`, path là path gửi tới `VITE_API_URL
 | `/admin/organizations` | `useGetOrganizations` | GET `/api/v1/organizations` |
 | | `useVerifyOrganization` (`apis/organization/organizationById.ts`) | PUT `/api/v1/organizations/:id/verify` body `{ status: 1 }` hoặc `{ status: 2, reject_reason }` |
 | | join/cancel/leave (OrganizationCard trong `PreviewOrganizationPopover`) | như 3.5 |
-| `/admin/organization-applications` | `useGetAdminApplications` (`apis/organization-application/adminApplications.ts`) | GET `/api/v1/admin/organization-applications?q=&status=&org_type=&lane=&page=&limit=` (`status=open` được map thành `SUBMITTED,UNDER_REVIEW,NEEDS_MORE_INFO`) |
+| `/admin/organization-applications` | `useGetAdminApplications` (`apis/organization-application/adminApplications.ts`) | GET `/api/v1/admin/organization-applications?q=&status=&org_type=&lane=&page=&limit=` (`status=open` được map thành `PENDING_REVIEW,NEEDS_REVISION`; server không bao giờ trả DRAFT / AWAITING_OWNER_CONFIRMATION) |
 | | `useGetAdminApplicationById` | GET `/api/v1/admin/organization-applications/:id` |
 | | `useClaimApplication` | PUT `/api/v1/admin/organization-applications/:id/claim` |
 | | `useRequestMoreInfo` | PUT `/api/v1/admin/organization-applications/:id/request-info` body `{ message }` |
@@ -292,7 +291,8 @@ Tổng số file hàm (không tính `models/`): 70; trong đó `apis/auth/update
 | Tên | Method | Path | Dùng ở đâu |
 |---|---|---|---|
 | `registerAdminMedia` | POST | `/api/v1/admin/media` | UNUSED |
-| `activateOrgAccount` / `useActivateOrgAccount` | POST | `/api/v1/auth/activate-org-account` | `app/(pages)/(auth)/activate-organization/page.tsx` |
+| `activateAccount` / `useActivateAccount` | POST | `/api/v1/auth/activate-account` | `app/(pages)/(auth)/activate-account/page.tsx` |
+| `resendActivation` / `useResendActivation` | POST | `/api/v1/auth/activation/resend` | `app/(pages)/(auth)/sign-in/_components/SignInForm.tsx` |
 | `getMe` | GET | `/api/v1/auth/me` | homepage `page.tsx`, `GoogleCallbackView.tsx` |
 | `googleCallback` | GET | `/auth/oauth/google/callback?code=` | `GoogleCallbackView.tsx` |
 | `getGoogleAuthorizationUrl` | GET | `/auth/oauth/google` | `sign-in/_components/SignInForm.tsx` |
@@ -356,17 +356,17 @@ Tổng số file hàm (không tính `models/`): 70; trong đó `apis/auth/update
 | `claimApplication` / `useClaimApplication` | PUT | `/api/v1/admin/organization-applications/:id/claim` | `ApplicationReviewDialog.tsx` |
 | `requestMoreInfo` / `useRequestMoreInfo` | PUT | `/api/v1/admin/organization-applications/:id/request-info` | `ApplicationReviewDialog.tsx` |
 | `decideApplication` / `useDecideApplication` | PUT | `/api/v1/admin/organization-applications/:id/decision` | `ApplicationReviewDialog.tsx` |
-| `createApplication` / `useCreateApplication` | POST | `/api/v1/organization-applications` (header `x-submission-token`) | `organizations/apply/_context/ApplicationContext.tsx` |
-| `updateApplication` / `useUpdateApplication` | PUT | `/api/v1/organization-applications/:id?token=` | `ApplicationContext.tsx` (edit mode) |
+| `saveApplication` / `useSaveApplication` | PUT | `/api/v1/organization-applications/:id?token=` | `organizations/apply/_context/ApplicationContext.tsx > saveDraft()` |
+| `submitApplication` / `useSubmitApplication` | POST | `/api/v1/organization-applications/:id/submit?token=` | `ApplicationContext.tsx > submit()` |
+| `resendOwnerInvite` / `useResendOwnerInvite` | POST | `/api/v1/organization-applications/:id/owners/:candidateId/resend?token=` | `apply/_components/OwnerConfirmations.tsx` |
+| `getOwnerConfirmation` / `useGetOwnerConfirmation`, `confirmOwner` / `useConfirmOwner`, `declineOwner` / `useDeclineOwner` | GET / POST | `/api/v1/organization-applications/owner-confirmations/:token(/confirm|/decline)` | `organizations/owner-confirm/page.tsx` |
 | `withdrawApplication` / `useWithdrawApplication` | POST | `/api/v1/organization-applications/:id/withdraw?token=` | `organizations/apply/status/page.tsx` |
 | `requestApplicationOtp` / `useRequestApplicationOtp` | POST | `/api/v1/organization-applications/email-otp` | `ApplicationContext.tsx` |
 | `verifyApplicationOtp` / `useVerifyApplicationOtp` | POST | `/api/v1/organization-applications/email-otp/verify` | `ApplicationContext.tsx` |
 | `resolveApplicationEmailLink` / `useResolveApplicationEmailLink` | GET | `/api/v1/organization-applications/email-otp/link` | `ApplicationContext.tsx` |
-| `getApplication` / `useGetApplication` | GET | `/api/v1/organization-applications/:id?token=` | `apply/submitted`, `apply/status`, `apply/edit` |
-| `presignDocument` / `usePresignDocument` | POST | `/api/v1/organization-applications/documents/presign` | `presignDocument` qua `uploadApplicationDocument`; `usePresignDocument` UNUSED |
-| `presignDocumentForApplication` | POST | `/api/v1/organization-applications/:id/documents/presign?token=` | qua `uploadApplicationDocument` (edit mode) |
+| `getApplication` / `useGetApplication` | GET | `/api/v1/organization-applications/:id?token=` | `apply/status`, `apply/edit` |
+| `presignDocumentForApplication` | POST | `/api/v1/organization-applications/:id/documents/presign?token=` | qua `uploadApplicationDocument` |
 | `uploadApplicationDocument` | POST (storage) | `upload_url` do server trả (axios thô) | `ApplicationContext.tsx` |
-| `SUBMISSION_TOKEN_HEADER` | — | hằng `"x-submission-token"` | `createApplication.ts`, `presignDocument.ts` |
 | `getJoinRequestsByOrg` / `useGetJoinRequestsByOrg` (file `getJoinRequestsByOrg.ts`) | GET | `/api/v1/organizations/:id/join-requests` | UNUSED (bản trùng trong `organizationById.ts` mới được dùng) |
 | `getMembersByOrg` / `useGetMembersByOrg` (file `getMembersByOrg.ts`) | GET | `/api/v1/organizations/:id/members` | UNUSED (trùng) |
 | `getMyOrganizations` / `useGetMyOrganizations` | GET | `/api/v1/organizations/my` | organizations search, `organizations/me`, `SelectListOrganization.tsx` |
@@ -473,7 +473,7 @@ sequenceDiagram
     end
 ```
 
-- `PUBLIC_AUTH_PATHS` (so khớp bằng `url.includes`): `/api/v1/auth/sign-in`, `/sign-up`, `/refresh-token`, `/request-password-reset`, `/reset-password`, `/activate-org-account`, `/api/v1/auth/oauth/`, và `/api/v1/organization-applications` (401 ở form hồ sơ nghĩa là submission token hết hạn, không được đá về sign-in).
+- `PUBLIC_AUTH_PATHS` (so khớp bằng `url.includes`): `/api/v1/auth/sign-in`, `/sign-up`, `/refresh-token`, `/request-password-reset`, `/reset-password`, `/activate-account`, `/activation/resend`, `/api/v1/auth/oauth/`, và `/api/v1/organization-applications` (401 ở form hồ sơ nghĩa là tracking link hết hạn, không được đá về sign-in).
 - Chỉ retry 1 lần (`_retry`). Không có hàng đợi/khóa: nhiều request 401 đồng thời sẽ gọi refresh song song (mục 10).
 - Nếu refresh trả 2xx nhưng không có `data.data` → không làm gì, rơi xuống reject lỗi 401 gốc (không logout).
 - Refresh dùng `window.location.href` (full reload), không dùng router.
@@ -528,18 +528,20 @@ Client chỉ có **1 role cứng**: `ADMIN_ROLE_ID = "40ed59d7-5d7c-4ab2-88a2-a2
 | Campaign detail — nút Join | không phải owner, `request_status` ≠ APPROVED và ≠ PENDING | `campaigns/[id]/page.tsx > CampaignDetailBody` |
 | — nút Cancel (hủy xin tham gia) | không phải owner, `request_status === PENDING` | như trên |
 | — nút Verify (Clean/Not clean) | `campaign.status` ∈ {WAITING_CONFIRMED (7), COMPLETED (17)} (mọi user) | như trên |
-| — nút "Mark done" | `isCampaignOwner` (`campaign.owner.id === user.id`) và status ∈ {ACTIVE (1), INREVIEW (9)} | như trên |
+| — nút "Mark done" | `isCampaignOwner` (`campaign.owner.id === user.id`; `campaign.owner` giờ là **người tạo campaign**, server lấy từ `createdBy`) và status ∈ {ACTIVE (1), INREVIEW (9)} | như trên |
 | — banner "awaiting admin" | owner và status = WAITING_CONFIRMED | như trên |
 | — nút "Attendance QR" | `campaign.can_manage_campaign` (owner hoặc manager, do API trả) và status = ACTIVE | `page.tsx`, `CampaignAttendanceQrButton.tsx` |
 | — tab "Join requests" + badge đếm | chỉ `isCampaignOwner` (manager không thấy) | `campaigns/[id]/_components/CampaignTabs.tsx` |
 | — nút "Add task", sửa/xoá task | chỉ `isCampaignOwner`; sửa/xoá ẩn khi task `status === COMPLETED` | `CampaignTask.tsx`, `components/client/shared/CampaignTaskCard.tsx` |
-| Organization detail — tag "Your group", nút "Edit group", tab "Join requests", nút "Resend contact email" | `organization.owner_id === user.id` (resend thêm điều kiện có contact email và chưa verify) | `organizations/[id]/_context/OrganizationDetailContext.tsx > showYourGroupTag`, `HeroSection.tsx`, `OrganizationDetailTabs.tsx`, `GeneralInformation.tsx` |
-| — nút Join | không phải owner, `!is_member`, `joinListingShowsJoinButton(request_status)` | như trên, `modules/OrganizationCard/OrganizationCard.tsx` |
+| Organization detail — tag "Your group", nút "Edit group", tab "Join requests", nút "Resend contact email" | `organization.is_owner` do API trả (resend thêm điều kiện có contact email và chưa verify). Tab thành viên hiện danh sách `owners[]` (kèm nhãn người đại diện pháp lý) tách khỏi thành viên thường | `organizations/[id]/_context/OrganizationDetailContext.tsx > showYourGroupTag`, `HeroSection.tsx`, `OrganizationDetailTabs.tsx`, `GeneralInformation.tsx` |
+| — nút Join | `!is_owner`, `!is_member`, `joinListingShowsJoinButton(request_status)` | như trên, `modules/OrganizationCard/OrganizationCard.tsx` |
 | — nút Cancel | `joinListingShowsCancelButton(request_status)` | như trên |
-| — nút Leave | không phải owner và `is_member` | như trên |
+| — nút Leave | `!is_owner` và `is_member` | như trên |
 | Chọn tổ chức khi tạo campaign / filter | chỉ tổ chức `is_owner: true` | `components/form/SelectListOrganization.tsx` |
-| Application status — "Withdraw" | status ∈ {SUBMITTED, UNDER_REVIEW, NEEDS_MORE_INFO} | `organizations/apply/status/page.tsx` |
-| — "Edit application" | status = NEEDS_MORE_INFO | như trên; `apply/edit/page.tsx` chặn nếu khác |
+| Application status — "Withdraw" | status ∈ {DRAFT, AWAITING_OWNER_CONFIRMATION, PENDING_REVIEW, NEEDS_REVISION}; có dialog xác nhận | `organizations/apply/status/page.tsx` |
+| — bảng "Owner confirmations" | ẩn khi DRAFT; nút "Resend (n left)" khi AWAITING / NEEDS_REVISION, owner PENDING, còn lượt và qua `next_resend_at`; nút "Replace" khi NEEDS_REVISION và owner DECLINED / EXPIRED | `apply/_components/OwnerConfirmations.tsx` |
+| — "Continue your application" / "Edit application" | status ∈ {DRAFT, NEEDS_REVISION} | như trên; `apply/edit/page.tsx` chặn nếu khác |
+| Owner confirm — nút Xác nhận / "I'm not involved" | `active && status === PENDING && !expired`; cảnh báo khi `session_email_mismatch` | `organizations/owner-confirm/page.tsx` |
 | Admin campaigns — "Ban" | status = ACTIVE | `admin/campaigns/_components/DataTable.tsx` |
 | — "Verify" (approve/ban) | status ∉ {INACTIVE, COMPLETED, WAITING_CONFIRMED} và ≠ ACTIVE | như trên |
 | — "Completion review" | status = WAITING_CONFIRMED | như trên |
@@ -549,7 +551,7 @@ Client chỉ có **1 role cứng**: `ADMIN_ROLE_ID = "40ed59d7-5d7c-4ab2-88a2-a2
 | Admin users — "Ban" | status = ACTIVE | `admin/users/_components/DataTable.tsx` |
 | Admin gift redemptions — đổi trạng thái | PROCESSING → SHIPPED/CANCELLED; SHIPPED → DELIVERED/CANCELLED; trạng thái khác không có lựa chọn | `admin/gifts/_components/RedeemsTable.tsx > nextStatuses()` |
 | Admin gift form | Gift `isActive === false` ở chế độ edit → form bị disable | `admin/gifts/_components/GiftFormDialog.tsx` |
-| Admin application review | `isClosed` (APPROVED/REJECTED/WITHDRAWN) khoá quyết định; nút "Claim" ẩn khi đã UNDER_REVIEW | `admin/organization-applications/_components/ApplicationReviewDialog.tsx` |
+| Admin application review | `isClosed` (APPROVED/REJECTED/WITHDRAWN) hoặc NEEDS_REVISION khoá quyết định; nút "Claim" ẩn khi đã có `claimed_at`; card "Owners" (`OwnerRow`): giờ + IP xác nhận, tài khoản Ecolink, số tổ chức đang làm owner (≥ 2 tô màu), cảnh báo `same_ip_cluster`; email liên hệ khác email người nộp thì ghi "chưa xác thực" | `admin/organization-applications/_components/ApplicationReviewDialog.tsx` |
 | Admin application review — tab "Activity" | Modal chia 2 tab dưới header (tên tổ chức + trạng thái): "Information" (các card hồ sơ + khối Decision) và "Activity" (kèm số event). Timeline `events` mới nhất trước; người thao tác = `actor_name` → "Admin" (có `actor_id`) → "System" (ACCOUNT_PROVISIONED) / "Applicant"; DOCUMENT_VIEWED ẩn mặc định, bật bằng checkbox "Show document views"; RESUBMITTED hiện chip các trường đã sửa và ±số giấy tờ | `admin/organization-applications/_components/ApplicationActivity.tsx` |
 | Admin DataTable chung | `permission.role === 'staff'` mà không khai báo `canSelect`/`canEdit` → không cho chọn/sửa (hạ tầng, không trang nào truyền role staff) | `components/admin/shared/DataTable/DataTable.tsx` |
 
@@ -563,7 +565,7 @@ Client chỉ có **1 role cứng**: `ADMIN_ROLE_ID = "40ed59d7-5d7c-4ab2-88a2-a2
 | Sign up | name bắt buộc ≥ 3; email như trên; password ≥ 6; phải tick điều khoản (`isAgreed`) mới bật nút submit | `app/(pages)/(auth)/sign-up/page.tsx` |
 | Request reset | email bắt buộc + regex | `request-reset-password/page.tsx` |
 | Reset password | cần `?reset_token=` (thiếu → màn "Invalid Reset Token"); newPassword ≥ 6 | `reset-password/page.tsx` |
-| Activate org | cần `?token=`; newPassword ≥ 8 (comment: "identity-service rejects anything shorter"); confirm phải khớp | `activate-organization/page.tsx` |
+| Activate account | cần `?token=`; newPassword ≥ 8 (comment: "identity-service rejects anything shorter"); confirm phải khớp | `activate-account/page.tsx` |
 | Tạo incident | title bắt buộc; ≥ 1 ảnh, tối đa 10 ảnh, chỉ `image/*`; ảnh nén (cạnh dài ≤ 1280px, JPEG quality 0.5); detailAddress bắt buộc; latitude/longitude bắt buộc (chọn trên bản đồ); severity 1–5 (mặc định 1); `waste_type` = mảng join bằng dấu phẩy | `incidents/create/_components/{Information,FileUpload,Address}.tsx`, `incidents/create/_services/incident.service.ts`, `libs/compressImage.ts`, `constants/severity.ts` |
 | Tạo campaign | organization bắt buộc (chỉ tổ chức sở hữu); title bắt buộc, ≤ 200 (cắt thêm khi gửi); detail_address ≤ 255 (tự cắt); difficulty clamp 1–4; banner ảnh crop + nén; `report_ids` chỉ gồm report `status === TODO (21)`; **start/end date không có rule bắt buộc hay so sánh** | `campaigns/create/_services/campaign.service.ts > transformToApiData()`, `GeneralInformation.tsx`, `LeafletAddress.tsx`, `constants/difficulty.ts` |
 | Task (tạo/sửa) | title bắt buộc; status bắt buộc khi sửa (TODO/IN_PROGRESS/COMPLETED); scheduled_date, time from/to bắt buộc, to > from; khi status = COMPLETED phải có mô tả kết quả hoặc media; tối đa 20 file evidence; video ≤ 100 MB; ảnh được nén; chỉ image/video | `components/client/shared/PopoverCreateUpdateTask.tsx` |
@@ -572,10 +574,11 @@ Client chỉ có **1 role cứng**: `ADMIN_ROLE_ID = "40ed59d7-5d7c-4ab2-88a2-a2
 | Hồ sơ cá nhân | name bắt buộc (không toàn khoảng trắng); phone tuỳ chọn, ≤ 20, regex `/^[0-9+\s\-().]{7,20}$/`; DOB dạng `YYYY-MM-DD`; avatar `image/jpeg,png,webp` qua Cloudinary; detail_address ≤ 255 | `profile/account/_components/ProfileGeneralInformation.tsx`, `ProfileLocationSection.tsx` |
 | Hồ sơ tổ chức — email | email bắt buộc, regex `/^[^\s@]+@[^\s@]+\.[^\s@]+$/`; OTP bắt buộc đúng 6 chữ số | `organizations/apply/_components/StepEmail.tsx` |
 | — profile | orgType bắt buộc; name bắt buộc; logo bắt buộc; address/lat/lng không bắt buộc | `StepProfile.tsx`, `ApplicationImageField.tsx` |
-| — contact | channel đầu tiên bắt buộc, mọi URL phải khớp `/^https?:\/\/.+/i`; người đại diện: full name, ID number (≥ 4), phone bắt buộc khi nộp mới (khi sửa: chỉ bắt buộc nếu đã nhập một phần); email người đại diện tuỳ chọn + regex | `StepContact.tsx` |
+| — contact | email liên hệ bắt buộc + regex (placeholder = email người nộp); channel đầu tiên bắt buộc, mọi URL phải khớp `/^https?:\/\/.+/i` | `StepContact.tsx` |
+| — owners | 1–5 dòng (email + họ tên bắt buộc, email người nộp khoá không sửa / xoá được), radio chọn đúng 1 người đại diện pháp lý; `validateOwnerList()` giống server; KYC: phone bắt buộc, ID number bắt buộc nếu chưa có `id_last4` đã lưu (≥ 4) | `StepOwners.tsx`, `_services/application.service.ts > validateOwnerList()` |
 | — documents | chỉ PDF/JPG/PNG; mỗi file ≤ 10 MB; tổng ≤ 5 (tính cả tài liệu cũ còn giữ); **không bắt buộc tối thiểu 1** ở client | `StepDocuments.tsx`, `ApplicationContext.tsx > STEP_FIELDS` |
 | — review | consent phải `true` | `StepReview.tsx` |
-| — luồng | "Back" không quay lại bước email khi nộp mới (token đã gắn với email); submit yêu cầu `submissionToken` | `ApplicationContext.tsx > back(), submit()` |
+| — luồng | Cổng OTP chỉ có bước email; trình soạn nháp có profile → contact → owners → documents → review. "Continue" validate bước rồi lưu im lặng; "Save draft" lưu có toast; ảnh chọn từ máy được upload Cloudinary trước khi lưu; submit = lưu + `POST /submit` | `ApplicationContext.tsx > next(), saveDraft(), submit()` |
 | Sửa tổ chức (owner) | name bắt buộc; contact email bắt buộc + regex | `organizations/me/_components/UpdateOrganizationPopover.tsx` |
 | Admin ban/reject (campaign, incident, organization, user) | lý do bắt buộc (trim), `maxLength=5000` | `VerifyCampaignConfirm.tsx`, `CompletionReviewCampaignConfirm.tsx`, `VerifyIncidentConfirm.tsx`, `ApproveOrganizationConfirm.tsx`, `BanUserConfirm.tsx` |
 | Admin duyệt hồ sơ | REJECT cần lý do; REQUEST_INFO cần ≥ 1 lý do (các lý do nối bằng dấu phẩy), chọn "Other" phải nhập text; APPROVE + waive documents cần lý do waive | `ApplicationReviewDialog.tsx` |
@@ -588,7 +591,8 @@ Client chỉ có **1 role cứng**: `ADMIN_ROLE_ID = "40ed59d7-5d7c-4ab2-88a2-a2
 
 - `STATUS` (số): ACTIVE 1, INACTIVE 2, DELETED 3, DRAFT 4, NEW 5, WAITING_APPROVED 6, WAITING_CONFIRMED 7, REVIEWED 8, INREVIEW 9, ASSIGNED 10, CANCELED 11, PENDING 12, VERIFIED 13, APPROVED 14, RECEIVED 15, CONFIRMED 16, COMPLETED 17, REJECTED 18, RETURNED 19, OBSOLETE 20, TODO 21, IN_PROGRESS 22, FAILED 23, CLOSED 24, UPLOAD_FAILED 26, TODO_BYPASS 100 (`ecolink-client/constants/status.ts`). Cần đối chiếu với `shared/da2-constants` phía server.
 - `SEVERITY_LEVEL` 1–5 (Low, Moderate, Substantial, Severe, Critical) (`constants/severity.ts`); `DIFFICULTY_LEVEL` 1–4 (Easy..Very Hard) (`constants/difficulty.ts`); `PRIORITY` URGENT 1, MEDIUM 2, LOW 3 (`constants/priority.ts`).
-- Trạng thái hồ sơ tổ chức: DRAFT, SUBMITTED, UNDER_REVIEW, NEEDS_MORE_INFO, APPROVED, REJECTED, WITHDRAWN (`constants/organizationApplicationStatus.ts`).
+- Trạng thái hồ sơ tổ chức: DRAFT, AWAITING_OWNER_CONFIRMATION, PENDING_REVIEW, NEEDS_REVISION, APPROVED, REJECTED, WITHDRAWN; trạng thái owner: PENDING, CONFIRMED, DECLINED, EXPIRED (`constants/organizationApplicationStatus.ts`).
+- Mã lỗi API → câu i18n: `constants/apiErrorMessages.ts > apiErrorMessage()` (chèn `{{email}}` lấy từ phần sau `": "` của message), được `hooks/reactQuery.ts > usePost` ưu tiên trước message của server.
 - Notification preferences: `campaign_new`, `campaign_nearby_verify`, `campaign_done`, `campaign_completion_rejected`, `volunteer_request`, `report_status` (mặc định true) (`constants/notificationPreferences.ts`).
 - `PAYOUT_METRIC_OPTIONS`: CRP, VRP, ORG_AGGREGATE (`constants/gamification.ts`) — không nơi nào dùng.
 

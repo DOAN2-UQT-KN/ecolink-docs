@@ -9,7 +9,7 @@
 | Mục | Hành vi trong code | Bằng chứng |
 |---|---|---|
 | Phát hành | identity ký **access token** và **refresh token** bằng cùng `JWT_SECRET`, cùng payload `{userId, email, role}`, không có claim phân biệt loại token. TTL: `JWT_EXPIRES_IN` (code mặc định 30m) và `JWT_REFRESH_EXPIRES_IN` (30d) | `ID/utils/jwt.utils.ts`, `ID/modules/auth/auth.service.ts > login()` |
-| Claim `role` | Khi login: **tên role** (`ADMIN`, `USER`, `ORG_OWNER`). Khi refresh: **roleId (UUID)**. Đây là bug làm admin mất quyền sau khi refresh | `auth.service.ts` (khoảng dòng 137 và 189) |
+| Claim `role` | **Tên role** (`ADMIN`, `USER`) cả khi login lẫn khi refresh (bug refresh ghi roleId đã sửa 2026-09-26) | `auth.service.ts > login(), refreshAccessToken()` |
 | Lưu phía server | Chỉ lưu `sha256(refresh token)` ở `auth_tokens` (type REFRESH). Access token là stateless | `auth.service.ts` |
 | Vận chuyển | Header `Authorization: Bearer <access>`; hoặc cookie `accessToken` (httpOnly, maxAge 15 phút, do identity set lúc login) | `*/middleware/auth.middleware.ts` |
 | Kiểm tra | **Mỗi service tự verify** JWT bằng `JWT_SECRET` dùng chung: identity, incident, notification, reward (`authenticate`), ai-service (`get_auth_context`). Gateway không kiểm tra gì | `ID/middleware/auth.middleware.ts`, `INC/middleware/auth.middleware.ts`, `NS/middleware/auth.middleware.ts`, `RW/middleware/auth.middleware.ts`, `AI/auth.py` |
@@ -36,25 +36,25 @@
 
 | Token | Cách có | TTL | Dùng cho | Bằng chứng |
 |---|---|---|---|---|
-| OTP (6 số) | Email | 10 phút, tối đa 5 lần sai | Đổi lấy submission token | `organization-application-otp.service.ts` |
+| OTP (6 số) | Email | 10 phút, tối đa 5 lần sai | Mở đơn DRAFT và lấy tracking token | `organization-application-otp.service.ts` |
 | LINK token | Link trong email OTP | 10 phút | Xác định email trên form | `resolveEmailLink()` |
-| Submission token (`x-submission-token`) | Xác thực OTP thành công | 30 phút, dùng 1 lần | Presign giấy tờ, nộp đơn | `submission-token.middleware.ts` |
-| Tracking token (`?token=`) | Sau khi nộp đơn hoặc khi được yêu cầu bổ sung | 180 ngày | Xem, sửa, rút **mọi đơn cùng email** | `resolveTrackingToken()` |
+| Tracking token (`?token=`) | Xác thực OTP thành công; kèm trong các email gửi người nộp | 180 ngày, dùng lại được | Xem, lưu nháp, tải giấy tờ, nộp, gửi lại lời mời, rút **mọi đơn có cùng `submitterEmail`** | `resolveTrackingToken()`, `loadForApplicant()` |
+| Token xác nhận owner (path `/owner-confirmations/:token`) | Email `ORG_OWNER_CONFIRMATION_REQUEST` tới từng owner | 14 ngày; gửi lại thì token cũ mất hiệu lực | Xem tóm tắt đơn, xác nhận, từ chối — **sở hữu hộp thư là bằng chứng đồng thuận**; lưu sha256 | `owner-confirmation.service.ts` |
 
 ### 1.4 Token một lần khác
 
 | Token | TTL | Endpoint |
 |---|---|---|
 | PASSWORD_RESET | 1h | `POST /auth/reset-password` |
-| ORG_ACCOUNT_ACTIVATION | 72h | `POST /auth/activate-org-account` |
+| ACCOUNT_ACTIVATION | 72h (`ACCOUNT_ACTIVATION_TTL_MS`), user phải đang PENDING_ACTIVATION | `POST /auth/activate-account` (gửi lại: `POST /auth/activation/resend`) |
 | ORGANIZATION_CONTACT_EMAIL | 72h | `GET /organizations/verify-contact-email` |
 | QR điểm danh (JWT `campaign_attendance_qr_v1`, ký bằng `JWT_SECRET`) | 1h | `POST /campaigns/:id/attendance-check-in` |
 
 ### 1.5 Vai trò
 
-- **Role ở identity:** `ADMIN`, `USER`, `ORG_OWNER`. Hệ thống permission set tồn tại nhưng **không được dùng để phân quyền** (`ID/middleware/authorize.middleware.ts` không được route nào gọi).
+- **Role ở identity:** `ADMIN`, `USER` (role `ORG_OWNER` và tài khoản `accountType = ORG` đã bị xoá bởi migration `20260926100000_drop_org_accounts`). Hệ thống permission set tồn tại nhưng **không được dùng để phân quyền** (`ID/middleware/authorize.middleware.ts` không được route nào gọi).
 - **Kiểm tra admin:** tất cả đều là `req.user.role.toLowerCase() === "admin"`, viết lặp lại ở từng controller hoặc middleware (identity `requireAdmin`, reward `requireAdmin`, incident inline trong từng controller).
-- **Quyền theo ngữ cảnh** (lưu ở incident): owner tổ chức (`organizations.ownerId`), thành viên tổ chức, `campaign.createdBy`, manager (`campaign_managers`), volunteer APPROVED, chủ report, người được giao task.
+- **Quyền theo ngữ cảnh** (lưu ở incident): vai trong tổ chức (`organization_members.role`: `LEGAL_REPRESENTATIVE` và `OWNER` là **owner**, ngoài ra `ADMIN`, `CAMPAIGN_MANAGER` — chưa có luồng gán — và `MEMBER`), kiểm tra bằng `organization_member.repository.ts > isOwner(), findActiveRole()`, `campaign.createdBy`, manager (`campaign_managers`), volunteer APPROVED, chủ report, người được giao task.
 - **Phía client:** link Admin chỉ hiện khi `user.roleId === ADMIN_ROLE_ID` (UUID cứng trong `FE/constants/roles.ts`). Guard trong `AdminLayout` **bị comment out**, nên mọi user đăng nhập đều vào được `/admin/*`. Việc chặn thực sự nằm ở API.
 
 ## 2. Ma trận phân quyền
@@ -67,7 +67,7 @@ Ký hiệu:
 
 Cột:
 - **Khách**: không đăng nhập
-- **User**: người dùng đăng nhập bất kỳ, kể cả tài khoản tổ chức
+- **User**: người dùng đăng nhập bất kỳ (owner tổ chức cũng là user thường)
 - **Chủ**: chủ tài nguyên theo ngữ cảnh ở cột "Chủ là ai"
 - **Admin**
 
@@ -75,7 +75,7 @@ Cột:
 
 | Hành động | Khách | User | Chủ | Admin | Chủ là ai / điều kiện | Nơi kiểm tra |
 |---|---|---|---|---|---|---|
-| Đăng ký, đăng nhập, Google, refresh, quên và đặt lại mật khẩu, kích hoạt tài khoản tổ chức | ✅ | ✅ | | ✅ | | Không có guard |
+| Đăng ký, đăng nhập, Google, refresh, quên và đặt lại mật khẩu, kích hoạt tài khoản, gửi lại email kích hoạt | ✅ | ✅ | | ✅ | | Không có guard |
 | Tự chọn role khi đăng ký (`roleId`) | 🔓 | | | | Có thể tự đăng ký làm ADMIN | `auth.service.ts > signup()` |
 | Xem `me`, đổi mật khẩu, logout | ❌ | ✅ | | ✅ | | `authenticate` |
 | Xem user khác (`GET /users/:id`, `/users/email/:email`) | ❌ | 🔓 | ✅ | ✅ | Lộ email, status, lý do ban. Vị trí chỉ trả cho chính chủ | `user.entity.ts > toUserResponse()` |
@@ -90,26 +90,28 @@ Cột:
 | Hành động | Khách | User | Admin | Điều kiện | Nơi kiểm tra |
 |---|---|---|---|---|---|
 | Xin OTP, xác thực OTP | ✅ | ✅ | ✅ | Rate limit | `rate-limit.middleware.ts` |
-| Presign giấy tờ, nộp đơn | ⚠️ | ⚠️ | ⚠️ | Có submission token | `requireSubmissionToken()` |
-| Xem, sửa, rút đơn | ⚠️ | ⚠️ | ⚠️ | Có tracking token của email đó; chỉ sửa được khi NEEDS_MORE_INFO | `loadForApplicant()` |
-| Danh sách và chi tiết đơn, xem giấy tờ | ❌ | ❌ | ✅ | | `organization-application-admin.controller.ts > requireAdmin()` |
+| Xem, lưu nháp, tải giấy tờ, nộp, gửi lại lời mời, rút | ⚠️ | ⚠️ | ⚠️ | Có tracking token của email đó; lưu / tải / nộp chỉ khi DRAFT hoặc NEEDS_REVISION | `loadForApplicant()` |
+| Xem tóm tắt, xác nhận, từ chối làm owner | ⚠️ | ⚠️ | ⚠️ | Có token xác nhận; JWT (nếu có) chỉ để cảnh báo lệch email | `owner-confirmation.service.ts`, `optionalAuthenticate()` |
+| Danh sách và chi tiết đơn, xem giấy tờ | ❌ | ❌ | ✅ | Không bao giờ thấy DRAFT / AWAITING_OWNER_CONFIRMATION | `organization-application-admin.controller.ts > requireAdmin()`, `HIDDEN_FROM_ADMIN_STATUSES` |
 | Claim | ❌ | ❌ | ⚠️ | Chưa bị admin khác claim | `claim()` |
-| Yêu cầu bổ sung, duyệt, từ chối, cấp Blue Tick | ❌ | ❌ | ✅ | Không yêu cầu phải claim trước | `requestMoreInfo()`, `decide()` |
+| Yêu cầu bổ sung, duyệt, từ chối, cấp Blue Tick | ❌ | ❌ | ✅ | Chỉ khi PENDING_REVIEW; không yêu cầu phải claim trước | `requestMoreInfo()`, `decide()`, `loadPendingReview()` |
 
 ### 2.3 Tổ chức
+
+Cột **Owner** = membership vai `LEGAL_REPRESENTATIVE` hoặc `OWNER` (một tổ chức có thể có nhiều owner, ai cũng đủ quyền).
 
 | Hành động | Khách | User | Owner | Thành viên | Admin | Nơi kiểm tra |
 |---|---|---|---|---|---|---|
 | Tạo tổ chức trực tiếp | ❌ | ❌ | ❌ | ❌ | ❌ (chỉ service có `INTERNAL_INCIDENT_API_KEY`) | `requireInternalIncidentApiKey()` |
 | Xem danh sách, chi tiết, theo slug | ❌ | ✅ | ✅ | ✅ | ✅ | `authenticate` |
-| Sửa thông tin tổ chức | ❌ | ❌ | ✅ | ❌ | ❌ | `updateOrganization()` |
+| Sửa thông tin tổ chức | ❌ | ❌ | ✅ | ❌ | ❌ | `updateOrganization()`, `assertOwner()` |
 | Gửi lại email xác minh | ❌ | ❌ | ✅ | ❌ | ❌ | `resendOrganizationContactVerificationEmail()` |
 | Xác minh email liên hệ (click link) | ✅ | ✅ | ✅ | ✅ | ✅ | Token |
 | Duyệt hoặc ban tổ chức | ❌ | ❌ | ❌ | ❌ | ✅ | `adminVerifyOrganization` |
 | Xin gia nhập | ❌ | ⚠️ (chưa là thành viên, chưa có PENDING) | ❌ | ❌ | ⚠️ | `createJoinRequest()` |
 | Xem và xử lý yêu cầu gia nhập | ❌ | ❌ | ✅ | ❌ | ❌ | `processJoinRequest()` |
 | Huỷ yêu cầu gia nhập của mình | ❌ | ⚠️ (khi PENDING) | | | | `cancelJoinRequest()` |
-| Rời tổ chức | ❌ | | ❌ | ✅ | | `leaveOrganization()` |
+| Rời tổ chức | ❌ | | ❌ (owner cuối cùng: DB chặn `ORG_MUST_HAVE_OWNER`) | ✅ | | `leaveOrganization()` |
 | Xem danh sách thành viên | ❌ | 🔓 | ✅ | 🔓 | ✅ | Kiểm tra owner bị comment out (`listMembersForOwner()`) |
 
 ### 2.4 Báo cáo sự cố
@@ -127,11 +129,11 @@ Cột:
 
 ### 2.5 Chiến dịch
 
-Cột **Owner tổ chức** dùng cho hành động tạo campaign. Cột **createdBy** là người đã tạo campaign. Cột **Manager** là người có trong `campaign_managers` (người tạo tự động được thêm vào bảng này). Cột **Volunteer** là người có join request APPROVED.
+Cột **Owner tổ chức** (membership vai `LEGAL_REPRESENTATIVE` / `OWNER`) dùng cho hành động tạo campaign. Cột **createdBy** là người đã tạo campaign. Cột **Manager** là người có trong `campaign_managers` (người tạo tự động được thêm vào bảng này). Cột **Volunteer** là người có join request APPROVED.
 
 | Hành động | User | Owner tổ chức | createdBy | Manager | Volunteer | Admin | Nơi kiểm tra |
 |---|---|---|---|---|---|---|---|
-| Tạo campaign | ❌ | ✅ | | | | ❌ (trừ khi là owner) | `createCampaign()` |
+| Tạo campaign | ❌ | ✅ | | | | ❌ (trừ khi là owner) | `createCampaign()`, `isOwner()` |
 | Xem danh sách, chi tiết (mọi status), task, manager, submission | 🔓 ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | `authenticate` |
 | Sửa campaign (kể cả `status`, report, manager) | ❌ | | ✅ 🔓 (đổi được status) | ❌ | ❌ | ❌ | `ensureOwner()` |
 | Xoá campaign | ❌ | | ✅ | ❌ | ❌ | ❌ | `ensureOwner()` |
