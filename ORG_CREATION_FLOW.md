@@ -319,7 +319,7 @@ Dữ liệu tổ chức / hồ sơ cũ là dữ liệu dev nên bị xoá, khôn
   (`npx jest`).
 - Integration: `src/__it__/org-ownership.it.test.ts` (Testcontainers, `npm run test:it`) — race
   trần 3 tổ chức, owner đã có tài khoản, trigger `ORG_MUST_HAVE_OWNER`, áp dụng owner change ADD_OWNER nâng
-  MEMBER lên OWNER, các case chuyển giao / rời đồng thời / thu hồi owner cuối (cần xác nhận khi test hoàn tất), hai lần chấp nhận lời mời đồng thời. Cần Docker; trên Apple Silicon pull sẵn
+  MEMBER lên OWNER, chuyển giao bị rollback giữa chừng, hai owner rời cùng lúc, hai owner thu hồi nhau cùng lúc, owner cuối không rời / hạ vai được, hai lần chấp nhận lời mời đồng thời. Cần Docker; trên Apple Silicon pull sẵn
   `postgis/postgis:17-3.5` bản `linux/amd64`.
 
 Kịch bản thủ công (cần `npm run dev` + `npm run dev:worker` của incident và notification):
