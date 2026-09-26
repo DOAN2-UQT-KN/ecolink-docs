@@ -557,7 +557,7 @@ Mọi cột `status` kiểu Int ở incident, notification và reward (job) đ�
 | `LegalRepIdType` | CCCD, MSSV, PASSPORT, OTHER | Loại giấy tờ tuỳ thân của người đại diện |
 | `ApplicationEventType` | SUBMITTED, RESUBMITTED, WITHDRAWN, CLAIMED, INFO_REQUESTED, APPROVED, REJECTED, DOCUMENTS_WAIVED, DOCUMENT_VIEWED, OWNER_CONFIRMED, OWNER_DECLINED, OWNER_EXPIRED, OWNER_CANDIDATE_REMOVED, OWNER_CONFIRMATIONS_RESET, OWNER_INVITE_RESENT, READY_FOR_REVIEW, OWNER_ATTACHED, DRAFT_UPDATE_NOTIFIED (dùng để giới hạn email "đã cập nhật" 1/giờ) | Audit trail |
 | `ViolationSeverity` | MINOR, MAJOR | Chưa có code ghi |
-| Hằng số | `OWNER_ORG_LIMIT = 3`, `MAX_OWNERS_PER_APPLICATION = 5`, `OWNER_CONFIRM_TTL_DAYS = 14`, `OWNER_CONFIRM_MAX_RESENDS = 3`, `OWNER_CONFIRM_RESEND_COOLDOWN_MS = 1h`, `MAX_PENDING_INVITES_PER_EMAIL = 2`, `LANE_B_VERIFICATION_VALID_DAYS = 365`, `APPLICATION_DOCUMENT_LIMITS = {5 file, 10MB, pdf/jpeg/png}` | |
+| Hằng số | `OWNER_ORG_LIMIT = 3`, `MAX_OWNERS_PER_APPLICATION = 5`, `OWNER_CONFIRM_TTL_DAYS = 14`, `OWNER_CONFIRM_RESEND_COOLDOWN_MS = 1h`, `MAX_PENDING_INVITES_PER_EMAIL = 2`, `LANE_B_VERIFICATION_VALID_DAYS = 365`, `APPLICATION_DOCUMENT_LIMITS = {5 file, 10MB, pdf/jpeg/png}` | |
 
 ### 6.3 Notification (`notification-service/prisma/schema.prisma`, `ecolink-server/shared/da2-constants/src/notification-preferences.ts`)
 

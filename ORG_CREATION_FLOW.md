@@ -232,7 +232,7 @@ WITHDRAWN ← người nộp tự rút, từ DRAFT / AWAITING / PENDING_REVIEW /
 - `apply/_services/application.service.ts` — `toSaveApplicationRequest()`, `validateOwnerList()`
   (cùng rule với server).
 - `apply/_components/OwnerConfirmations.tsx` — thanh tiến trình `x/y đã xác nhận`, còn N ngày,
-  nút "Gửi lại (còn n)", nút "Thay người" khi `NEEDS_REVISION`.
+  nút "Gửi lại" (không giới hạn số lần; khoá 1 giờ sau mỗi lần, hiện giờ được gửi lại và "Đã gửi n lần"), nút "Thay người" khi `NEEDS_REVISION`.
 - `constants/apiErrorMessages.ts` — map mã lỗi (`OWNER_QUOTA_EXCEEDED`…) sang câu i18n, chèn email
   lấy từ message; dùng trong `hooks/reactQuery.ts > usePost`.
 - `/organizations/apply/submitted` đã bị bỏ; nộp xong đi thẳng trang theo dõi.

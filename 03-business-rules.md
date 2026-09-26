@@ -87,7 +87,7 @@
 
 ## 4b. Owner xác nhận và membership tổ chức
 
-> Dải mã 300–329. Thiết kế: [ORG_OWNERSHIP_FLOW.md](ORG_OWNERSHIP_FLOW.md). Hằng số: `DC/organization-trust.ts` (`OWNER_ORG_LIMIT = 3`, `MAX_OWNERS_PER_APPLICATION = 5`, `OWNER_CONFIRM_TTL_DAYS = 14`, `OWNER_CONFIRM_MAX_RESENDS = 3`, `OWNER_CONFIRM_RESEND_COOLDOWN_MS = 1h`, `MAX_PENDING_INVITES_PER_EMAIL = 2`).
+> Dải mã 300–329. Thiết kế: [ORG_OWNERSHIP_FLOW.md](ORG_OWNERSHIP_FLOW.md). Hằng số: `DC/organization-trust.ts` (`OWNER_ORG_LIMIT = 3`, `MAX_OWNERS_PER_APPLICATION = 5`, `OWNER_CONFIRM_TTL_DAYS = 14`, `OWNER_CONFIRM_RESEND_COOLDOWN_MS = 1h`, `MAX_PENDING_INVITES_PER_EMAIL = 2`).
 
 | ID | Rule | Áp dụng ở đâu | Hệ quả khi vi phạm | File |
 |---|---|---|---|---|
@@ -98,7 +98,7 @@
 | BR-304 | Người nộp được tự đánh dấu CONFIRMED lúc nộp (hộp thư đã qua OTP), ghi IP và user agent của request nộp. Không còn owner nào chưa xác nhận thì đơn vào thẳng PENDING_REVIEW | `POST /:id/submit` | — | `submitApplication()` |
 | BR-305 | Link xác nhận: 32 byte ngẫu nhiên, chỉ lưu sha256, TTL 14 ngày; chỉ gửi cho owner chưa có link còn hạn, sau khi transaction commit | submit, resend | — | `owner-candidates.ts > newConfirmToken(), sendConfirmationEmails()` |
 | BR-306 | Quy tắc reset: so snapshot (tên, loại tổ chức, email người đại diện pháp lý, tập email owner) với lần nộp trước, không phụ thuộc thứ tự key. Khác → mọi owner CONFIRMED về PENDING kèm link mới, ghi `OWNER_CONFIRMATIONS_RESET`. Sửa mô tả, logo, giấy tờ, kênh thì giữ xác nhận | `POST /:id/submit` | — | `buildConfirmationSnapshot()`, `snapshotsDiffer()` |
-| BR-307 | Gửi lại lời mời: đơn AWAITING hoặc NEEDS_REVISION, owner đang PENDING; tối đa 1 + 3 lần gửi, cách lần trước ≥ 1 giờ; token mới vô hiệu token cũ; hạn đặt lại 14 ngày | `POST /:id/owners/:candidateId/resend` | 429 RESEND_LIMIT_REACHED / RESEND_TOO_SOON; 409 APPLICATION_NOT_ACTIVE; 404 | `resendOwnerInvite()` |
+| BR-307 | Gửi lại lời mời: đơn AWAITING hoặc NEEDS_REVISION, owner đang PENDING; **không giới hạn số lần**, nhưng cách lần trước ≥ 1 giờ (chốt chống spam duy nhất vì email đi tới người khác); token mới vô hiệu token cũ; hạn đặt lại 14 ngày | `POST /:id/owners/:candidateId/resend` | 429 RESEND_TOO_SOON; 409 APPLICATION_NOT_ACTIVE; 404 | `resendOwnerInvite()` |
 | BR-308 | Xác nhận: idempotent (đã CONFIRMED → `already_done`); owner bị gỡ → 404; đã DECLINED → 409; đơn không ở AWAITING / NEEDS_REVISION → 409 (kiểm tra trước hạn); hết hạn → 410; ghi IP, user agent. Lần xác nhận cuối khi đơn đang AWAITING chuyển PENDING_REVIEW **trong cùng transaction**, có row lock trên đơn | `POST /owner-confirmations/:token/confirm` | 404 OWNER_CONFIRMATION_NOT_FOUND; 409 ALREADY_DECLINED / APPLICATION_NOT_ACTIVE; 410 CONFIRM_EXPIRED | `owner-confirmation.service.ts > confirm()` |
 | BR-309 | "Tôi không liên quan": owner đã CONFIRMED → 409; bấm lần hai không làm gì; đơn về NEEDS_REVISION với `reviewNote`; `block_future` ghi `owner_invite_blocks`; lý do ≤ 1000 ký tự; người nộp nhận email `ORG_OWNER_DECLINED` | `POST /owner-confirmations/:token/decline` | 409 ALREADY_CONFIRMED / APPLICATION_NOT_ACTIVE | `decline()` |
 | BR-310 | Sweeper mỗi giờ (`OWNER_CONFIRMATION_EXPIRY_INTERVAL_MS`, tắt bằng `OWNER_CONFIRMATION_EXPIRY_ENABLED=false`): owner PENDING quá hạn trên đơn AWAITING → EXPIRED, đơn về NEEDS_REVISION, người nộp nhận email `ORG_OWNER_CONFIRMATION_EXPIRED` | worker incident | — | `owner-confirmation-expiry.job.ts`, `expireOverdue()` |

@@ -681,7 +681,7 @@ Những điểm dưới đây thiết kế chưa quyết được thay chủ s�
 
 **4. Hạn owner xác nhận là bao lâu?** Đề xuất 14 ngày, tối đa 3 lần gửi lại cách nhau 1 giờ.
 
-> ✅ Đã chốt: 14 ngày, gửi lại tối đa 3 lần, cách nhau ≥ 1 giờ.
+> ✅ Đã chốt: 14 ngày, cách nhau ≥ 1 giờ. ~~Gửi lại tối đa 3 lần~~ — cập nhật 2026-09-26: **bỏ giới hạn số lần gửi lại**, chỉ giữ khoảng cách 1 giờ.
 
 **5. Có tách `LEGAL_REPRESENTATIVE` khỏi `OWNER` không?** Nếu tổ chức muốn tách hai vai — giám đốc đứng tên, nhân viên vận hành — thì cần. Câu trả lời ảnh hưởng tới ràng buộc "đã đứng tên 3 tổ chức": nó đếm theo vai nào?
 
