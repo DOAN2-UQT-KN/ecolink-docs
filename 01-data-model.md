@@ -8,7 +8,7 @@
 > - `ecolink-server/services/ai-service/app/db/models.py`
 > - Enum số / chuỗi dùng chung: `ecolink-server/shared/da2-constants/src/*`
 >
-> Mỗi service có một DB riêng trên cùng instance PostgreSQL. **Không có khoá ngoại giữa các DB**. Các cột `userId`, `ownerId`, `volunteerId`, `createdBy`… chỉ lưu UUID user của identity-service. Liên kết `campaigns.difficulty` sang `rewarddb.difficulties.level` cũng là liên kết logic, không có FK.
+> Mỗi service có một DB riêng trên cùng instance PostgreSQL. **Không có khoá ngoại giữa các DB**. Các cột `userId`, `organization_members.userId`, `volunteerId`, `createdBy`… chỉ lưu UUID user của identity-service. Liên kết `campaigns.difficulty` sang `rewarddb.difficulties.level` cũng là liên kết logic, không có FK.
 
 Quy ước chung:
 - `id` là UUID, default `uuid()` hoặc `gen_random_uuid()`, trừ khi ghi khác.
@@ -32,8 +32,6 @@ erDiagram
     string email UK
     string password "nullable"
     uuid roleId FK
-    string accountType "PERSONAL|ORG"
-    uuid provisionedFromApplicationId UK
     int status "1|2|3"
     json notificationPreferences
     float latitude
@@ -69,7 +67,7 @@ erDiagram
 | Field | Kiểu | Ràng buộc | Ghi chú |
 |---|---|---|---|
 | id | uuid | PK | |
-| email | text | **unique** (không phân biệt deletedAt; có phân biệt hoa thường) | Sign-up lưu nguyên văn; Google và provision lưu lowercase |
+| email | text | **unique** (không phân biệt deletedAt; có phân biệt hoa thường) | Sign-up lưu nguyên văn; Google và ensure-users (duyệt đơn tổ chức) lưu lowercase |
 | name | text | NOT NULL | |
 | password | text? | | Hash bcrypt cost 10. NULL với tài khoản tổ chức chưa kích hoạt. Với user tạo qua Google là UUID dạng plaintext |
 | avatar, bio | text? | | Avatar phải là URL http(s) |
@@ -83,9 +81,7 @@ erDiagram
 | detailAddress | varchar(255)? | | |
 | notificationPreferences | json | default `{}` | Xem mục 6.3 |
 | roleId | uuid | FK → roles, RESTRICT | |
-| accountType | varchar(16) | default `PERSONAL` | `PERSONAL` / `ORG` |
-| provisionedFromApplicationId | uuid? | **unique** | Id đơn đăng ký tổ chức; khoá idempotent khi provision |
-| status | int | default 1, index | 1 ACTIVE, 2 INACTIVE (bị ban), 3 PENDING_ACTIVATION (`identity-service/src/constants/user-status.ts`) |
+| status | int | default 1, index | 1 ACTIVE, 2 INACTIVE (bị ban), 3 PENDING_ACTIVATION — tạo cho owner được duyệt chưa có tài khoản, `password = null` (`identity-service/src/constants/user-status.ts`) |
 | rejectReason | text? | | Lý do ban |
 | createdAt, updatedAt, deletedAt | | index deletedAt | |
 
@@ -93,7 +89,7 @@ erDiagram
 | Field | Kiểu | Ràng buộc | Ghi chú |
 |---|---|---|---|
 | userId | uuid | FK → users, CASCADE; index (userId, type) | |
-| type | varchar(32) | | `REFRESH`, `PASSWORD_RESET`, `ORGANIZATION_CONTACT_EMAIL`, `ORG_ACCOUNT_ACTIVATION` (`identity-service/src/constants/auth-token-type.ts`) |
+| type | varchar(32) | | `REFRESH`, `PASSWORD_RESET`, `ORGANIZATION_CONTACT_EMAIL`, `ACCOUNT_ACTIVATION` (`identity-service/src/constants/auth-token-type.ts`) |
 | tokenHash | varchar(64) | **unique** | SHA-256 của token |
 | expiresAt | datetime | index | REFRESH theo `exp` của JWT; reset 1h; các loại còn lại 72h |
 | revokedAt, usedAt | datetime? | | Thu hồi / đã dùng (token một lần) |
@@ -169,6 +165,7 @@ erDiagram
   OrganizationApplication ||--o| Organization : "Organization.applicationId (unique)"
   OrganizationApplication ||--o{ OrganizationApplicationDocument : "cascade"
   OrganizationApplication ||--o{ OrganizationApplicationEvent : "cascade"
+  OrganizationApplication ||--o{ OrganizationApplicationOwner : "cascade"
   Organization ||--o{ OrganizationMember : ""
   Organization ||--o{ OrganizationJoiningRequest : ""
   Organization ||--o{ OrganizationChannel : "cascade"
@@ -177,7 +174,7 @@ erDiagram
   OrganizationApplicationOtp {
     uuid id PK
     string email
-    string purpose "OTP|LINK|SUBMISSION|TRACKING"
+    string purpose "OTP|LINK|TRACKING"
     string codeHash
     int attempts
     datetime expiresAt
@@ -186,7 +183,6 @@ erDiagram
   Organization {
     uuid id PK
     string slug UK
-    uuid ownerId
     int status
     bool isEmailVerified
     string kycStatus
@@ -198,10 +194,32 @@ erDiagram
     string code UK
     string status
     string lane
+    string type "NEW_ORG|ADD_OWNER"
+    string submitterEmail
     string contactEmail
     string legalRepIdHash
     json profile
     json channels
+    json confirmationSnapshot
+  }
+  OrganizationApplicationOwner {
+    uuid id PK
+    uuid applicationId FK
+    string email
+    bool isLegalRep
+    string status "PENDING|CONFIRMED|DECLINED|EXPIRED"
+    string confirmTokenHash UK
+    datetime expiresAt
+    uuid resolvedUserId
+    datetime removedAt
+  }
+  OrganizationMember {
+    uuid organizationId PK
+    uuid userId PK
+    string role
+  }
+  OwnerInviteBlock {
+    string email PK
   }
 ```
 
@@ -307,13 +325,12 @@ erDiagram
 | domainVerified | bool | default false | Đặt bằng `lane A && documentsWaived` |
 | verifiedAt, verifiedBy | | | |
 | verificationExpiresAt | datetime? | | Lane B: +365 ngày; không có job xử lý hết hạn |
-| tickRevokedReason, profileCompleteness, successfulCampaignCount, violationCount, legalRepLimitOverride | | | [CHƯA HOÀN THIỆN] không có code ghi |
-| ownerId | uuid? | index | User tài khoản tổ chức; null trong lúc đang provision |
+| tickRevokedReason, profileCompleteness, successfulCampaignCount, violationCount | | | [CHƯA HOÀN THIỆN] không có code ghi |
 | applicationId | uuid? | **unique**, FK → organization_applications | |
 
 | Bảng | Field chính | Ràng buộc |
 |---|---|---|
-| OrganizationMember (`organization_members`) | organizationId, userId, deletedAt | PK kép. Không có cột role |
+| OrganizationMember (`organization_members`) | organizationId, userId, **role** (`OrgMemberRole`, default `MEMBER`), source (`MembershipSource`: APPLICATION_APPROVAL / JOIN_REQUEST / INTERNAL), sourceRef (uuid, vd id đơn), deletedAt | PK kép `(organizationId, userId)` = một vai mỗi người mỗi tổ chức; index `(userId, role)`. Owner của tổ chức = membership vai `LEGAL_REPRESENTATIVE` hoặc `OWNER` (không còn `organizations.ownerId`) |
 | OrganizationJoiningRequest (`organization_joining_requests`) | organizationId, requesterId, status (12 / 14 / 18), deletedAt (xoá mềm nghĩa là đã huỷ) | |
 | OrganizationChannel (`organization_channels`) | organizationId (cascade), type (`FACEBOOK_PAGE` / `WEBSITE` / `ZALO_OA`), url, isPrimary | Chỉ được ghi lúc duyệt đơn |
 | OrganizationViolation (`organization_violations`) | organizationId, campaignId?, severity (`MINOR` / `MAJOR`), reason | [CHƯA HOÀN THIỆN] không có code ghi |
@@ -322,30 +339,37 @@ erDiagram
 | Field | Kiểu | Ràng buộc / default | Ý nghĩa |
 |---|---|---|---|
 | code | varchar(16) | **unique** | `ORG-XXXXXXXX` |
-| orgType | varchar(32) | NOT NULL | `OrgType` |
-| status | varchar(20) | default `SUBMITTED` | `ApplicationStatus` |
+| type | varchar(16) | default `NEW_ORG` | `ApplicationType` (`ADD_OWNER` chưa dùng) |
+| orgType | varchar(32)? | | `OrgType`; bắt buộc khi nộp |
+| status | varchar(32) | default `DRAFT` | `ApplicationStatus` |
 | lane | varchar(1)? | | `A` / `B`, do admin đặt khi duyệt |
 | documentsWaived, documentsWaivedReason | bool, text? | | Miễn nộp giấy tờ |
-| profile | json | NOT NULL | `{name, contactEmail, logoUrl, backgroundUrl, address, latitude, longitude, description}` |
+| profile | json | default `{}` | `{name, contactEmail, logoUrl, backgroundUrl, address, latitude, longitude, description}` |
 | channels | json | default `[]` | `[{type, url, isPrimary}]` |
-| contactEmail | varchar(320) | index | Dạng chuẩn hoá, dùng cho rule "mỗi email chỉ 1 đơn mở" (không có ràng buộc DB) |
-| legalRepName, legalRepPhone, legalRepEmail, legalRepPosition, legalRepIdType | | | Người đại diện pháp lý |
+| submitterEmail | varchar(320) | index | Email đã qua OTP; giữ link theo dõi; rule "mỗi email chỉ 1 đơn mở" (không có ràng buộc DB); luôn là một owner |
+| contactEmail | varchar(320)? | index | Email liên hệ công khai của tổ chức, mặc định = submitterEmail; không bao giờ thành tài khoản |
+| legalRepPhone, legalRepPosition, legalRepIdType | | | KYC của owner có `isLegalRep` (họ tên, email nằm trên dòng owner) |
 | legalRepIdHash | varchar(64)? | index | SHA-256 của số giấy tờ (viết hoa) |
 | legalRepIdLast4 | varchar(4)? | | |
 | submittedByUserId | uuid? | | Luôn null (xem 99) |
 | emailVerifiedAt, consentedAt | datetime? | | |
+| submittedAt | datetime? | index `(status, submittedAt)` | Lần nộp / nộp lại gần nhất |
+| confirmationSnapshot | json? | | `{snapshot: {name, orgType, legalRepEmail, ownerEmails}, fields: {<field>: fingerprint}}` — so với lần nộp trước để quyết định reset xác nhận và ghi `changedFields` |
 | reviewerId, claimedAt, reviewedAt, reviewNote, rejectReason | | | Thông tin thẩm định |
 | organizationId | uuid? | | Tổ chức được tạo ra |
-| accountProvisionedAt | datetime? | | Thời điểm tạo xong tài khoản tổ chức ở identity |
 | purgedAt | datetime? | | Không có job purge |
 
 | Bảng | Field chính | Ghi chú |
 |---|---|---|
 | OrganizationApplicationDocument | applicationId? (null từ lúc presign tới lúc nộp; cascade), submissionEmail, docType, storageKey (khoá Cloudinary private), format, mimeType, sizeBytes (client tự khai), fileName, purgedAt | |
 | OrganizationApplicationEvent | applicationId (cascade), eventType (`ApplicationEventType`), actorId? (null = người nộp hoặc relay), payload | Audit trail; hiển thị ở card "Activity" trong modal Review của admin. RESUBMITTED ghi `changedFields` (tên trường, không có giá trị) |
-| OrganizationApplicationOtp | email, purpose (`OTP` / `LINK` / `SUBMISSION` / `TRACKING`), codeHash (sha256), attempts, expiresAt, usedAt | index (email, purpose) |
+| OrganizationApplicationOtp | email, purpose (`OTP` / `LINK` / `TRACKING`), codeHash (sha256), attempts, expiresAt, usedAt | index (email, purpose) |
+| OrganizationApplicationOwner (`organization_application_owners`) | applicationId (cascade), email, fullName, isLegalRep, nationalIdDocumentId?, status (`OwnerCandidateStatus`), confirmTokenHash? (sha256, **unique**), expiresAt, sentAt, sentCount, respondedAt, declineReason, confirmIp, confirmUa, resolvedUserId (điền lúc duyệt), removedAt (gỡ khỏi danh sách, không xoá) | unique `(applicationId, email)`, index `(email, status)` |
+| OwnerInviteBlock (`owner_invite_blocks`) | email (PK), sourceCandidateId, createdAt | Email đã chọn "chặn mọi lời mời sau này" |
 
-Migration `incident-service/prisma/migrations/20260922104500_truncate_legacy_organizations` chạy `TRUNCATE organizations … CASCADE`, nên dữ liệu campaign và report cũ trỏ tới tổ chức cũng bị xoá theo.
+Migration `incident-service/prisma/migrations/20260922104500_truncate_legacy_organizations` chạy `TRUNCATE organizations … CASCADE`, nên dữ liệu campaign và report cũ trỏ tới tổ chức cũng bị xoá theo. Migration `20260926100000_org_multi_owner` làm lại việc này (kèm `organization_applications`, `organization_application_otps`), bỏ `organizations.owner_id` và `legal_rep_limit_override`.
+
+**Bất biến "tổ chức luôn có owner"** (cùng migration): hàm `assert_org_has_owner(org_id)` và hai constraint trigger `DEFERRABLE INITIALLY DEFERRED` — `organizations_owner_guard` (AFTER INSERT OR UPDATE OF `deleted_at` trên `organizations`) và `organization_members_owner_guard` (AFTER UPDATE OR DELETE trên `organization_members`). Tổ chức chưa xoá mà không còn membership chưa xoá vai `LEGAL_REPRESENTATIVE` / `OWNER` thì COMMIT bị raise `ORG_MUST_HAVE_OWNER` (SQLSTATE `check_violation`).
 
 ---
 
@@ -523,18 +547,22 @@ Mọi cột `status` kiểu Int ở incident, notification và reward (job) đ�
 | `ApplicationLane` | A, B | A: fast-track cho cơ quan nhà nước hoặc trường học có domain chính thức. B: luồng tiêu chuẩn, cần giấy tờ pháp lý. Chỉ admin được đặt |
 | `KycStatus` | NOT_SUBMITTED, APPROVED, EXPIRED, REVOKED | Kết luận về giấy tờ pháp lý. Code chỉ ghi APPROVED |
 | `TrustTier` | NONE, BASIC, VERIFIED | Cấp tin cậy. VERIFIED là **Blue Tick**. BASIC không được dùng |
-| `ApplicationStatus` | DRAFT, SUBMITTED, UNDER_REVIEW, NEEDS_MORE_INFO, APPROVED, REJECTED, WITHDRAWN | Vòng đời của đơn. DRAFT không được dùng. "Đơn mở" gồm SUBMITTED, UNDER_REVIEW, NEEDS_MORE_INFO |
+| `ApplicationStatus` | DRAFT, AWAITING_OWNER_CONFIRMATION, PENDING_REVIEW, NEEDS_REVISION, APPROVED, REJECTED, WITHDRAWN | Vòng đời của đơn (xem 04 §7). "Đơn mở" (`OPEN_APPLICATION_STATUSES`) gồm DRAFT, AWAITING_OWNER_CONFIRMATION, PENDING_REVIEW, NEEDS_REVISION; sửa được (`EDITABLE_APPLICATION_STATUSES`) khi DRAFT, NEEDS_REVISION |
+| `ApplicationType` | NEW_ORG, ADD_OWNER | ADD_OWNER chưa dùng (Phase 2) |
+| `OwnerCandidateStatus` | PENDING, CONFIRMED, DECLINED, EXPIRED | Trạng thái xác nhận của một owner |
+| `OrgMemberRole` | LEGAL_REPRESENTATIVE, OWNER, ADMIN, CAMPAIGN_MANAGER, MEMBER | `OWNER_ROLES` = LEGAL_REPRESENTATIVE, OWNER. ADMIN / CAMPAIGN_MANAGER chưa có luồng gán |
+| `MembershipSource` | APPLICATION_APPROVAL, JOIN_REQUEST, INTERNAL | Nguồn gốc membership |
 | `ApplicationDocType` | ESTABLISHMENT_DECISION, BUSINESS_LICENSE, REP_ID_CARD, OTHER | Loại giấy tờ |
 | `OrganizationChannelType` | FACEBOOK_PAGE, WEBSITE, ZALO_OA | Kênh chính thức |
 | `LegalRepIdType` | CCCD, MSSV, PASSPORT, OTHER | Loại giấy tờ tuỳ thân của người đại diện |
-| `ApplicationEventType` | SUBMITTED, RESUBMITTED, WITHDRAWN, CLAIMED, INFO_REQUESTED, APPROVED, REJECTED, DOCUMENTS_WAIVED, DOCUMENT_VIEWED, ACCOUNT_PROVISIONED | Audit trail |
+| `ApplicationEventType` | SUBMITTED, RESUBMITTED, WITHDRAWN, CLAIMED, INFO_REQUESTED, APPROVED, REJECTED, DOCUMENTS_WAIVED, DOCUMENT_VIEWED, OWNER_CONFIRMED, OWNER_DECLINED, OWNER_EXPIRED, OWNER_CANDIDATE_REMOVED, OWNER_CONFIRMATIONS_RESET, OWNER_INVITE_RESENT, READY_FOR_REVIEW, OWNER_ATTACHED | Audit trail |
 | `ViolationSeverity` | MINOR, MAJOR | Chưa có code ghi |
-| Hằng số | `DEFAULT_LEGAL_REP_ORG_LIMIT = 3`, `LANE_B_VERIFICATION_VALID_DAYS = 365`, `APPLICATION_DOCUMENT_LIMITS = {5 file, 10MB, pdf/jpeg/png}` | |
+| Hằng số | `OWNER_ORG_LIMIT = 3`, `MAX_OWNERS_PER_APPLICATION = 5`, `OWNER_CONFIRM_TTL_DAYS = 14`, `OWNER_CONFIRM_MAX_RESENDS = 3`, `OWNER_CONFIRM_RESEND_COOLDOWN_MS = 1h`, `MAX_PENDING_INVITES_PER_EMAIL = 2`, `LANE_B_VERIFICATION_VALID_DAYS = 365`, `APPLICATION_DOCUMENT_LIMITS = {5 file, 10MB, pdf/jpeg/png}` | |
 
 ### 6.3 Notification (`notification-service/prisma/schema.prisma`, `ecolink-server/shared/da2-constants/src/notification-preferences.ts`)
 
 - `NotificationType`: `EMAIL`, `WEBSITE` (in-app).
-- `NotificationKind` (27 giá trị). Bảng dưới liệt kê từng kind, key preference tương ứng và nơi phát:
+- `NotificationKind` (32 giá trị). Bảng dưới liệt kê từng kind, key preference tương ứng và nơi phát:
 
 | Kind | Preference key | Có nơi phát? |
 |---|---|---|
@@ -548,7 +576,7 @@ Mọi cột `status` kiểu Int ở incident, notification và reward (job) đ�
 | CAMPAIGN_SUBMISSION_PENDING_REVIEW, CAMPAIGN_SUBMISSION_APPROVED, TASK_ASSIGNED | campaignNew | Không |
 | CAMPAIGN_COMPLETION_PENDING_ADMIN | (luôn gửi) | Có |
 | ORGANIZATION_CONTACT_VERIFY, ORGANIZATION_APPROVED, ORGANIZATION_REJECTED | (luôn gửi) | Có |
-| ORG_APPLICATION_OTP, ORG_APPLICATION_RECEIVED, ORG_APPLICATION_NEEDS_INFO, ORG_APPLICATION_REJECTED, ORG_ACCOUNT_ACTIVATION | (luôn gửi) | Có |
+| ORG_APPLICATION_OTP, ORG_APPLICATION_RECEIVED, ORG_APPLICATION_NEEDS_INFO, ORG_APPLICATION_REJECTED, ORG_OWNER_CONFIRMATION_REQUEST, ORG_OWNER_DECLINED, ORG_OWNER_CONFIRMATION_EXPIRED, ORG_APPLICATION_WITHDRAWN_NOTICE, ORG_OWNER_ATTACHED, ACCOUNT_ACTIVATION (đổi tên từ ORG_ACCOUNT_ACTIVATION) | (luôn gửi) | Có |
 | REPORT_APPROVED, REPORT_REJECTED | (luôn gửi) | Có |
 | RESET_PASSWORD, GENERIC | (luôn gửi) | Không |
 
@@ -572,14 +600,13 @@ Các key preference (tất cả mặc định `true`): `campaignNew`, `campaignN
 | Enum | Giá trị | Nguồn |
 |---|---|---|
 | identity `UserStatus` | 1 ACTIVE, 2 INACTIVE, 3 PENDING_ACTIVATION | `identity-service/src/constants/user-status.ts` |
-| identity `AccountType` | PERSONAL, ORG | như trên |
-| identity `AuthTokenType` | REFRESH, PASSWORD_RESET, ORGANIZATION_CONTACT_EMAIL, ORG_ACCOUNT_ACTIVATION | `identity-service/src/constants/auth-token-type.ts` |
+| identity `AuthTokenType` | REFRESH, PASSWORD_RESET, ORGANIZATION_CONTACT_EMAIL, ACCOUNT_ACTIVATION | `identity-service/src/constants/auth-token-type.ts` |
 | `VoteValue` | NONE 0, UP 1, DOWN -1 | `da2-constants/src/global-status.ts` |
 | `VoteResourceType`, `SavedResourceType` | `report`, `campaign` | như trên |
 | `MediaResourceType` | REPORT, USER, REPORT_RESULT, AI_PREDICT, OTHER | như trên |
 | `MediaFileStage` | BEFORE, AFTER | Không dùng |
 | `AppLocale` | `en`, `vi` | `da2-constants/src/i18n.ts` |
-| Outbox `OutboxEventType` | REPORT_COMPLETION_GREEN_POINTS, CAMPAIGN_COMPLETION_GREEN_POINTS, REPORT_VOTE_MILESTONE_GREEN_POINTS, CAMPAIGN_FACEBOOK_RECOGNITION, ORG_ACCOUNT_PROVISION | `incident-service/src/outbox/outbox.types.ts` |
+| Outbox `OutboxEventType` | REPORT_COMPLETION_GREEN_POINTS, CAMPAIGN_COMPLETION_GREEN_POINTS, REPORT_VOTE_MILESTONE_GREEN_POINTS, CAMPAIGN_FACEBOOK_RECOGNITION, ORG_OWNER_ONBOARD | `incident-service/src/outbox/outbox.types.ts` |
 | Job type (incident) | ANALYZE_REPORT, TRANSLATE_TEXT | `incident-service/src/constants/job-type.enum.ts` |
 | Job type (reward) | CAMPAIGN_COMPLETION_GREEN_POINTS, REPORT_COMPLETION_GREEN_POINTS, REPORT_VOTE_MILESTONE_GREEN_POINTS, UPVOTE_ADDING_GREEN_POINTS, REFERRAL_ADDING_GREEN_POINTS, CAMPAIGN_FACEBOOK_RECOGNITION, TRANSLATE_TEXT | reward-service `src/queue/*` |
 | ai `ChatMessageRole` | system, user, assistant, tool | `ai-service/app/db/models.py` |

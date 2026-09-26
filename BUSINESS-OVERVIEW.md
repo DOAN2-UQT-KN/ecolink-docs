@@ -1,6 +1,6 @@
 # Ecolink — Tổng quan nghiệp vụ
 
-> Tài liệu dành cho PM, BA, khách hàng, nhà tài trợ và tình nguyện viên nòng cốt. Nội dung tổng hợp từ bộ tài liệu kỹ thuật trong thư mục `docs/`, và được viết dựa trên **đúng những gì sản phẩm đang làm** tại thời điểm 23/09/2026. Nó không mô tả những gì sản phẩm "dự định" làm.
+> Tài liệu dành cho PM, BA, khách hàng, nhà tài trợ và tình nguyện viên nòng cốt. Nội dung tổng hợp từ bộ tài liệu kỹ thuật trong thư mục `docs/`, và được viết dựa trên **đúng những gì sản phẩm đang làm** tại thời điểm 26/09/2026. Nó không mô tả những gì sản phẩm "dự định" làm.
 > Những chỗ sản phẩm chưa làm xong, hoặc đang làm khác với mong đợi, được nêu rõ ở mục 3 (cột Trạng thái) và mục 10.
 
 ---
@@ -33,12 +33,13 @@ Ecolink là nền tảng kết nối cộng đồng để **phát hiện và d�
 | Vai trò | Là ai | Muốn làm gì | Được làm | Không được làm |
 |---|---|---|---|---|
 | **Khách** | Người chưa đăng nhập | Tìm hiểu, đăng ký tài khoản, nộp hồ sơ tổ chức | Đăng ký, đăng nhập, xem danh sách quà và bảng xếp hạng, **nộp hồ sơ đăng ký tổ chức** (không cần tài khoản) | Xem báo cáo, chiến dịch, bản đồ (sẽ được yêu cầu đăng nhập) |
-| **Người dùng** (người dân) | Người có tài khoản cá nhân | Báo cáo rác, theo dõi, bình chọn, tham gia | Gửi và sửa báo cáo của mình; bình chọn và lưu báo cáo hoặc chiến dịch; xin tham gia chiến dịch hoặc tổ chức; gửi yêu cầu khẩn cấp (SOS); chat với trợ lý AI; đổi quà; cài đặt thông báo | Duyệt nội dung; tạo chiến dịch (chỉ tổ chức được tạo) |
+| **Người dùng** (người dân) | Người có tài khoản cá nhân | Báo cáo rác, theo dõi, bình chọn, tham gia | Gửi và sửa báo cáo của mình; bình chọn và lưu báo cáo hoặc chiến dịch; xin tham gia chiến dịch hoặc tổ chức; gửi yêu cầu khẩn cấp (SOS); chat với trợ lý AI; đổi quà; cài đặt thông báo | Duyệt nội dung; tạo chiến dịch (chỉ owner của tổ chức được tạo) |
 | **Tình nguyện viên** | Người dùng đã được chấp nhận vào một chiến dịch | Làm việc trong chiến dịch và nhận điểm | Nhận việc được giao, cập nhật kết quả, điểm danh bằng mã QR, nhận điểm khi chiến dịch hoàn thành | Quản lý chiến dịch |
-| **Tài khoản tổ chức** (chủ tổ chức) | Tài khoản riêng của tổ chức, được hệ thống cấp sau khi hồ sơ được duyệt | Quản lý tổ chức và chiến dịch | Sửa thông tin tổ chức; duyệt người xin gia nhập; **tạo chiến dịch**; sửa và xoá chiến dịch do mình tạo | Tự tạo tổ chức mà không qua thẩm định; tự rời tổ chức |
-| **Người quản lý chiến dịch** | Chủ tổ chức (người tạo chiến dịch) và những người được thêm làm quản lý | Vận hành chiến dịch | Duyệt người tham gia, tạo và giao việc, tạo mã điểm danh, báo hoàn thành chiến dịch, thêm hoặc bớt người quản lý | Tự duyệt hoàn thành chiến dịch (cần quản trị viên) |
-| **Thành viên tổ chức** | Người dùng được chủ tổ chức chấp nhận | Theo dõi hoạt động của tổ chức | Nhận thông báo khi tổ chức mở chiến dịch mới; rời tổ chức | Quản lý tổ chức |
-| **Người nộp hồ sơ tổ chức** | Đại diện tổ chức, chưa có tài khoản | Đăng ký tổ chức lên Ecolink | Xác thực email bằng mã, nộp hồ sơ và giấy tờ, theo dõi, bổ sung, rút hồ sơ qua đường link trong email | — |
+| **Owner tổ chức** (gồm người đại diện pháp lý) | Người dùng cá nhân được gắn vai owner sau khi hồ sơ được duyệt. Một tổ chức có thể có nhiều owner (tối đa 5 lúc đăng ký); một người làm owner tối đa 3 tổ chức. Tổ chức **không** có tài khoản đăng nhập riêng | Quản lý tổ chức và chiến dịch | Sửa thông tin tổ chức; duyệt người xin gia nhập; **tạo chiến dịch**; sửa và xoá chiến dịch do mình tạo | Tự tạo tổ chức mà không qua thẩm định; tự rời tổ chức (luồng rời / chuyển giao chưa có) |
+| **Người quản lý chiến dịch** | Owner đã tạo chiến dịch và những người được thêm làm quản lý | Vận hành chiến dịch | Duyệt người tham gia, tạo và giao việc, tạo mã điểm danh, báo hoàn thành chiến dịch, thêm hoặc bớt người quản lý | Tự duyệt hoàn thành chiến dịch (cần quản trị viên) |
+| **Thành viên tổ chức** | Người dùng được owner chấp nhận | Theo dõi hoạt động của tổ chức | Nhận thông báo khi tổ chức mở chiến dịch mới; rời tổ chức | Quản lý tổ chức |
+| **Người nộp hồ sơ tổ chức** | Người lập hồ sơ, không cần tài khoản; bắt buộc là một trong các owner | Đăng ký tổ chức lên Ecolink | Xác thực email bằng mã, lưu nháp, khai danh sách owner, nộp hồ sơ và giấy tờ, gửi lại email xác nhận cho owner, theo dõi, sửa, rút hồ sơ qua đường link trong email | — |
+| **Owner được mời** | Người được ghi tên làm owner trong một hồ sơ | Đồng ý hoặc từ chối | Mở link trong email (không cần đăng nhập), bấm **Xác nhận** hoặc **Tôi không liên quan**, có thể chặn email mình khỏi mọi lời mời sau này | Được gán vai khi chưa tự xác nhận |
 | **Quản trị viên** | Nhân sự vận hành Ecolink | Kiểm duyệt và vận hành | Duyệt hoặc chặn báo cáo, chiến dịch, tổ chức, người dùng; thẩm định hồ sơ tổ chức và cấp dấu tích xanh; duyệt hoàn thành chiến dịch; quản lý quà và đơn đổi quà; cấu hình điểm, mùa, huy hiệu | Sửa báo cáo của người dân (bị cấm) |
 
 > Chi tiết kỹ thuật: xem `docs/05-permissions.md`.
@@ -65,24 +66,26 @@ Trạng thái: ✅ đã có · 🟡 đang làm dở / có hạn chế · ❌ ch�
 | Tính năng | Mô tả | Ai dùng | Trạng thái |
 |---|---|---|---|
 | Trang tổ chức | Tên, logo, ảnh bìa, mô tả, email liên hệ, danh sách thành viên và chiến dịch; có đường dẫn riêng theo tên | Mọi người đăng nhập | ✅ |
-| Cập nhật thông tin tổ chức | Chủ tổ chức sửa thông tin; đổi email liên hệ thì phải xác minh lại email đó | Chủ tổ chức | ✅ |
-| Xác minh email liên hệ | Gửi đường link xác minh về email liên hệ | Chủ tổ chức | ✅ |
-| Gia nhập tổ chức | Người dùng xin gia nhập, chủ tổ chức duyệt hoặc từ chối; thành viên có thể rời | Người dùng, chủ tổ chức | ✅ |
+| Cập nhật thông tin tổ chức | Owner sửa thông tin; đổi email liên hệ thì phải xác minh lại email đó | Owner | ✅ |
+| Xác minh email liên hệ | Gửi đường link xác minh về email liên hệ | Owner | ✅ |
+| Gia nhập tổ chức | Người dùng xin gia nhập, owner duyệt hoặc từ chối (mọi owner đều nhận thông báo); thành viên có thể rời | Người dùng, owner | ✅ |
+| Nhiều owner | Trang tổ chức hiển thị danh sách owner và người đại diện pháp lý | Mọi người đăng nhập | ✅ Thêm owner sau khi tổ chức đã hoạt động, mời quản trị viên / quản lý chiến dịch, rời hoặc chuyển giao quyền owner: ❌ chưa có |
 | Duyệt hoặc chặn tổ chức | Quản trị viên chặn tổ chức vi phạm, hoặc bỏ chặn | Quản trị viên | 🟡 Tổ chức bị chặn vẫn tạo được chiến dịch |
 
 ### 3.3 Xác minh và dấu tích xanh
 | Tính năng | Mô tả | Ai dùng | Trạng thái |
 |---|---|---|---|
-| Nộp hồ sơ đăng ký tổ chức | Xác thực email bằng mã một lần, khai thông tin, kênh chính thức (Facebook, website, Zalo OA), người đại diện pháp lý, tải lên tối đa 5 giấy tờ | Người nộp hồ sơ | ✅ |
-| Theo dõi, bổ sung, rút hồ sơ | Qua đường link trong email, không cần tài khoản | Người nộp hồ sơ | ✅ |
+| Nộp hồ sơ đăng ký tổ chức | Xác thực email bằng mã một lần, lưu nháp, khai thông tin, kênh chính thức (Facebook, website, Zalo OA), danh sách owner (tối đa 5, đúng một người đại diện pháp lý), tải lên tối đa 5 giấy tờ | Người nộp hồ sơ | ✅ |
+| Owner xác nhận | Mỗi owner nhận email riêng và phải tự xác nhận trong 14 ngày; đủ xác nhận mới vào hàng chờ thẩm định | Owner được mời | ✅ |
+| Theo dõi, sửa, rút hồ sơ | Qua đường link trong email, không cần tài khoản; thấy ai đã xác nhận, gửi lại email (tối đa 3 lần) | Người nộp hồ sơ | ✅ |
 | Thẩm định hồ sơ | Quản trị viên nhận xử lý, xem giấy tờ (mỗi lần xem đều được ghi lại), yêu cầu bổ sung, duyệt hoặc từ chối | Quản trị viên | ✅ |
-| Dấu tích xanh | Gắn khi duyệt hồ sơ. Mặc định có với luồng ưu tiên dành cho cơ quan nhà nước và trường học; luồng tiêu chuẩn thì quản trị viên tự quyết | Quản trị viên | 🟡 Có lưu nhưng **chưa hiển thị cho người dùng**; chưa có tạm dừng, thu hồi hay xử lý hết hạn |
-| Tự động tạo tài khoản tổ chức | Duyệt hồ sơ xong, hệ thống tạo tài khoản và gửi email để tổ chức đặt mật khẩu | Hệ thống | 🟡 Nếu email kích hoạt bị lỗi thì chưa có cách gửi lại |
+| Dấu tích xanh | Gắn khi duyệt hồ sơ. Mặc định có với luồng ưu tiên dành cho cơ quan nhà nước và trường học; luồng tiêu chuẩn thì quản trị viên tự quyết | Quản trị viên | 🟡 Đã hiển thị cho người dùng; chưa có tạm dừng, thu hồi hay xử lý hết hạn |
+| Gắn vai owner khi duyệt | Duyệt hồ sơ xong, mỗi owner được gắn vai. Ai chưa có tài khoản được tạo tài khoản cá nhân và nhận email kích hoạt (72 giờ); ai đã có tài khoản nhận email "đã được gắn vai" | Hệ thống | ✅ Hết hạn email kích hoạt thì tự yêu cầu gửi lại từ trang đăng nhập |
 
 ### 3.4 Chiến dịch
 | Tính năng | Mô tả | Ai dùng | Trạng thái |
 |---|---|---|---|
-| Tạo chiến dịch | Tổ chức tạo chiến dịch: tiêu đề, mô tả, ảnh bìa, thời gian, địa điểm, **mức độ khó** (quyết định số người tối đa và số điểm thưởng), gắn các điểm rác cần xử lý | Chủ tổ chức | ✅ |
+| Tạo chiến dịch | Owner tạo chiến dịch cho tổ chức: tiêu đề, mô tả, ảnh bìa, thời gian, địa điểm, **mức độ khó** (quyết định số người tối đa và số điểm thưởng), gắn các điểm rác cần xử lý | Owner | ✅ |
 | Sửa và xoá chiến dịch | | Người tạo chiến dịch | 🟡 Giao diện chưa có chỗ sửa; hệ thống cho phép tự đổi trạng thái (mục 10) |
 | Duyệt chiến dịch | Quản trị viên duyệt, khi đó người dân quanh khu vực 5 km được mời tham gia; hoặc chặn | Quản trị viên | ✅ |
 | Đăng ký tham gia | Tình nguyện viên xin tham gia; người quản lý duyệt, có giới hạn số người theo mức độ khó | Người dùng, quản lý | ✅ |
@@ -121,7 +124,7 @@ Trạng thái: ✅ đã có · 🟡 đang làm dở / có hạn chế · ❌ ch�
 | Tính năng | Mô tả | Trạng thái |
 |---|---|---|
 | Thông báo trong ứng dụng | Chuông thông báo, tự làm mới mỗi 20 giây, đánh dấu đã đọc | ✅ |
-| Email | Mã xác thực, xác nhận hồ sơ, yêu cầu bổ sung, từ chối, kích hoạt tài khoản tổ chức, xác minh email liên hệ | ✅ |
+| Email | Mã xác thực, xác nhận hồ sơ, lời mời xác nhận owner, owner từ chối / hết hạn, hồ sơ bị rút, yêu cầu bổ sung, từ chối, kích hoạt tài khoản, "đã được gắn làm owner", xác minh email liên hệ | ✅ |
 | Tuỳ chọn nhận thông báo | 6 nhóm có thể tắt; các thông báo quan trọng luôn được gửi | ✅ |
 | Đánh dấu tất cả đã đọc | | ❌ |
 
@@ -149,7 +152,7 @@ Các trường hợp thường gặp:
 - Email đã được dùng: thông báo "email đã tồn tại".
 - Mật khẩu ngắn: giao diện cho phép 6 ký tự, nhưng hệ thống yêu cầu ít nhất 8 khi đăng ký, nên người dùng có thể gặp lỗi khó hiểu.
 - Tài khoản bị chặn: thông báo "tài khoản đã bị khoá".
-- Tài khoản tổ chức chưa kích hoạt: thông báo cần dùng đường link kích hoạt trong email.
+- Tài khoản chưa kích hoạt (tạo cho owner được duyệt): thông báo cần dùng link kích hoạt, kèm nút **Gửi lại email kích hoạt**.
 - Phiên đăng nhập hết hạn: hệ thống thử làm mới phiên; không được thì đưa về trang đăng nhập.
 
 ```mermaid
@@ -183,45 +186,57 @@ flowchart LR
 ```
 
 ### 4.3 Đăng ký tổ chức và nhận dấu tích xanh
-1. Đại diện tổ chức vào "Đăng ký tổ chức" và nhập email. Hệ thống gửi **mã xác thực một lần** gồm 6 số, hiệu lực 10 phút.
-2. Nhập mã. Người đại diện có 30 phút để hoàn thành hồ sơ: loại tổ chức, tên, logo, mô tả, địa chỉ, ít nhất 1 kênh chính thức, người đại diện pháp lý, tối đa 5 giấy tờ (PDF hoặc ảnh, mỗi file ≤ 10MB), và đồng ý xử lý dữ liệu cá nhân.
-3. Nộp hồ sơ. Người đại diện nhận email xác nhận có **mã hồ sơ** và **đường link theo dõi** (hiệu lực 180 ngày).
-4. Quản trị viên thẩm định. Có 3 khả năng:
-   - **Yêu cầu bổ sung:** người nộp nhận email kèm nội dung cần bổ sung, sửa hồ sơ qua link, rồi nộp lại.
+> Thiết kế đầy đủ, kèm lý do từng lựa chọn: `docs/ORG_OWNERSHIP_FLOW.md`. Điểm khác lớn nhất so với trước: **tổ chức không có tài khoản đăng nhập riêng**. Người quản lý tổ chức là các **owner** — người dùng cá nhân — và mỗi owner phải tự xác nhận trước khi quản trị viên được thẩm định.
+
+1. Người lập hồ sơ vào "Đăng ký tổ chức" và nhập **email của chính mình**. Hệ thống gửi **mã xác thực một lần** gồm 6 số, hiệu lực 10 phút.
+2. Nhập mã. Hệ thống mở một **bản nháp** và gửi **đường link theo dõi** (hiệu lực 180 ngày), nên có thể lưu nháp và quay lại sau. Nếu email này đã có hồ sơ đang mở thì mở lại hồ sơ đó.
+3. Điền hồ sơ: loại tổ chức, tên, logo, mô tả, địa chỉ, email liên hệ, ít nhất 1 kênh chính thức, **danh sách owner** (1–5 người: email, họ tên; đúng một người là **người đại diện pháp lý**, kèm số điện thoại và giấy tờ tuỳ thân), tối đa 5 giấy tờ (PDF hoặc ảnh, mỗi file ≤ 10MB), và đồng ý xử lý dữ liệu cá nhân. Người lập hồ sơ bắt buộc có tên trong danh sách owner.
+4. Nộp hồ sơ. Hệ thống kiểm tra ngay (trước khi gửi bất kỳ email nào): tài khoản bị đình chỉ, người đã làm owner 3 tổ chức, email đang có tên ở quá nhiều hồ sơ khác, email đã chặn lời mời. Người lập hồ sơ được tính là đã xác nhận.
+5. **Mỗi owner khác nhận một email riêng** tóm tắt hồ sơ (tổ chức, người nộp, các owner khác, vai của họ) với hai nút **Xác nhận** và **Tôi không liên quan**. Không cần đăng nhập. Hạn 14 ngày; người lập hồ sơ gửi lại được tối đa 3 lần, cách nhau 1 giờ.
+   - Có người bấm "Tôi không liên quan" hoặc hết hạn: hồ sơ quay về **cần sửa**, người lập hồ sơ nhận email, thay người rồi nộp lại.
+   - Đủ xác nhận: hồ sơ vào **hàng chờ thẩm định**. Trước thời điểm này quản trị viên không nhìn thấy hồ sơ.
+6. Quản trị viên thẩm định, xem cả **con người** (giờ và IP xác nhận, đã có tài khoản chưa, đang làm owner mấy tổ chức). Có 3 khả năng:
+   - **Yêu cầu bổ sung:** người nộp nhận email, sửa qua link, rồi nộp lại.
    - **Từ chối:** người nộp nhận email kèm lý do.
-   - **Duyệt:** trang tổ chức được tạo. Quản trị viên chọn có gắn **dấu tích xanh** hay không. Hệ thống tạo tài khoản tổ chức và gửi email **kích hoạt** (hiệu lực 72 giờ).
-5. Người đại diện mở email kích hoạt, đặt mật khẩu, rồi đăng nhập để quản lý tổ chức.
+   - **Duyệt:** trang tổ chức được tạo, quản trị viên chọn có gắn **dấu tích xanh** hay không, và từng owner được gắn vai.
+7. Owner chưa có tài khoản Ecolink nhận email **kích hoạt** (72 giờ) để đặt mật khẩu; owner đã có tài khoản nhận email "tài khoản của bạn vừa được gắn làm owner" và đăng nhập như bình thường.
 
 Các trường hợp thường gặp:
 - Xin mã quá nhiều lần (quá 3 lần mỗi giờ): phải chờ.
 - Nhập sai mã 5 lần: phải xin mã mới.
-- Email này đã có một hồ sơ đang chờ xử lý: không nộp thêm được.
-- Người đại diện đã đứng tên 3 tổ chức: không nộp thêm được.
-- Email liên hệ đã có tài khoản Ecolink: không tạo được tài khoản tổ chức, cần quản trị viên xử lý thủ công.
-- Người nộp có thể **rút hồ sơ** bất cứ lúc nào trước khi có quyết định.
+- Email này đã có một hồ sơ đang mở: mở lại hồ sơ đó thay vì tạo hồ sơ mới.
+- Một owner đã làm owner 3 tổ chức: không nộp được (kiểm tra lại lúc duyệt).
+- Một email đã có tên ở 2 hồ sơ khác đang xử lý: không ghi tên thêm được (chống spam).
+- Owner đã có tài khoản Ecolink: **được phép**, không cần xử lý thủ công.
+- Sửa tên, loại tổ chức, người đại diện pháp lý hoặc danh sách owner sau khi đã có người xác nhận: mọi xác nhận bị đặt lại, tất cả phải xác nhận lại. Sửa mô tả, logo, giấy tờ, kênh thì giữ nguyên.
+- Email kích hoạt hết hạn: tự bấm "Gửi lại email kích hoạt" ở trang đăng nhập.
+- Người nộp có thể **rút hồ sơ** bất cứ lúc nào trước khi có quyết định, kể cả khi đang là nháp hoặc đang chờ owner xác nhận. Các owner đã xác nhận được báo qua email.
 
 ```mermaid
 flowchart TD
   A[Nhập email] --> B[Nhận mã 6 số]
-  B --> C[Điền hồ sơ + giấy tờ]
+  B --> C[Nháp: hồ sơ, giấy tờ, danh sách owner]
   C --> D[Nộp hồ sơ]
-  D --> E{Quản trị viên}
-  E -->|Cần bổ sung| F[Email yêu cầu bổ sung]
-  F --> C
+  D --> M[Email xác nhận tới từng owner]
+  M --> Q{Mọi owner xác nhận?}
+  Q -->|Có người từ chối / hết hạn| C
+  Q -->|Đủ| E{Quản trị viên}
+  E -->|Cần bổ sung| C
   E -->|Từ chối| G[Email từ chối]
-  E -->|Duyệt| H[Tạo trang tổ chức ± dấu tích xanh]
-  H --> I[Email kích hoạt]
-  I --> J[Đặt mật khẩu và đăng nhập]
+  E -->|Duyệt| H[Tạo trang tổ chức ± dấu tích xanh, gắn vai owner]
+  H --> T{Owner đã có tài khoản?}
+  T -->|Chưa| I[Email kích hoạt → đặt mật khẩu]
+  T -->|Rồi| J[Email đã gắn vai → đăng nhập]
   D -.->|Người nộp đổi ý| K[Rút hồ sơ]
 ```
 
 ### 4.4 Tổ chức mở chiến dịch
-1. Chủ tổ chức vào "Tạo chiến dịch", chọn tổ chức, nhập thông tin, chọn mức độ khó và chọn các điểm rác đã được duyệt cần xử lý.
+1. Owner của tổ chức vào "Tạo chiến dịch", chọn tổ chức, nhập thông tin, chọn mức độ khó và chọn các điểm rác đã được duyệt cần xử lý.
 2. Chiến dịch được tạo ở trạng thái **chờ duyệt**. Thành viên tổ chức nhận thông báo "tổ chức có chiến dịch mới".
 3. Quản trị viên duyệt, chiến dịch **đang hoạt động**, và người dân trong bán kính 5 km được mời tham gia.
 
 Các trường hợp thường gặp:
-- Người tạo không phải chủ tổ chức: bị từ chối.
+- Người tạo không phải owner của tổ chức: bị từ chối.
 - Điểm rác đã thuộc chiến dịch khác hoặc chưa được duyệt: không chọn được.
 - Chiến dịch bị chặn: các điểm rác được trả về danh sách chờ để chiến dịch khác nhận. Tổ chức **không nhận thông báo** về việc bị chặn.
 
@@ -235,7 +250,7 @@ Các trường hợp thường gặp:
    - Chiến dịch **hoàn thành**, các điểm rác chuyển sang **đã xử lý**.
    - Tình nguyện viên đã điểm danh nhận điểm xanh theo mức độ khó.
    - Mọi tình nguyện viên nhận thông báo "chiến dịch hoàn thành".
-   - Nếu quản trị viên từ chối, chiến dịch tiếp tục hoạt động và chủ tổ chức nhận lý do.
+   - Nếu quản trị viên từ chối, chiến dịch tiếp tục hoạt động và các owner của tổ chức nhận lý do.
 
 Các trường hợp thường gặp:
 - Bị từ chối tham gia: người xin nhận thông báo và có thể xin lại.
@@ -294,11 +309,11 @@ Mã BR-xxx dùng để đối chiếu với `docs/03-business-rules.md`.
 ### 5.1 Tài khoản
 - **BR-001, BR-002:** Đăng ký cần email hợp lệ, tên và mật khẩu ít nhất 8 ký tự. Mỗi email chỉ đăng ký được một tài khoản.
 - **BR-003:** Người đăng ký mới là người dùng thường. *(Hiện hệ thống cho phép tự chọn vai trò khi đăng ký, xem mục 10.)*
-- **BR-004, BR-005:** Sai email hoặc mật khẩu thì không đăng nhập được. Tài khoản bị khoá, và tài khoản tổ chức chưa kích hoạt, cũng không đăng nhập được, kể cả qua Google.
+- **BR-004, BR-005:** Sai email hoặc mật khẩu thì không đăng nhập được. Tài khoản bị khoá, và tài khoản chưa kích hoạt, cũng không đăng nhập được, kể cả qua Google.
 - **BR-006, BR-007, BR-008, BR-012:** Phiên đăng nhập có thời hạn và được tự làm mới. Đăng xuất, đổi mật khẩu hoặc bị khoá sẽ chấm dứt khả năng làm mới phiên, nhưng phiên đang dùng vẫn còn hiệu lực đến khi hết hạn.
 - **BR-009:** Đổi mật khẩu cần nhập đúng mật khẩu cũ.
 - **BR-010:** Đường link đặt lại mật khẩu dùng một lần và hết hạn sau 1 giờ.
-- **BR-011:** Link kích hoạt tài khoản tổ chức dùng một lần và hết hạn sau 72 giờ; mật khẩu ít nhất 8 ký tự.
+- **BR-011, BR-016:** Link kích hoạt tài khoản (cho owner chưa có tài khoản) dùng một lần và hết hạn sau 72 giờ; mật khẩu ít nhất 8 ký tự. Người dùng tự yêu cầu gửi lại được từ trang đăng nhập (tối đa 3 lần mỗi giờ).
 - **BR-013:** Đăng nhập Google lần đầu sẽ tự tạo tài khoản.
 - **BR-014, BR-015:** Chỉ quản trị viên làm được các việc quản trị. Các hệ thống bên trong Ecolink trao đổi với nhau bằng khoá bí mật riêng.
 - **BR-020, BR-021, BR-022:** Hồ sơ cá nhân: số điện thoại 7–20 ký tự; ngày sinh theo dạng năm-tháng-ngày; vị trí nhà phải có đủ cả vĩ độ và kinh độ, xoá vị trí thì địa chỉ cũng bị xoá theo.
@@ -306,51 +321,62 @@ Mã BR-xxx dùng để đối chiếu với `docs/03-business-rules.md`.
 - **BR-024:** Vị trí nhà chỉ chính người đó nhìn thấy.
 - **BR-025, BR-026, BR-027:** Quản trị viên khoá tài khoản phải ghi lý do, và không được tự khoá chính mình. Khoá lại người đã bị khoá chỉ cập nhật lý do. Chưa có chức năng mở khoá.
 - **BR-028:** Tên vai trò không được trùng.
-- **BR-029:** Mỗi hồ sơ tổ chức được duyệt chỉ tạo một tài khoản tổ chức. Email liên hệ đã có tài khoản thì không tạo được.
+- **BR-029:** Khi duyệt hồ sơ, owner đã có tài khoản thì dùng tài khoản đó; owner chưa có thì được tạo một tài khoản cá nhân chờ kích hoạt. Không còn tài khoản riêng cho tổ chức.
 - **BR-030, BR-091:** Link xác minh email liên hệ tổ chức hiệu lực 72 giờ, dùng một lần; gửi link mới thì link cũ mất hiệu lực. Email trong link phải trùng email liên hệ hiện tại.
 - **BR-031:** "Người dân ở gần" là người có vị trí nhà trong bán kính 5 km (mặc định).
 - **BR-032, BR-033:** Hệ thống chỉ lấy thông tin tối đa 100 người mỗi lần và tôn trọng tuỳ chọn tắt thông báo của từng người.
 
 ### 5.2 Hồ sơ đăng ký tổ chức
 - **BR-050, BR-051, BR-052:** Mỗi email xin mã tối đa 3 lần mỗi giờ; mỗi mạng internet tối đa 10 lần mỗi giờ. Các thao tác khác trên form hồ sơ tối đa 60 lần mỗi giờ. Trên hệ thống thật không tắt được giới hạn này.
-- **BR-053, BR-054:** Mã xác thực gồm 6 số, hiệu lực 10 phút; nhập sai quá 5 lần phải xin mã mới. Nhập đúng thì có 30 phút để hoàn thành hồ sơ.
-- **BR-055:** Chỉ ai đã xác thực email mới tải giấy tờ lên và nộp hồ sơ được.
+- **BR-053, BR-054:** Mã xác thực gồm 6 số, hiệu lực 10 phút; nhập sai quá 5 lần phải xin mã mới. Nhập đúng thì hệ thống mở bản nháp và gửi link theo dõi — không còn giới hạn 30 phút.
+- **BR-055, BR-066:** Mọi thao tác sau đó (lưu, nộp, tải giấy tờ, gửi lại lời mời, rút) dùng link theo dõi (180 ngày).
 - **BR-056:** Giấy tờ phải là PDF, JPG hoặc PNG, mỗi file tối đa 10MB, mỗi hồ sơ tối đa 5 file. Loại giấy tờ gồm: quyết định thành lập, giấy phép kinh doanh, giấy tờ tuỳ thân người đại diện, khác.
-- **BR-057:** Bắt buộc đồng ý cho xử lý dữ liệu cá nhân.
+- **BR-057:** Bắt buộc đồng ý cho xử lý dữ liệu cá nhân trước khi nộp.
 - **BR-058:** Loại tổ chức phải là: cơ quan nhà nước, trường học, câu lạc bộ, NGO, hoặc doanh nghiệp xã hội.
-- **BR-059:** Phải có tên và logo; email liên hệ phải trùng email đã xác thực.
+- **BR-059:** Phải có tên và logo. Email liên hệ của tổ chức mặc định là email người nộp; dùng email khác thì tổ chức chưa được coi là đã xác minh email.
 - **BR-060:** Phải có ít nhất một kênh chính thức (trang Facebook, website, Zalo OA) với địa chỉ web hợp lệ.
-- **BR-061:** Mỗi email chỉ có **một hồ sơ đang chờ xử lý** tại một thời điểm.
-- **BR-062:** Một người đại diện pháp lý đứng tên tối đa **3 tổ chức**.
-- **BR-063:** Thông tin người đại diện cần họ tên và số điện thoại. Số giấy tờ tuỳ thân ít nhất 4 ký tự, và **hệ thống không lưu số đầy đủ**, chỉ lưu dạng mã hoá cùng 4 số cuối.
-- **BR-064:** Giấy tờ đính kèm phải do chính email đó tải lên.
+- **BR-061:** Mỗi email chỉ có **một hồ sơ đang mở**; xác thực lại thì mở lại hồ sơ đó.
+- **BR-063:** Với người đại diện pháp lý, hệ thống **không lưu số giấy tờ đầy đủ**, chỉ lưu dạng mã hoá cùng 4 số cuối.
+- **BR-064:** Giấy tờ đính kèm phải do chính email người nộp tải lên.
 - **BR-065:** Mỗi hồ sơ có một mã riêng dạng ORG-XXXXXXXX.
-- **BR-066:** Link theo dõi có hiệu lực 180 ngày và cho xem mọi hồ sơ của cùng email.
-- **BR-067:** Chỉ sửa hoặc bổ sung hồ sơ khi quản trị viên yêu cầu bổ sung.
-- **BR-068:** Không rút được hồ sơ đã có quyết định.
+- **BR-067:** Chỉ sửa hồ sơ khi đang là nháp, hoặc đã bị trả về để sửa.
+- **BR-068:** Rút được bất cứ lúc nào trước khi có quyết định; không rút được hồ sơ đã có quyết định.
+- **BR-069:** Danh sách owner: 1–5 người, không trùng email, người nộp phải có tên, đúng một người đại diện pháp lý.
+
+### 5.2b Owner xác nhận
+- **BR-300:** Owner bị đình chỉ, hoặc đã làm owner **3 tổ chức**, thì không nộp được — kiểm tra ngay lúc nộp, trước khi gửi email.
+- **BR-301:** Một email không được có tên ở quá 2 hồ sơ khác đang xử lý (chống dội email).
+- **BR-302, BR-309:** Owner bấm "Tôi không liên quan" có thể chặn email mình khỏi mọi lời mời sau này.
+- **BR-303:** Owner đã từ chối phải được gỡ hoặc thay trước khi nộp lại.
+- **BR-304:** Người nộp được tính là đã xác nhận.
+- **BR-305, BR-310:** Mỗi owner có 14 ngày để xác nhận; quá hạn thì hồ sơ trả về người nộp.
+- **BR-306:** Đổi tên, loại tổ chức, người đại diện pháp lý hoặc danh sách owner sau khi đã có người xác nhận thì mọi người phải xác nhận lại.
+- **BR-307:** Gửi lại email xác nhận tối đa 3 lần cho mỗi owner, cách nhau ít nhất 1 giờ.
+- **BR-308:** Xác nhận không cần đăng nhập; hệ thống ghi lại thời điểm, IP và trình duyệt làm bằng chứng. Đủ xác nhận thì hồ sơ tự vào hàng chờ thẩm định.
 
 ### 5.3 Thẩm định và dấu tích xanh
-- **BR-070:** Một hồ sơ chỉ do một quản trị viên nhận xử lý tại một thời điểm.
-- **BR-071:** Hồ sơ đã duyệt, đã từ chối hoặc đã rút thì không thao tác được nữa.
+- **BR-070:** Một hồ sơ chỉ do một quản trị viên nhận xử lý tại một thời điểm (không bắt buộc nhận trước khi quyết định).
+- **BR-071:** Quản trị viên chỉ thấy hồ sơ khi mọi owner đã xác nhận; chỉ thao tác được hồ sơ đang chờ thẩm định.
 - **BR-072:** Yêu cầu bổ sung phải có nội dung.
 - **BR-073:** Từ chối phải có lý do.
 - **BR-074:** Khi duyệt, quản trị viên phải chọn **luồng ưu tiên** (cơ quan nhà nước hoặc trường học có tên miền chính thức) hoặc **luồng tiêu chuẩn**.
 - **BR-075:** Hồ sơ không có giấy tờ chỉ được duyệt khi quản trị viên chủ động miễn giấy tờ và ghi lý do.
 - **BR-076:** Hồ sơ phải có tên và logo mới được duyệt.
 - **BR-077:** Dấu tích xanh mặc định được gắn cho luồng ưu tiên; luồng tiêu chuẩn thì quản trị viên tự quyết. Xác minh theo luồng tiêu chuẩn có hạn 1 năm.
-- **BR-078:** Mỗi lần quản trị viên mở giấy tờ đều được ghi lại. Đường tải giấy tờ chỉ có hiệu lực 5 phút.
-- **BR-079:** Tài khoản tổ chức được tạo tự động sau khi duyệt, và email kích hoạt được gửi cho email liên hệ.
+- **BR-078:** Mỗi lần mở giấy tờ đều được ghi lại. Đường tải giấy tờ chỉ có hiệu lực 5 phút.
+- **BR-079, BR-312:** Duyệt xong, mỗi owner được gắn vai (kiểm tra lại trần 3 tổ chức); owner chưa có tài khoản nhận email kích hoạt, owner đã có tài khoản nhận email "đã được gắn vai" — không bao giờ nhận link đổi mật khẩu.
+- **BR-315:** Mỗi tổ chức luôn phải còn ít nhất một owner.
 
 ### 5.4 Tổ chức
 - **BR-080:** Tổ chức chỉ được tạo qua thẩm định hồ sơ, hoặc bởi hệ thống nội bộ.
 - **BR-081:** Không có hai tổ chức đang hoạt động trùng cả tên lẫn email liên hệ.
 - **BR-082:** Đường dẫn trang tổ chức sinh từ tên (bỏ dấu); trùng thì thêm số, và không đổi khi đổi tên.
-- **BR-083:** Chỉ chủ tổ chức sửa được thông tin. Đổi email liên hệ thì phải xác minh lại email mới.
+- **BR-083:** Chỉ owner sửa được thông tin. Đổi email liên hệ thì phải xác minh lại email mới.
 - **BR-084:** Quản trị viên chặn tổ chức phải ghi lý do.
-- **BR-085:** Chủ tổ chức và người đã là thành viên không được xin gia nhập; mỗi người chỉ có một yêu cầu đang chờ.
-- **BR-086:** Chỉ chủ tổ chức duyệt yêu cầu gia nhập.
+- **BR-085:** Owner và người đã là thành viên không được xin gia nhập; mỗi người chỉ có một yêu cầu đang chờ.
+- **BR-086:** Owner nào của tổ chức cũng duyệt được yêu cầu gia nhập.
 - **BR-087:** Người xin chỉ huỷ được yêu cầu khi còn đang chờ.
-- **BR-088:** Chủ tổ chức không được rời tổ chức.
+- **BR-088:** Owner không được rời tổ chức (chưa có luồng rời hoặc chuyển giao).
 - **BR-089:** Tổ chức bị chặn không xem được qua đường dẫn trang.
 - **BR-090:** Chỉ gửi lại email xác minh khi email liên hệ chưa được xác minh.
 
@@ -376,7 +402,7 @@ Mã BR-xxx dùng để đối chiếu với `docs/03-business-rules.md`.
 
 ### 5.7 Chiến dịch
 - **BR-150:** Chiến dịch cần tiêu đề và mức độ khó; vị trí và thời gian là tuỳ chọn.
-- **BR-151:** Chỉ **chủ tổ chức** tạo được chiến dịch cho tổ chức mình.
+- **BR-151:** Chỉ **owner** (kể cả người đại diện pháp lý) tạo được chiến dịch cho tổ chức mình.
 - **BR-152:** Mức độ khó phải thuộc danh sách mức độ do quản trị viên cấu hình.
 - **BR-153:** Chiến dịch mới chờ quản trị viên duyệt; người tạo tự động là người quản lý.
 - **BR-154:** Chỉ người tạo sửa hoặc xoá được chiến dịch. Xoá thì các điểm rác được trả lại danh sách chờ.
@@ -476,7 +502,7 @@ flowchart LR
 | Gửi → Chờ duyệt | Người dùng | Gợi ý xử lý từ AI |
 | → Đã duyệt | Quản trị viên | Thông báo "đã duyệt" |
 | → Bị chặn | Quản trị viên | Thông báo kèm lý do |
-| → Đang xử lý | Chủ tổ chức (khi tạo chiến dịch) | — |
+| → Đang xử lý | Owner (khi tạo chiến dịch) | — |
 | → Đã xử lý | Quản trị viên | Thông báo "đã xử lý" (+ điểm nếu có cấu hình) |
 
 ### 6.2 Chiến dịch
@@ -490,51 +516,51 @@ flowchart LR
 ```
 | Bước | Ai làm | Ai nhận được gì |
 |---|---|---|
-| Tạo → Chờ duyệt | Chủ tổ chức | Thành viên tổ chức: "có chiến dịch mới" |
+| Tạo → Chờ duyệt | Owner | Thành viên tổ chức: "có chiến dịch mới" |
 | → Đang hoạt động | Quản trị viên | Người dân trong 5 km: lời mời tham gia |
 | → Bị chặn | Quản trị viên | (không có thông báo) |
 | → Chờ duyệt hoàn thành | Người quản lý | Quản trị viên: "có chiến dịch chờ duyệt"; người dân gần đó: mời xác nhận đã sạch |
-| → Hoàn thành | Quản trị viên | Tình nguyện viên: "hoàn thành" và điểm (nếu đã điểm danh); chủ tổ chức: "được duyệt" |
-| → Quay lại hoạt động | Quản trị viên | Chủ tổ chức: lý do từ chối |
+| → Hoàn thành | Quản trị viên | Tình nguyện viên: "hoàn thành" và điểm (nếu đã điểm danh); các owner: "được duyệt" |
+| → Quay lại hoạt động | Quản trị viên | Các owner: lý do từ chối |
 
 ### 6.3 Yêu cầu tham gia chiến dịch hoặc tổ chức
 | Trạng thái | Ai chuyển | Người xin nhận được |
 |---|---|---|
-| Đang chờ | Người xin | (Người quản lý hoặc chủ tổ chức nhận thông báo) |
-| Được chấp nhận | Người quản lý / chủ tổ chức | Thông báo "được chấp nhận" |
-| Bị từ chối | Người quản lý / chủ tổ chức | Thông báo "bị từ chối" |
+| Đang chờ | Người xin | (Người quản lý hoặc các owner nhận thông báo) |
+| Được chấp nhận | Người quản lý / owner | Thông báo "được chấp nhận" |
+| Bị từ chối | Người quản lý / owner | Thông báo "bị từ chối" |
 | Đã huỷ | Người xin | — |
 
 ### 6.4 Hồ sơ đăng ký tổ chức
 ```mermaid
 flowchart LR
-  A[Đã nộp] -->|Quản trị viên nhận| B[Đang thẩm định]
-  A --> C[Cần bổ sung]
-  B --> C
-  C -->|Người nộp nộp lại| A
-  A --> D[Đã duyệt]
-  B --> D
-  C --> D
-  A --> E[Bị từ chối]
-  B --> E
-  C --> E
-  A --> F[Đã rút]
-  B --> F
+  N[Nháp] -->|Người nộp nộp| W[Chờ owner xác nhận]
+  N -->|Chỉ có người nộp là owner| P
+  W -->|Mọi owner xác nhận| P[Chờ thẩm định]
+  W -->|Owner từ chối / hết hạn| C[Cần sửa]
+  P -->|Yêu cầu bổ sung| C
+  C -->|Người nộp nộp lại| W
+  P --> D[Đã duyệt]
+  P --> E[Bị từ chối]
+  N --> F[Đã rút]
+  W --> F
+  P --> F
   C --> F
 ```
 | Trạng thái | Ai chuyển | Người nộp nhận được |
 |---|---|---|
-| Đã nộp | Người nộp | Email xác nhận kèm mã hồ sơ và link theo dõi |
-| Đang thẩm định | Quản trị viên | — |
-| Cần bổ sung | Quản trị viên | Email nội dung cần bổ sung và link sửa |
-| Đã duyệt | Quản trị viên | Email kích hoạt tài khoản tổ chức |
+| Nháp | Người nộp (xác thực email) | Link theo dõi |
+| Chờ owner xác nhận | Người nộp (nộp) | Email xác nhận kèm mã hồ sơ; các owner khác nhận email xác nhận |
+| Chờ thẩm định | Hệ thống (owner cuối cùng xác nhận) | — |
+| Cần sửa | Quản trị viên (yêu cầu bổ sung) hoặc hệ thống (owner từ chối / hết hạn) | Email nội dung cần sửa và link |
+| Đã duyệt | Quản trị viên | Các owner: email kích hoạt hoặc "đã được gắn vai" |
 | Bị từ chối | Quản trị viên | Email kèm lý do |
-| Đã rút | Người nộp | — |
+| Đã rút | Người nộp | Các owner đã xác nhận nhận email báo rút |
 
 ### 6.5 Tổ chức
-| Trạng thái | Ai chuyển | Chủ tổ chức nhận được |
+| Trạng thái | Ai chuyển | Các owner nhận được |
 |---|---|---|
-| Đang hoạt động (± dấu tích xanh) | Quản trị viên (khi duyệt hồ sơ) | Email kích hoạt |
+| Đang hoạt động (± dấu tích xanh) | Quản trị viên (khi duyệt hồ sơ) | Email kích hoạt hoặc "đã được gắn làm owner" |
 | Bị chặn | Quản trị viên | Thông báo kèm lý do |
 | Hoạt động lại | Quản trị viên | Thông báo "được duyệt" |
 
@@ -543,8 +569,8 @@ Dấu tích xanh hiện chỉ được gắn một lần khi duyệt hồ sơ, v
 ### 6.6 Tài khoản
 | Trạng thái | Ai chuyển |
 |---|---|
-| Hoạt động | Người dùng tự đăng ký; tài khoản tổ chức sau khi kích hoạt |
-| Chờ kích hoạt | Hệ thống (tài khoản tổ chức mới tạo) |
+| Hoạt động | Người dùng tự đăng ký; tài khoản tạo cho owner sau khi kích hoạt |
+| Chờ kích hoạt | Hệ thống (tài khoản tạo khi duyệt hồ sơ cho owner chưa có tài khoản) |
 | Bị khoá | Quản trị viên (chưa có chức năng mở khoá) |
 
 ### 6.7 Đơn đổi quà
@@ -564,7 +590,7 @@ Dấu tích xanh hiện chỉ được gắn một lần khi duyệt hồ sơ, v
 
 Có = được · Không = không được · ĐK = có điều kiện
 
-| Việc | Khách | Người dùng | Tình nguyện viên | Quản lý chiến dịch | Chủ tổ chức | Quản trị viên |
+| Việc | Khách | Người dùng | Tình nguyện viên | Quản lý chiến dịch | Owner tổ chức | Quản trị viên |
 |---|---|---|---|---|---|---|
 | Đăng ký, đăng nhập | Có | — | — | — | — | — |
 | Nộp hồ sơ tổ chức | Có | Có | Có | Có | Có | Có |
@@ -585,7 +611,8 @@ Có = được · Không = không được · ĐK = có điều kiện
 | Duyệt hoàn thành, trao điểm | Không | Không | Không | Không | Không | Có |
 | Gửi SOS | Không | ĐK: chiến dịch đang hoạt động | ĐK | ĐK | ĐK | ĐK |
 | Sửa thông tin tổ chức, duyệt thành viên | Không | Không | Không | Không | Có | Không |
-| Xin gia nhập tổ chức, rời tổ chức | Không | Có | Có | Có | Không (chủ không rời được) | Có |
+| Xin gia nhập tổ chức, rời tổ chức | Không | Có | Có | Có | Không (owner không rời được) | Có |
+| Xác nhận / từ chối làm owner (link trong email) | Có | Có | Có | Có | Có | Có |
 | Thẩm định hồ sơ, cấp dấu tích xanh | Không | Không | Không | Không | Không | Có |
 | Duyệt hoặc chặn tổ chức, khoá người dùng | Không | Không | Không | Không | Không | Có |
 | Đổi quà | Không | Có | Có | Có | Có | Có |
@@ -607,17 +634,20 @@ Kênh gồm **trong ứng dụng** (chuông thông báo) và **email**. Hiện c
 | Nộp hồ sơ thành công | Người nộp | Email | Mã hồ sơ và link theo dõi | Không |
 | Quản trị viên yêu cầu bổ sung | Người nộp | Email | Nội dung cần bổ sung và link sửa | Không |
 | Hồ sơ bị từ chối | Người nộp | Email | Lý do từ chối | Không |
-| Hồ sơ được duyệt | Email liên hệ của tổ chức | Email | Link kích hoạt tài khoản (72 giờ) | Không |
+| Được ghi tên làm owner | Owner được mời | Email | Tóm tắt hồ sơ, nút xác nhận / "Tôi không liên quan", hạn 14 ngày | Không |
+| Owner từ chối hoặc hết hạn xác nhận | Người nộp | Email | Ai chưa xác nhận và link sửa | Không |
+| Hồ sơ bị rút | Owner đã xác nhận | Email | Tổ chức sẽ không được tạo | Không |
+| Hồ sơ được duyệt | Từng owner | Email | Chưa có tài khoản: link kích hoạt (72 giờ); đã có: "đã được gắn làm owner" | Không |
 | Cần xác minh email liên hệ tổ chức | Email liên hệ | Email | Link xác minh (72 giờ) | Không |
-| Tổ chức được duyệt hoặc bị chặn | Chủ tổ chức | Ứng dụng | Kết quả và lý do | Không |
-| Có người xin gia nhập tổ chức hoặc tham gia chiến dịch | Chủ tổ chức / quản lý | Ứng dụng | Tên người xin và tên tổ chức/chiến dịch | Có (nhóm "Yêu cầu tình nguyện") |
+| Tổ chức được duyệt hoặc bị chặn | Các owner | Ứng dụng | Kết quả và lý do | Không |
+| Có người xin gia nhập tổ chức hoặc tham gia chiến dịch | Các owner / quản lý | Ứng dụng | Tên người xin và tên tổ chức/chiến dịch | Có (nhóm "Yêu cầu tình nguyện") |
 | Yêu cầu được chấp nhận hoặc bị từ chối | Người xin | Ứng dụng | Kết quả | Có (nhóm "Yêu cầu tình nguyện") |
 | Tổ chức mở chiến dịch mới | Thành viên tổ chức | Ứng dụng | Tên chiến dịch | Có (nhóm "Chiến dịch mới") |
 | Chiến dịch được duyệt | Người dân trong 5 km | Ứng dụng | Mời tham gia | Có (nhóm "Chiến dịch gần bạn") |
 | Chiến dịch báo hoàn thành | Người dân trong 5 km | Ứng dụng | Mời xác nhận khu vực đã sạch | Có (nhóm "Chiến dịch gần bạn") |
 | Chiến dịch báo hoàn thành | Quản trị viên được chỉ định | Ứng dụng | Có chiến dịch chờ duyệt | Không |
 | Chiến dịch hoàn thành | Tình nguyện viên | Ứng dụng | Chiến dịch đã hoàn thành | Có (nhóm "Chiến dịch hoàn thành") |
-| Hoàn thành được duyệt hoặc bị từ chối | Chủ tổ chức | Ứng dụng | Kết quả và lý do | Duyệt: có; Từ chối: có (nhóm riêng) |
+| Hoàn thành được duyệt hoặc bị từ chối | Các owner | Ứng dụng | Kết quả và lý do | Duyệt: có; Từ chối: có (nhóm riêng) |
 | Báo cáo được duyệt hoặc bị chặn | Người gửi | Ứng dụng | Kết quả và lý do | Không |
 | Báo cáo đã được xử lý | Người gửi | Ứng dụng | Trạng thái mới | Có (nhóm "Trạng thái báo cáo") |
 
@@ -632,12 +662,13 @@ Hiện **không có** thông báo cho các sự kiện: đặt lại mật khẩ
 | Thuật ngữ | Giải thích |
 |---|---|
 | **Báo cáo / sự cố** | Một điểm rác hoặc ô nhiễm do người dân gửi, kèm ảnh, vị trí và mức độ nghiêm trọng (1–5) |
-| **Tổ chức** | Trường học, câu lạc bộ, NGO, cơ quan nhà nước hoặc doanh nghiệp xã hội đã được Ecolink thẩm định; có trang riêng và tài khoản quản lý |
+| **Tổ chức** | Trường học, câu lạc bộ, NGO, cơ quan nhà nước hoặc doanh nghiệp xã hội đã được Ecolink thẩm định; có trang riêng; không có tài khoản đăng nhập riêng, do các owner quản lý |
 | **Hồ sơ đăng ký tổ chức** | Bộ thông tin và giấy tờ tổ chức nộp để được lên Ecolink |
 | **Mã xác thực một lần** | Mã 6 số gửi qua email để chứng minh người nộp sở hữu email đó (thường gọi là OTP) |
 | **Luồng ưu tiên / luồng tiêu chuẩn** | Hai cách thẩm định: ưu tiên dành cho cơ quan nhà nước và trường học có tên miền chính thức (thường được miễn giấy tờ); tiêu chuẩn cần giấy tờ pháp lý |
 | **Dấu tích xanh** | Nhãn xác nhận tổ chức đã được Ecolink xác minh uy tín |
-| **Người đại diện pháp lý** | Người đứng tên chịu trách nhiệm cho tổ chức; mỗi người đứng tên tối đa 3 tổ chức |
+| **Owner** | Người dùng được gắn vai quản lý một tổ chức sau khi tự xác nhận và được duyệt; mỗi người làm owner tối đa 3 tổ chức |
+| **Người đại diện pháp lý** | Owner đứng tên chịu trách nhiệm pháp lý cho tổ chức; mỗi hồ sơ có đúng một người |
 | **Chiến dịch** | Hoạt động dọn dẹp do tổ chức mở, gắn với một hoặc nhiều điểm rác |
 | **Mức độ khó** | Cấp độ của chiến dịch, quyết định số tình nguyện viên tối đa và số điểm thưởng |
 | **Người quản lý chiến dịch** | Người tạo chiến dịch và những người được thêm vào để vận hành |
@@ -681,10 +712,10 @@ Phần này viết lại các vấn đề trong `docs/99-open-issues.md` theo g�
 | 9 | **Dấu tích xanh** | Chỉ gắn một lần khi duyệt hồ sơ. Không hiển thị cho người dùng. Không có tạm dừng hay thu hồi. Luồng tiêu chuẩn có hạn 1 năm nhưng không có gì xảy ra khi hết hạn. Tổ chức bị chặn vẫn giữ dấu tích | Hiển thị dấu tích ở đâu? Khi nào thu hồi (vi phạm, đổi email, hết hạn)? Tiêu chí "lịch sử hoạt động" cho luồng tiêu chuẩn là gì? |
 | 10 | **Tổ chức bị chặn** | Vẫn tạo được chiến dịch và vẫn hiện trong danh sách | Chặn thì được làm gì và không được làm gì? |
 | 11 | **Thẩm định** | Quản trị viên có thể duyệt hoặc từ chối mà không cần "nhận xử lý" trước | Có bắt buộc nhận xử lý trước khi quyết định không? |
-| 12 | **Email kích hoạt tổ chức bị lỗi** | Không có cách gửi lại | Cần nút "gửi lại link kích hoạt" không, và ai được bấm? |
-| 13 | **Email liên hệ tổ chức đã có tài khoản cá nhân** | Không tạo được tài khoản tổ chức, hồ sơ bị treo | Cho phép gắn tài khoản có sẵn, hay bắt dùng email khác? |
-| 14 | **Hạn mức 3 tổ chức cho mỗi người đại diện** | Có giá trị mặc định nhưng không có chỗ để quản trị viên nâng hạn mức | Có cần ngoại lệ không? |
-| 15 | **Ai được tạo chiến dịch** | Chỉ tài khoản tổ chức (chủ). Thành viên tổ chức không tạo được | Có muốn thành viên được tạo không? |
+| 12 | ~~Email kích hoạt bị lỗi~~ | **Đã giải quyết (26/09/2026):** người dùng tự gửi lại từ trang đăng nhập | — |
+| 13 | ~~Email liên hệ tổ chức đã có tài khoản cá nhân~~ | **Đã giải quyết (26/09/2026):** tổ chức không còn tài khoản riêng; owner đã có tài khoản được gắn vai trực tiếp | — |
+| 14 | **Hạn mức 3 tổ chức cho mỗi owner** | Cố định 3, tính theo tài khoản (cả owner lẫn người đại diện pháp lý); không có ngoại lệ | Có cần ngoại lệ không? |
+| 15 | **Ai được tạo chiến dịch** | Chỉ owner (kể cả người đại diện pháp lý). Vai quản lý chiến dịch / quản trị viên tổ chức đã có trong dữ liệu nhưng chưa có luồng mời (Phase 2) | Có muốn thành viên được tạo không? |
 | 16 | **Ai quản lý chiến dịch** | Có 3 cách hiểu khác nhau về "người quản lý". Người quản lý có thể gỡ cả người tạo | Chuẩn hoá vai trò: chủ chiến dịch, quản lý, tình nguyện viên |
 | 17 | **Điểm thưởng chiến dịch** | Chỉ người đã điểm danh nhận điểm, nhưng mọi người được chấp nhận đều nhận thông báo "hoàn thành" | Người không điểm danh có được ghi nhận gì không? |
 | 18 | **Điểm cho người báo cáo** | Được điểm khi quản trị viên đánh dấu trực tiếp, nhưng **không** được điểm khi báo cáo được xử lý qua chiến dịch. Mức điểm mặc định là 0 | Người báo cáo có nên nhận điểm khi chiến dịch xử lý điểm rác của họ không? Bao nhiêu điểm? |
