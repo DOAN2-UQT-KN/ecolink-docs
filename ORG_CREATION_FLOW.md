@@ -48,6 +48,7 @@ sequenceDiagram
     I--)N: ORG_APPLICATION_OTP (mã 6 số, 10 phút)
     U->>I: POST .../email-otp/verify { email, otp }
     I->>I: mở DRAFT (hoặc trả đơn đang mở) + owner = người nộp
+    I--)N: ORG_APPLICATION_DRAFT_STARTED (link trình soạn nháp — chỉ khi đơn mới)
     I-->>U: { application_id, tracking_token (180 ngày), resumed }
 
     Note over U,I: Soạn nháp (lưu nhiều lần)
@@ -107,6 +108,12 @@ Vào `/organizations/apply`, nhập **email của chính mình** → nhận mã 
 lực **10 phút**, sai tối đa **5 lần**, giới hạn **3 mã / email / giờ** và **10 mã / IP / giờ**.
 Mã đúng mở một hồ sơ `DRAFT` (hoặc trả lại hồ sơ đang mở của email đó) và cấp **tracking token**
 180 ngày. Trình duyệt chuyển sang `/organizations/apply/edit/:id?token=`.
+
+Khi hồ sơ **mới được tạo**, hệ thống gửi email `ORG_APPLICATION_DRAFT_STARTED` kèm link vào trình
+soạn nháp để người nộp đóng tab rồi quay lại sau. Mở lại hồ sơ cũ bằng OTP thì **không** gửi thêm
+(tránh dội hộp thư). Gửi mail lỗi không chặn việc mở nháp. Trình soạn nháp (status `DRAFT`) hiện
+khung `DraftLinkNotice` báo đã gửi link và có nút "Sao chép liên kết". Mất link: nhập lại email ở
+`/organizations/apply` để lấy mã mới — hệ thống mở lại đúng bản nháp.
 
 ### Bước 2 — Soạn nháp
 

@@ -258,6 +258,7 @@ sequenceDiagram
   3. `POST /email-otp/verify {email, otp}` (BR-054):
      - Sai → tăng số lần thử; ≥5 → 429.
      - Đúng → `openDraftForEmail()`: đã có đơn mở của email đó thì trả lại (`resumed=true`, BR-061); chưa có thì tạo đơn `DRAFT` (code `ORG-XXXXXXXX`, `submitterEmail`, `contactEmail` = email đó, `emailVerifiedAt`) kèm một owner là người nộp.
+     - Đơn **mới** → gửi `ORG_APPLICATION_DRAFT_STARTED` (fire-and-forget) kèm `buildApplicationEditUrl(id, token)`; đơn mở lại → không gửi (BR-317).
      - Trả `{application_id, tracking_token (180 ngày), resumed}`. Client chuyển sang `/organizations/apply/edit/:id?token=`.
   4. Soạn nháp (lặp lại được, DRAFT hoặc NEEDS_REVISION — BR-067):
      - Giấy tờ: `POST /:id/documents/presign?token=` → chữ ký Cloudinary `authenticated` (BR-056) → trình duyệt upload thẳng.
@@ -928,6 +929,7 @@ sequenceDiagram
 | Kind | Kênh | Người nhận | Khi nào | Nơi phát |
 |---|---|---|---|---|
 | ORG_APPLICATION_OTP | email | email người nộp | Xin mã OTP | `organization-application-otp.service.ts > requestOtp()` |
+| ORG_APPLICATION_DRAFT_STARTED | email | người nộp | OTP mở đơn DRAFT **mới** (không gửi khi mở lại) | `organization-application.service.ts > openDraftForEmail()` |
 | ORG_APPLICATION_RECEIVED | email | người nộp | Nộp đơn lần đầu | `organization-application.service.ts > submitApplication()` |
 | ORG_APPLICATION_NEEDS_INFO | email | người nộp | Admin yêu cầu bổ sung | `organization-application-admin.service.ts > requestMoreInfo()` |
 | ORG_APPLICATION_REJECTED | email | người nộp | Admin từ chối | `... > reject()` |

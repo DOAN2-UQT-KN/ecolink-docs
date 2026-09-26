@@ -91,7 +91,7 @@ Nguồn: `ecolink-client/src/routes/index.tsx > router`. Tổng: **45 route entr
 | `/organizations/apply` | `app/(pages)/(main)/organizations/apply/page.tsx` | Main | **Không** (cổng OTP email; xác thực xong chuyển sang `/apply/edit/:id?token=`) | — | Không |
 | `/organizations/apply/status/:id` | `.../organizations/apply/status/page.tsx > ApplicationStatusPage` | Main | Không (`?token=` tracking) | — | Không |
 | `/organizations/owner-confirm` | `.../organizations/owner-confirm/page.tsx > OwnerConfirmPage` | Main | Không (`?token=` xác nhận owner; JWT nếu có chỉ để cảnh báo lệch email) | — | Không |
-| `/organizations/apply/edit/:id` | `.../organizations/apply/edit/page.tsx > ApplicationEditPage` | Main | Không (`?token=`); trình soạn nháp, chỉ khi status ∈ `EDITABLE_APPLICATION_STATUSES` (DRAFT, NEEDS_REVISION) | — | Kiểm tra status trong page; context tự `replace` sang trang theo dõi nếu status đổi |
+| `/organizations/apply/edit/:id` | `.../organizations/apply/edit/page.tsx > ApplicationEditPage` | Main | Không (`?token=`); trình soạn nháp, chỉ khi status ∈ `EDITABLE_APPLICATION_STATUSES` (DRAFT, NEEDS_REVISION). Status DRAFT hiện `_components/DraftLinkNotice.tsx` (đã gửi link tới email người nộp + nút sao chép `window.location.href`) | — | Kiểm tra status trong page; context tự `replace` sang trang theo dõi nếu status đổi |
 | `/organizations/email-verified` | `.../organizations/email-verified/page.tsx` | Main | Không; chỉ hiển thị lỗi theo `?error=` | — | Không |
 | `/organizations/me` | `.../organizations/me/page.tsx` | Main | Có (qua API 401) | — | Không |
 | `/organizations/:slug` | `.../organizations/[id]/page.tsx` | Main | Tuỳ server `GET /organizations/by-slug/:slug` | Tab/nút theo owner/member | Không |
