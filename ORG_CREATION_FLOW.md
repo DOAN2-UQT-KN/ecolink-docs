@@ -307,7 +307,7 @@ Dữ liệu tổ chức / hồ sơ cũ là dữ liệu dev nên bị xoá, khôn
 ## 2.7 Phạm vi chưa làm
 
 - Admin nền tảng can thiệp trực tiếp vai owner (tranh chấp, owner mất liên lạc) **[CHƯA HOÀN THIỆN]**.
-- **Phase 4:** quyền quản lý chiến dịch theo vai tổ chức **[CHƯA HOÀN THIỆN]**.
+- ~~**Phase 4:** quyền quản lý chiến dịch theo vai tổ chức~~ — đã làm 2026-09-27 (xem [05-permissions.md §2.5](05-permissions.md)).
 - Blue Tick chưa mang đặc quyền nào (chưa nối campaign, chưa có sweep).
 
 ---

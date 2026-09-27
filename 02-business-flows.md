@@ -646,23 +646,23 @@ sequenceDiagram
 ## D. Chiến dịch (campaign)
 
 ### F25 — Tạo chiến dịch
-- **Actor:** user có membership vai `LEGAL_REPRESENTATIVE` hoặc `OWNER` trong tổ chức.
+- **Actor:** thành viên có quyền `CAMPAIGN_CREATE` trong tổ chức (vai `LEGAL_REPRESENTATIVE`, `OWNER` hoặc `CAMPAIGN_MANAGER`).
 - **Điều kiện tiên quyết:**
   - Tổ chức tồn tại (không kiểm tra status).
   - Difficulty có tier tương ứng ở reward.
   - Các report được gắn phải ở TODO và chưa thuộc campaign nào (BR-150..BR-153).
 - **Luồng chính:**
-  1. `/campaigns/create`: client tải `GET /organizations/my?is_owner=true`, `GET /reports/search?status=21`, `GET /incident/saved-resources`. Upload banner lên Cloudinary.
+  1. `/campaigns/create` (hoặc `/campaigns/create?organizationId=<id>` từ tab campaign của trang tổ chức): client tải `GET /organizations/my?roles=LEGAL_REPRESENTATIVE,OWNER,CAMPAIGN_MANAGER` (chỉ giữ tổ chức có `permissions.can_create_campaign`), `GET /reports/search?status=21`, `GET /incident/saved-resources`. Tổ chức chọn sẵn: `?organizationId=` → tổ chức ngữ cảnh (nếu tạo được ở đó) → trống. Upload banner lên Cloudinary.
   2. `POST /api/v1/campaigns {organizationId, title, description?, banner?, startDate?, endDate?, detailAddress?, latitude?, longitude?, radiusKm?, difficulty, reportIds[]}`.
   3. `campaign.service.ts > createCampaign()`:
-     - Kiểm tra org tồn tại và `organizationMemberRepository.isOwner(orgId, userId)` (BR-151).
+     - Kiểm tra org tồn tại và `orgAccessService.assertOrgPermission(orgId, userId, CAMPAIGN_CREATE)` (BR-151).
      - Gọi reward `GET /internal/v1/difficulties/level/:l`.
      - `validateReportIds`.
      - Chạy transaction Serializable: tạo campaign (**PENDING 12**), upsert người tạo vào `campaign_managers`, report TODO → INPROCESS (22) và gán `campaignId`.
   4. Enqueue `TRANSLATE_TEXT` (CAMPAIGN).
   5. Gửi thông báo `CAMPAIGN_CREATED` cho thành viên tổ chức (trừ người tạo), có lọc theo preference.
 - **Luồng lỗi:**
-  - 404 không có tổ chức; 403 không phải owner.
+  - 404 không có tổ chức; 403 `ORG_PERMISSION_DENIED` khi vai không có `CAMPAIGN_CREATE`.
   - 400 difficulty không hợp lệ (cũng xảy ra khi reward service chết).
   - 400 reportIds không hợp lệ.
 - **Dữ liệu thay đổi:** `campaigns`, `campaign_managers`, `reports`, `background_jobs`.
@@ -670,13 +670,13 @@ sequenceDiagram
 
 ```mermaid
 sequenceDiagram
-  actor O as Owner tổ chức
+  actor O as Thành viên (LR / OWNER / CAMPAIGN_MANAGER)
   participant INC as incident
   participant RW as reward
   participant Q as SQS
   participant NS as notification
   O->>INC: POST /api/v1/campaigns
-  INC->>INC: kiểm tra membership vai owner
+  INC->>INC: assertOrgPermission(CAMPAIGN_CREATE)
   INC->>RW: GET /internal/v1/difficulties/level/:l
   RW-->>INC: tier
   INC->>INC: TX Serializable: campaign(12), manager, reports 21→22
@@ -686,10 +686,10 @@ sequenceDiagram
 ```
 
 ### F26 — Sửa và xoá chiến dịch
-- **Sửa:** `PUT /campaigns/:id`, **chỉ `createdBy`**. Body có thể gồm field bất kỳ, kể cả `status` là số tuỳ ý (**bỏ qua được bước duyệt của admin**, 99 ISSUE-S08), `reportIds` (thay toàn bộ; report bị gỡ trở về TODO), `managerIds` (đồng bộ, luôn giữ owner). Khi sửa **không enqueue dịch lại**.
-- **Xoá:** `DELETE /campaigns/:id`, chỉ `createdBy`. Campaign bị xoá mềm; report gắn với nó trở về TODO và `campaignId=null`.
+- **Sửa:** `PUT /campaigns/:id`, người quản lý campaign (người tạo, manager, hoặc LR / OWNER của tổ chức; đều phải còn là thành viên active — BR-159). Body có thể gồm field bất kỳ, kể cả `status` là số tuỳ ý (**bỏ qua được bước duyệt của admin**, 99 ISSUE-S08), `reportIds` (thay toàn bộ; report bị gỡ trở về TODO), `managerIds` (đồng bộ, luôn giữ người tạo; mọi người phải là thành viên active, BR-155). Khi sửa **không enqueue dịch lại**.
+- **Xoá:** `DELETE /campaigns/:id`, người tạo hoặc LR / OWNER của tổ chức. Campaign bị xoá mềm; report gắn với nó trở về TODO và `campaignId=null`.
 - **Client:** `UpdateCampaignPopover` có tồn tại nhưng không được render, nên UI hiện không có chỗ sửa campaign.
-- **File:** `campaign.service.ts > updateCampaign(), deleteCampaign(), ensureOwner()`.
+- **File:** `campaign.service.ts > updateCampaign(), deleteCampaign()`, `campaign-access.service.ts > assertCanManage(), assertCanDelete()`.
 
 ### F27 — Admin duyệt hoặc ban chiến dịch và mời người dân ở gần
 - `/admin/campaigns` → `PUT /api/v1/campaigns/:id/verify {status: 1|2, reject_reason}`.
@@ -725,7 +725,7 @@ sequenceDiagram
    - Campaign phải tồn tại (không kiểm tra status).
    - Chưa có yêu cầu nào chưa bị xoá của cùng người (BR-170).
    - Tạo PENDING và gửi thông báo `VOLUNTEER_REQUEST` cho các manager.
-2. Manager (có trong bảng `campaign_managers`): `GET /volunteers/join-requests?campaignId`, rồi `PUT /volunteers/join-requests/process {requestId, approved}`:
+2. Người quản lý campaign (BR-159): `GET /volunteers/join-requests?campaignId`, rồi `PUT /volunteers/join-requests/process {requestId, approved}`:
    - Duyệt: kiểm tra **sức chứa** — số APPROVED phải < `maxVolunteers` của tier difficulty, gọi reward (BR-172). Đạt thì → APPROVED (14) và gửi `VOLUNTEER_APPROVED`.
    - Từ chối: **xoá mềm** (không lưu REJECTED), gửi `VOLUNTEER_REJECTED`.
 3. Người xin có thể huỷ khi còn PENDING: `DELETE /volunteers/join-requests/cancel`.
@@ -758,9 +758,11 @@ sequenceDiagram
 
 ### F29 — Quản lý manager của chiến dịch
 - `POST /campaigns/:id/add-managers {userIds[]}`, `POST /:id/remove-manager`, `GET /:id/managers`.
-- Người được làm: `createdBy` hoặc manager hiện tại (`canManageCampaign`).
-- Không kiểm tra user có tồn tại hay không. Manager có thể gỡ cả người tạo khỏi bảng manager (99).
-- **File:** `INC/modules/campaign/campaign_manager/campaign_manager.service.ts`.
+- Người được làm: người quản lý campaign (người tạo, manager hiện tại, LR / OWNER của tổ chức — BR-159).
+- Người được thêm phải là thành viên active của tổ chức sở hữu campaign, nếu không → 422 `CAMPAIGN_MANAGER_NOT_MEMBER` (BR-155). Thêm lại người từng bị gỡ thì khôi phục dòng cũ. Không gỡ được người tạo → 422 `CANNOT_REMOVE_CAMPAIGN_CREATOR` (BR-156).
+- Rời hoặc bị gỡ khỏi tổ chức: dòng manager của người đó ở mọi campaign của tổ chức bị xoá mềm cùng transaction (BR-157).
+- **Client:** thẻ Managers ở tab thành viên của `/campaigns/:id` có nút "Add manager" (dialog `AutoCompleteUser` theo tổ chức của campaign, chỉ chọn được thành viên chưa là manager) và icon gỡ trên từng manager trừ người tạo, chỉ khi `can_manage_campaign`.
+- **File:** `INC/modules/campaign/campaign_manager/campaign_manager.service.ts`, `campaign_manager.repository.ts > removeFromOrganizationCampaigns()`.
 
 ### F30 — Quản lý task
 1. `POST /campaigns/:id/tasks` (canManage) → task TODO (21), priority 1..3.
@@ -800,13 +802,13 @@ sequenceDiagram
 ### F32 — Gửi SOS và giải quyết SOS
 - `POST /api/v1/sos {campaignId, content, phone}`: campaign phải ACTIVE và có toạ độ (BR-190). SOS lấy toạ độ và địa chỉ của campaign, status=1.
 - `GET /api/v1/sos` (có lọc theo khoảng cách PostGIS nếu gửi lat/lng). Trang `/maps` poll mỗi 10 giây.
-- `PUT /api/v1/sos/:id/solved` → COMPLETED (17). **Người dùng đăng nhập bất kỳ đều làm được** (99).
+- `PUT /api/v1/sos/:id/solved` → COMPLETED (17). Chỉ platform admin hoặc người quản lý campaign của SOS; người khác → 403 `SOS_PERMISSION_DENIED` (BR-192).
 - Khi campaign được duyệt hoàn thành, mọi SOS chưa xong của campaign chuyển COMPLETED.
 - **Không có thông báo** nào khi tạo SOS.
 - **File:** `INC/modules/sos/*`.
 
 ### F33 — Gửi hoàn thành chiến dịch và cộng đồng xác nhận
-1. Manager (bảng `campaign_managers`): `PUT /campaigns/:id/mark-done`:
+1. Người quản lý campaign (BR-159): `PUT /campaigns/:id/mark-done`:
    - Campaign phải ở ACTIVE hoặc INREVIEW.
    - Mọi task đã COMPLETED (campaign 0 task vẫn qua).
    - → **WAITING_CONFIRMED (7)**.
@@ -856,7 +858,7 @@ sequenceDiagram
 ```
 
 ### F35 — Submission kết quả chiến dịch
-- Manager: `POST /campaigns/:id/submissions` → INREVIEW (9). Người nộp thêm kết quả: `POST /submissions/:id/results {title, mediaUrls[]}`.
+- Người quản lý campaign: `POST /campaigns/:id/submissions` → INREVIEW (9). Người nộp thêm kết quả: `POST /submissions/:id/results {title, mediaUrls[]}`.
 - Manager duyệt: `PUT /submissions/:id/process` → APPROVED (14) hoặc REJECTED (18). Người nộp có thể tự duyệt submission của mình.
 - **Không có side effect** lên campaign và không có thông báo.
 - **[CHƯA HOÀN THIỆN]:**

@@ -20,7 +20,7 @@ Sep 26, 2026 · @Minh
 > - **Người đại diện pháp lý (2026-09-27)**: không được bỏ trống. Thu hồi LR hoặc LR tự hạ vai phải chọn **người thay** (owner có sẵn, tài khoản có sẵn hoặc email mới); người thay xác nhận qua email, các owner còn lại đồng ý; khi áp dụng người thay thành LR, LR cũ thành MEMBER (BR-344). Owner bị hạ vai mặc định xuống MEMBER; ADMIN không có quyền campaign.
 > - Admin nền tảng can thiệp trực tiếp vai owner (tranh chấp, owner mất liên lạc): **để sau**.
 >
-> **Còn lại [CHƯA HOÀN THIỆN]:** Admin nền tảng can thiệp vai owner. Phase 4 — quyền quản lý chiến dịch theo vai (`CAMPAIGN_CREATE`, `CAMPAIGN_MANAGE_ANY` mới khai báo), sửa các chỗ thiếu kiểm quyền campaign / SOS, lọc trang chiến dịch theo ngữ cảnh. Vòng đời riêng của dấu tích xanh.
+> **Còn lại [CHƯA HOÀN THIỆN]:** Admin nền tảng can thiệp vai owner. Vòng đời riêng của dấu tích xanh. (Phase 4 — quyền chiến dịch theo vai, kiểm quyền campaign / SOS, lọc `/campaigns/me` theo ngữ cảnh — đã làm 2026-09-27, xem [05-permissions.md §2.5](05-permissions.md).)
 >
 > **Điều chỉnh cho kiến trúc microservice** (tài liệu gốc viết như thể chỉ có một DB):
 > - `User` nằm ở identity-service; `Organization`, hồ sơ và membership nằm ở incident-service. `OrgMembership` = bảng `organization_members` sẵn có, thêm cột `role`.

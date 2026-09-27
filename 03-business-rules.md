@@ -134,7 +134,7 @@
 
 ## 5b. Phân quyền tổ chức và lời mời thành viên
 
-> Dải mã 330–349. Ma trận: `DC/org-permissions.ts`. Kiểm tra: `INC/modules/organization/org-access.service.ts`. Hằng số: `ORG_INVITATION_TTL_DAYS = 7` (`DC/organization-trust.ts`). Quyền campaign theo vai **chưa áp dụng** (phase 4).
+> Dải mã 330–349. Ma trận: `DC/org-permissions.ts`. Kiểm tra: `INC/modules/organization/org-access.service.ts`. Hằng số: `ORG_INVITATION_TTL_DAYS = 7` (`DC/organization-trust.ts`). Quyền campaign theo vai (`CAMPAIGN_CREATE`, `CAMPAIGN_MANAGE_ANY`) áp dụng ở §8 (BR-151, BR-159).
 
 | ID | Rule | Áp dụng ở đâu | Hệ quả khi vi phạm | File |
 |---|---|---|---|---|
@@ -191,23 +191,28 @@
 | ID | Rule | Áp dụng ở đâu | Hệ quả khi vi phạm | File |
 |---|---|---|---|---|
 | BR-150 | Tạo campaign: organizationId là UUID; title bắt buộc; banner ≤ 2048; ngày theo ISO8601; detailAddress ≤ 255; toạ độ hợp lệ; radiusKm ≥ 0; difficulty là số nguyên ≥ 1 | `POST /api/v1/campaigns` | 400 | `campaign.controller.ts > createCampaign` |
-| BR-151 | Chỉ người có vai owner (`LEGAL_REPRESENTATIVE` / `OWNER`) của tổ chức được tạo campaign; tổ chức phải tồn tại (không xét status) | tạo campaign | 404 / 403 "Only an organization owner can create campaigns" | `campaign.service.ts > createCampaign()`, `organization_member.repository.ts > isOwner()` |
+| BR-151 | Chỉ thành viên có `OrgPermission.CAMPAIGN_CREATE` (vai `LEGAL_REPRESENTATIVE` / `OWNER` / `CAMPAIGN_MANAGER`) của tổ chức được tạo campaign; tổ chức phải tồn tại (không xét status) | tạo campaign | 404 / 403 `ORG_PERMISSION_DENIED` | `campaign.service.ts > createCampaign()`, `INC/modules/organization/org-access.service.ts > assertOrgPermission()` |
 | BR-152 | difficulty phải có tier tương ứng ở reward-service | tạo, sửa campaign | 400 "Invalid campaign difficulty…" | `createCampaign()`, `updateCampaign()` |
 | BR-153 | Campaign mới có status PENDING (12); người tạo tự động là manager | tạo campaign | — | `createCampaign()` |
-| BR-154 | Chỉ `createdBy` được sửa hoặc xoá campaign; sửa có thể đặt status bất kỳ; xoá thì gỡ report | `PUT /:id`, `DELETE /:id` | 403 "Only campaign manager can modify campaign" | `updateCampaign()`, `deleteCampaign()`, `ensureOwner()` |
+| BR-154 | Sửa campaign: người quản lý (BR-159); sửa có thể đặt status bất kỳ. Xoá: người tạo hoặc LR / OWNER của tổ chức (đều phải còn là thành viên active); xoá thì gỡ report | `PUT /:id`, `DELETE /:id` | 403 `CAMPAIGN_PERMISSION_DENIED` | `updateCampaign()`, `deleteCampaign()`, `campaign-access.service.ts > assertCanManage(), assertCanDelete()` |
+| BR-155 | Manager của campaign phải là thành viên active của tổ chức sở hữu campaign (user không tồn tại cũng bị chặn) | `POST /:id/add-managers`, `managerIds` của `PUT /:id` | 422 `CAMPAIGN_MANAGER_NOT_MEMBER` | `campaign_manager.service.ts > assertAllMembers()` |
+| BR-156 | Không gỡ được người tạo khỏi danh sách manager; thêm lại người từng bị gỡ thì khôi phục dòng cũ | `POST /:id/remove-manager`, `add-managers` | 422 `CANNOT_REMOVE_CAMPAIGN_CREATOR` | `removeManager()`, `campaign_manager.repository.ts > assignManager()` (upsert) |
+| BR-157 | Kết thúc membership (bị gỡ, tự rời, owner tự rút lui không giữ vai, bị gỡ qua owner change) thì xoá mềm mọi dòng `campaign_managers` của người đó trong các campaign của tổ chức, cùng transaction. Hạ vai thì không gỡ | membership | — | `campaign_manager.repository.ts > removeFromOrganizationCampaigns()`, `organization_member.repository.ts > softDeleteMembership()`, `organization.service.ts > ownerStepOut()`, `owner-change-executor.ts > demoteOrRemove()` |
+| BR-158 | Danh sách volunteer đã duyệt: chỉ người quản lý campaign (BR-159), volunteer có join request APPROVED của campaign, hoặc platform admin | `GET /campaigns/volunteers/approved` | 404 / 403 `CAMPAIGN_PERMISSION_DENIED` | `campaign-access.service.ts > assertCanViewVolunteers()` |
+| BR-159 | Người quản lý campaign = thành viên active của tổ chức sở hữu campaign **và** (người tạo, hoặc có dòng active trong `campaign_managers`, hoặc vai có `CAMPAIGN_MANAGE_ANY` = LR / OWNER). Rời tổ chức là mất quyền, kể cả người tạo. Response trả `canManageCampaign`, `canDeleteCampaign` | mọi thao tác quản lý campaign | 403 `CAMPAIGN_PERMISSION_DENIED` (task, QR: 403 `FORBIDDEN` kèm message riêng) | `INC/modules/campaign/campaign-access.service.ts > compute()` |
 | BR-160 | Admin duyệt (→ 1) chỉ từ {12, 4, 5, 2}; ban (→ 2) chỉ từ {12, 4, 5, 1}, bắt buộc lý do ≤ 5000; đang ACTIVE mà duyệt lại thì no-op | `PUT /campaigns/:id/verify` | 400 | `adminVerifyCampaign()` |
 | BR-161 | Duyệt campaign có toạ độ thì mời người dân trong bán kính **5 km** (trừ admin, người tạo, manager) | verify | — | `notifyNearbyCitizensToJoinApprovedCampaign()` |
 | BR-162 | Ban campaign sẽ gỡ các report (INPROCESS → TODO) | verify status 2 | — | `banCampaignAndUnlinkReports()` |
-| BR-165 | Gửi hoàn thành: người gửi phải có trong bảng manager; campaign ở ACTIVE hoặc INREVIEW; **mọi task đã COMPLETED** | `PUT /:id/mark-done` | 400 "Some tasks is not completed"; 500 khi status sai | `submitCampaignCompletionForAdminApproval()` |
+| BR-165 | Gửi hoàn thành: người gửi là người quản lý (BR-159); campaign ở ACTIVE hoặc INREVIEW; **mọi task đã COMPLETED** | `PUT /:id/mark-done` | 403 `CAMPAIGN_PERMISSION_DENIED`; 400 "Some tasks is not completed"; 500 khi status sai | `submitCampaignCompletionForAdminApproval()` |
 | BR-166 | Duyệt hoàn thành chỉ khi campaign ở WAITING_CONFIRMED (7); từ chối bắt buộc lý do | `PUT /:id/completion-review` | 400 | `adminFinalizeCampaignCompletion()`, `adminRejectCampaign()` |
 | BR-167 | Điểm thưởng hoàn thành = `tier.greenPoints` cho mỗi volunteer **vừa được APPROVED vừa đã check-in**; không có ai đủ điều kiện thì không phát event | completion-review approve | — | `adminFinalizeCampaignCompletion()` |
 | BR-168 | Duyệt hoàn thành sẽ chuyển report và SOS của campaign sang COMPLETED; từ chối thì campaign trở về ACTIVE | completion-review | — | như trên |
 | BR-170 | Xin tham gia: campaign phải tồn tại (không xét status); người xin chưa có yêu cầu nào chưa bị xoá | `POST /campaigns/volunteers/join-requests` | 404; 409 "Join request already exists" | `campaign_joining_request.service.ts > createJoinRequest()` |
-| BR-171 | Chỉ manager (có trong bảng) được xem và xử lý yêu cầu; yêu cầu phải PENDING | `GET/PUT /volunteers/join-requests(/process)` | 403; 409 | `processJoinRequest()` |
+| BR-171 | Chỉ người quản lý campaign (BR-159) được xem và xử lý yêu cầu; yêu cầu phải PENDING | `GET/PUT /volunteers/join-requests(/process)` | 403 `CAMPAIGN_PERMISSION_DENIED`; 409 | `getJoinRequests()`, `processJoinRequest()` |
 | BR-172 | Duyệt tham gia phải còn chỗ: số APPROVED < `maxVolunteers` của tier (null nghĩa là không giới hạn) | process approve | 400 "Campaign volunteer capacity exceeded…" | `INC/modules/reward/reward-service.client.ts > assertCampaignHasCapacityForJoinApproval()` |
 | BR-173 | Từ chối tham gia = xoá mềm yêu cầu, nên người đó có thể xin lại ngay | process reject | — | `processJoinRequest()` |
 | BR-174 | Huỷ yêu cầu tham gia: chỉ chính chủ, khi PENDING | `DELETE /volunteers/join-requests/cancel` | 403 / 409 | `cancelJoinRequest()` |
-| BR-175 | Thêm hoặc gỡ manager, CRUD task, giao task, tạo QR: `createdBy` hoặc manager (`canManageCampaign`) | các endpoint manager/task/QR | 403 | `campaign_manager.service.ts > canManageCampaign()` |
+| BR-175 | Thêm hoặc gỡ manager, CRUD task, giao task, tạo QR: người quản lý campaign (BR-159) | các endpoint manager/task/QR | 403 | `campaign_manager.service.ts > canManageCampaign()` → `campaignAccessService.canManage()` |
 | BR-176 | Task: title bắt buộc; priority 1..3 (mặc định 2); task mới ở TODO; lần đầu giao thì chuyển INPROCESS | tạo, giao task | 400 | `campaign_task.service.ts` |
 | BR-177 | Chỉ giao task cho volunteer đã APPROVED, và không giao trùng | `POST /tasks/:id/assign` | 403 / 409 | `assignTask()` |
 | BR-178 | Kết quả task: volunteer được giao hoặc manager được cập nhật; file bị thay toàn bộ | `PUT /tasks/:id` (result) | 403 | `updateTaskResult()` |
@@ -215,8 +220,9 @@
 | BR-180 | QR điểm danh chỉ tạo được khi campaign ACTIVE; JWT TTL 1 giờ | `POST /:id/attendance-qr` | 400 / 403 | `campaign_attendance.service.ts > issueAttendanceQr()` |
 | BR-181 | Check-in: token đúng campaign, campaign ACTIVE, người quét đã APPROVED; mỗi người check-in 1 lần | `POST /:id/attendance-check-in` | 400 / 403 | `checkInWithQrToken()` |
 | BR-182 | Xác nhận sạch: value ∈ {1, -1}; campaign ở 7 hoặc 17; gửi lại cùng giá trị thì huỷ (thành 0) | `POST /:id/completion-verification` | 400 | `campaign_completion_verification.service.ts > submit()` |
-| BR-183 | Submission: chỉ manager được tạo và duyệt; chỉ người nộp được thêm kết quả; chỉ duyệt khi đang ở 9, 6 hoặc 12 | submission endpoints | 403 / 409 | `campaign_submission.service.ts` |
+| BR-183 | Submission: chỉ người quản lý campaign (BR-159) được tạo và duyệt; chỉ người nộp được thêm kết quả; chỉ duyệt khi đang ở 9, 6 hoặc 12 | submission endpoints | 403 / 409 | `campaign_submission.service.ts` |
 | BR-184 | Danh sách phân trang: page ≥ 1, limit 1..100; by-ids tối đa 100 UUID | các GET campaign | 400 | `campaign.controller.ts` |
+| BR-185 | `GET /campaigns/my?is_owner=true` trả campaign user tạo, quản lý, **và** mọi campaign của tổ chức user có vai LR / OWNER | `GET /campaigns/my` | — | `campaign.repository.ts > findManyPaginated()` |
 
 ## 9. SOS
 
@@ -224,7 +230,7 @@
 |---|---|---|---|---|
 | BR-190 | SOS: campaignId là UUID; content không rỗng, ≤ 2000; phone khớp `^\+?\d{7,15}$`; campaign tồn tại, **ACTIVE** và có toạ độ | `POST /api/v1/sos` | 400 / 404 | `INC/modules/sos/sos.controller.ts`, `sos.service.ts > create()` |
 | BR-191 | SOS lấy toạ độ và địa chỉ của campaign, status=1 | tạo SOS | — | `create()` |
-| BR-192 | Giải quyết SOS: id là số nguyên ≥ 1; đã COMPLETED thì no-op; không kiểm tra quyền | `PUT /api/v1/sos/:id/solved` | 400 / 404 | `solveSos()` |
+| BR-192 | Giải quyết SOS: id là số nguyên ≥ 1; chỉ platform admin hoặc người quản lý campaign của SOS (BR-159); đã COMPLETED thì no-op | `PUT /api/v1/sos/:id/solved` | 400 / 404 / 403 `SOS_PERMISSION_DENIED` | `sos.service.ts > solveSos()` |
 
 ## 10. Thông báo
 

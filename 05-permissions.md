@@ -55,7 +55,7 @@
 
 - **Role ở identity:** `ADMIN`, `USER` (role `ORG_OWNER` và tài khoản `accountType = ORG` đã bị xoá bởi migration `20260926100000_drop_org_accounts`). Hệ thống permission set tồn tại nhưng **không được dùng để phân quyền** (`ID/middleware/authorize.middleware.ts` không được route nào gọi).
 - **Kiểm tra admin:** tất cả đều là `req.user.role.toLowerCase() === "admin"`, viết lặp lại ở từng controller hoặc middleware (identity `requireAdmin`, reward `requireAdmin`, incident inline trong từng controller).
-- **Quyền theo ngữ cảnh** (lưu ở incident): vai trong tổ chức (`organization_members.role`: `LEGAL_REPRESENTATIVE` và `OWNER` là **owner**, ngoài ra `ADMIN`, `CAMPAIGN_MANAGER`, `MEMBER` — gán bằng "đổi vai", xem §2.3). Quyền quản lý tổ chức suy ra từ vai theo **ma trận duy nhất** `DC/org-permissions.ts` và được kiểm tra qua `INC/modules/organization/org-access.service.ts > assertOrgPermission()` (đọc DB mỗi request, không có ngữ cảnh tổ chức trong JWT). Quyền campaign vẫn theo `campaign.createdBy`, manager (`campaign_managers`), owner tổ chức khi tạo — **chưa đổi cho tới phase 4**. Ngoài ra: volunteer APPROVED, chủ report, người được giao task.
+- **Quyền theo ngữ cảnh** (lưu ở incident): vai trong tổ chức (`organization_members.role`: `LEGAL_REPRESENTATIVE` và `OWNER` là **owner**, ngoài ra `ADMIN`, `CAMPAIGN_MANAGER`, `MEMBER` — gán bằng "đổi vai", xem §2.3). Quyền quản lý tổ chức suy ra từ vai theo **ma trận duy nhất** `DC/org-permissions.ts` và được kiểm tra qua `INC/modules/organization/org-access.service.ts > assertOrgPermission()` (đọc DB mỗi request, không có ngữ cảnh tổ chức trong JWT). Quyền campaign theo `INC/modules/campaign/campaign-access.service.ts`: người tạo, manager (`campaign_managers`) hoặc LR / OWNER của tổ chức, với điều kiện còn là thành viên active; tạo campaign cần `CAMPAIGN_CREATE` (§2.5). Ngoài ra: volunteer APPROVED, chủ report, người được giao task.
 - **Phía client:** link Admin chỉ hiện khi `user.roleId === ADMIN_ROLE_ID` (UUID cứng trong `FE/constants/roles.ts`). Guard trong `AdminLayout` **bị comment out**, nên mọi user đăng nhập đều vào được `/admin/*`. Việc chặn thực sự nằm ở API.
 
 ## 2. Ma trận phân quyền
@@ -119,7 +119,7 @@ Cột:
 - REMOVE_OWNER: mọi owner trừ người đề xuất và người bị thu hồi đồng ý; tổ chức có 2 owner thì có hiệu lực ngay. Người bị thu hồi không phủ quyết được.
 - Owner tự hạ vai / rời: có hiệu lực ngay khi còn owner khác.
 
-`CAMPAIGN_CREATE` / `CAMPAIGN_MANAGE_ANY` mới **khai báo** trong ma trận và trả trong `permissions`; `createCampaign()` vẫn chỉ cho owner và quyền quản lý campaign chưa theo vai — **[CHƯA HOÀN THIỆN] phase 4**.
+`CAMPAIGN_CREATE` được kiểm ở `createCampaign()` (`orgAccessService.assertOrgPermission()`); `CAMPAIGN_MANAGE_ANY` cho LR / OWNER quản lý mọi campaign của tổ chức (`INC/modules/campaign/campaign-access.service.ts`, xem §2.5).
 
 Mọi response tổ chức có người xem (`GET /:id`, `/by-slug/:slug`, `/`, `/my`) kèm `my_role`, `is_owner`, `is_member` và `permissions { can_edit_org, can_approve_members, can_invite, can_manage_members, can_propose_owners, can_create_campaign, can_manage_all_campaigns, assignable_roles }` (`permissionsFor(role)`); client ẩn / hiện nút theo object này.
 
@@ -164,31 +164,35 @@ Mọi response tổ chức có người xem (`GET /:id`, `/by-slug/:slug`, `/`, 
 
 ### 2.5 Chiến dịch
 
-Cột **Owner tổ chức** (membership vai `LEGAL_REPRESENTATIVE` / `OWNER`) dùng cho hành động tạo campaign. Cột **createdBy** là người đã tạo campaign. Cột **Manager** là người có trong `campaign_managers` (người tạo tự động được thêm vào bảng này). Cột **Volunteer** là người có join request APPROVED.
+Một nguồn quyền: `INC/modules/campaign/campaign-access.service.ts > CampaignAccessService` (BR-159). Mọi quyền quản lý đòi người đó **đang là thành viên active** của tổ chức sở hữu campaign; rời hoặc bị gỡ khỏi tổ chức là mất quyền, kể cả người tạo, và dòng `campaign_managers` của họ bị xoá mềm (BR-157).
+
+Cột **Owner tổ chức** là thành viên vai `LEGAL_REPRESENTATIVE` / `OWNER` của tổ chức sở hữu campaign (`CAMPAIGN_MANAGE_ANY`). Cột **createdBy** là người đã tạo campaign. Cột **Manager** là người có dòng active trong `campaign_managers` (người tạo tự động được thêm; manager phải là thành viên active, BR-155). Cột **Volunteer** là người có join request APPROVED. Cột **Admin** là platform admin (không phải thành viên tổ chức). "Quản lý" = `canManage` (Owner tổ chức, createdBy hoặc Manager); lỗi chung là 403 `CAMPAIGN_PERMISSION_DENIED`.
 
 | Hành động | User | Owner tổ chức | createdBy | Manager | Volunteer | Admin | Nơi kiểm tra |
 |---|---|---|---|---|---|---|---|
-| Tạo campaign | ❌ | ✅ | | | | ❌ (trừ khi là owner) | `createCampaign()`, `isOwner()` |
+| Tạo campaign | ❌ | ✅ | | | | ❌ (trừ khi có vai) | `createCampaign()`, `assertOrgPermission(CAMPAIGN_CREATE)`: vai LR / OWNER / CAMPAIGN_MANAGER; sai → 403 `ORG_PERMISSION_DENIED` |
 | Xem danh sách, chi tiết (mọi status), task, manager, submission | 🔓 ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | `authenticate` |
-| Sửa campaign (kể cả `status`, report, manager) | ❌ | | ✅ 🔓 (đổi được status) | ❌ | ❌ | ❌ | `ensureOwner()` |
-| Xoá campaign | ❌ | | ✅ | ❌ | ❌ | ❌ | `ensureOwner()` |
+| Sửa campaign (kể cả `status`, report, manager) | ❌ | ✅ 🔓 (đổi được status) | ✅ 🔓 | ✅ 🔓 | ❌ | ❌ | `campaignAccessService.assertCanManage()` |
+| Xoá campaign | ❌ | ✅ | ✅ | ❌ | ❌ | ❌ | `assertCanDelete()` |
 | Duyệt hoặc ban campaign | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | `campaign.controller.ts > adminVerifyCampaign` |
-| Thêm hoặc gỡ manager | ❌ | | ✅ | ✅ | ❌ | ❌ | `canManageCampaign()` |
-| Tạo, sửa, xoá, giao task | ❌ | | ✅ | ✅ | ❌ | ❌ | `canManageCampaign()` |
-| Cập nhật kết quả task | ❌ | | ✅ | ✅ | ⚠️ (task được giao) | ❌ | `updateTaskResult()` |
+| Thêm hoặc gỡ manager | ❌ | ✅ | ✅ | ✅ | ❌ | ❌ | `assertCanManage()`; người được thêm phải là thành viên (422 `CAMPAIGN_MANAGER_NOT_MEMBER`); không gỡ được người tạo (422 `CANNOT_REMOVE_CAMPAIGN_CREATOR`) |
+| Tạo, sửa, xoá, giao task | ❌ | ✅ | ✅ | ✅ | ❌ | ❌ | `canManageCampaign()` → `campaignAccessService.canManage()` |
+| Cập nhật kết quả task | ❌ | ✅ | ✅ | ✅ | ⚠️ (task được giao) | ❌ | `updateTaskResult()` |
 | Đổi status task qua `/status` | ❌ | | | | ⚠️ (task được giao) | ❌ | `updateTaskStatusByVolunteer()` |
 | Xin tham gia | ✅ | ✅ | ✅ (tự xin được) | ✅ | | ✅ | `createJoinRequest()` |
-| Xem và xử lý yêu cầu tham gia | ❌ | | ⚠️ (chỉ khi còn trong bảng manager) | ✅ | ❌ | ❌ | `isManager` |
-| Xem danh sách volunteer đã duyệt | 🔓 | ✅ | ✅ | ✅ | ✅ | ✅ | Kiểm tra bị comment out |
-| Tạo QR điểm danh | ❌ | | ✅ | ✅ | ❌ | ❌ | `canManageCampaign()` |
+| Xem và xử lý yêu cầu tham gia | ❌ | ✅ | ✅ | ✅ | ❌ | ❌ | `assertCanManage()` |
+| Xem danh sách volunteer đã duyệt | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | `assertCanViewVolunteers()` |
+| Tạo QR điểm danh | ❌ | ✅ | ✅ | ✅ | ❌ | ❌ | `canManageCampaign()` |
 | Check-in | ❌ | | | | ✅ | | `checkInWithQrToken()` |
-| Gửi hoàn thành (mark-done) | ❌ | | ⚠️ (chỉ khi còn trong bảng manager) | ✅ | ❌ | ❌ | `isManager` |
+| Gửi hoàn thành (mark-done) | ❌ | ✅ | ✅ | ✅ | ❌ | ❌ | `assertCanManage()` |
 | Xác nhận sạch (completion-verification) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | `authenticate` |
 | Duyệt hoặc từ chối hoàn thành | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | `adminReviewCampaignCompletion` |
-| Tạo và duyệt submission | ❌ | | ⚠️ | ✅ (tự duyệt được) | ❌ | ❌ | `isManager` |
+| Tạo và duyệt submission | ❌ | ✅ | ✅ | ✅ (tự duyệt được) | ❌ | ❌ | `assertCanManage()` |
 | Danh sách "multi-submission review" | ❌ | | | | | ✅ | controller |
 | Gửi SOS, xem SOS | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | `authenticate` |
-| Giải quyết SOS | 🔓 | 🔓 | 🔓 | ✅ | 🔓 | ✅ | Không kiểm tra quyền |
+| Giải quyết SOS | ❌ | ✅ | ✅ | ✅ | ❌ | ✅ | `sos.service.ts > solveSos()`: admin hoặc `canManage` campaign của SOS; sai → 403 `SOS_PERMISSION_DENIED` |
+
+`GET /campaigns/my?is_owner=true` của Owner tổ chức gồm cả mọi campaign của tổ chức đó (BR-185). Response campaign có người xem kèm `can_manage_campaign`, `can_delete_campaign`.
 
 ### 2.6 Điểm, quà tặng, gamification (reward)
 
@@ -232,7 +236,7 @@ Chi tiết từng vấn đề ở [99-open-issues.md](99-open-issues.md) mục A
 3. `/api/v1/roles/*` không yêu cầu đăng nhập.
 4. `request-password-reset` trả token reset trong response.
 5. `PATCH /admin/gift-redemptions/:id/status` thiếu kiểm tra admin.
-6. `PUT /campaigns/:id` cho người tạo đổi `status` tuỳ ý.
-7. Danh sách volunteer đã duyệt, giải quyết SOS và trạng thái job AI không kiểm tra quyền (campaign / SOS để phase 4). Danh sách thành viên tổ chức cũng không có guard — cần xác nhận.
+6. `PUT /campaigns/:id` cho người quản lý campaign đổi `status` tuỳ ý.
+7. Trạng thái job AI không kiểm tra quyền. Danh sách thành viên tổ chức cũng không có guard — cần xác nhận. (Danh sách volunteer đã duyệt và giải quyết SOS đã kiểm quyền từ 2026-09-27.)
 8. Guard `/admin` phía client bị comment out.
 9. ~~Refresh token đổi claim `role` thành UUID~~ — đã sửa (`refreshAccessToken()` dùng tên role).

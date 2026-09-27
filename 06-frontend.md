@@ -79,9 +79,9 @@ Nguồn: `ecolink-client/src/routes/index.tsx > router`. Tổng: **45 route entr
 |---|---|---|---|---|---|
 | `/` | `app/(pages)/(main)/(hompage)/page.tsx > Home` | Main | Không (nếu có token thì gọi `getMe` để làm mới user) | — | Không |
 | `/campaigns` | `app/(pages)/(main)/campaigns/(search)/page.tsx` | Main | Tab explore: tuỳ server `GET /api/v1/campaigns`; tab `?tab=mine` gọi `/campaigns/my` (server `authenticate`) | — | Không |
-| `/campaigns/create` | `app/(pages)/(main)/campaigns/create/page.tsx > CreateCampaignPage` | Main | Có (qua API 401) | UI chỉ cho chọn tổ chức mình sở hữu (`is_owner: true`) | Không |
+| `/campaigns/create` | `app/(pages)/(main)/campaigns/create/page.tsx > CreateCampaignPage` | Main | Có (qua API 401) | UI chỉ cho chọn tổ chức mình có vai LR / OWNER / CAMPAIGN_MANAGER và `permissions.can_create_campaign`; nhận `?organizationId=` để chọn sẵn | Không |
 | `/campaigns/me` | `app/(pages)/(main)/campaigns/me/page.tsx` | Main | Có (qua API 401) | — | Không |
-| `/campaigns/:id` | `app/(pages)/(main)/campaigns/[id]/page.tsx > CampaignDetailPage` | Main | Tuỳ server `GET /campaigns/:id` | Hành động ẩn/hiện theo owner/manager (mục 9) | Không |
+| `/campaigns/:id` | `app/(pages)/(main)/campaigns/[id]/page.tsx > CampaignDetailPage` | Main | Tuỳ server `GET /campaigns/:id` | Hành động ẩn/hiện theo `can_manage_campaign` (mục 7) | Không |
 | `/incidents` | `app/(pages)/(main)/incidents/(search)/page.tsx` | Main | Có (qua API 401 — `GET /reports/search` có `authenticate`, `ecolink-server/services/incident-service/src/modules/report/report.routes.ts`) | — | Không |
 | `/incidents/create` | `app/(pages)/(main)/incidents/create/page.tsx` | Main | Có (qua API 401 khi submit) | — | Không |
 | `/incidents/me` | `app/(pages)/(main)/incidents/me/page.tsx` | Main | Có (qua API 401) | — | Không |
@@ -183,13 +183,13 @@ Ghi chú: `(hook)` = hàm trong `apis/`, path là path gửi tới `VITE_API_URL
 |---|---|---|
 | `/campaigns` tab explore | `useGetCampaigns` (`apis/campaign/getCampaigns.ts`) | GET `/api/v1/campaigns` |
 | `/campaigns?tab=mine` | `useGetMyCampaigns` | GET `/api/v1/campaigns/my` |
-| `/campaigns/create` | `useGetMyOrganizations` qua `components/form/SelectListOrganization.tsx` | GET `/api/v1/organizations/my?page=1&limit=100&is_owner=true` |
+| `/campaigns/create` | `useGetMyOrganizations` qua `components/form/SelectListOrganization.tsx` (`roles={CAMPAIGN_CREATOR_ROLES}`) và `hooks/useCampaignCreatorOrganizations.ts` (cùng params nên chung cache; lọc `permissions.can_create_campaign`). Tổ chức mặc định: `?organizationId=` → `activeOrganizationId` của ngữ cảnh (nếu có trong danh sách tạo được) → trống (`campaigns/create/page.tsx`); `CampaignContext` chỉ gán khi form chưa có giá trị | GET `/api/v1/organizations/my?page=1&limit=100&roles=LEGAL_REPRESENTATIVE,OWNER,CAMPAIGN_MANAGER` |
 | | `useGetReports` (`apis/incident/getReport.ts`) — tab "explore" của IncidentList | GET `/api/v1/reports/search?page=1&limit=20&status=21 (TODO)` |
 | | `useGetSavedResources` (`apis/saved-resource/getSavedResource.ts`) — tab "saved" | GET `api/v1/incident/saved-resources?resource_type=report...` |
 | | `useSaveResource`, `useUpvote`, `useDownvote` (qua `modules/ReportDetailCard`) | POST `/api/v1/incident/saved-resources/save`; POST `/api/v1/incident/votes/upvote` / `downvote` |
 | | `uploadToCloudinary` (banner) → `useCreateCampaign` (`apis/campaign/createCampaign.ts`) | Cloudinary → POST `/api/v1/campaigns` → push `/campaigns/me` |
 | | Nominatim (`LeafletAddress.tsx`) | GET `https://nominatim.openstreetmap.org/reverse` và `/search` |
-| `/campaigns/me` | `useGetMyCampaigns` (`app/(pages)/(main)/campaigns/me/_context/CampaignMeContext.tsx`), `useGetMyOrganizations` (filter) | GET `/api/v1/campaigns/my`; GET `/api/v1/organizations/my?is_owner=true` |
+| `/campaigns/me` | `useGetMyCampaigns` (`app/(pages)/(main)/campaigns/me/_context/CampaignMeContext.tsx`); filter tổ chức `SelectListOrganization allOptions roles={ALL_ORG_MEMBER_ROLES}` (`_components/FormFilter.tsx`): URL không có `organizationId` → lọc theo `activeOrganizationId`; chọn "All" ghi `organizationId=-1` vào URL để bỏ lọc mà không bị mặc định ghi đè. Nút "Add Campaign" chỉ hiện khi `useCampaignCreatorOrganizations()` có ≥ 1 tổ chức (`campaigns/me/page.tsx`) | GET `/api/v1/campaigns/my?is_owner=true&organizationId=` (server: BR-185); GET `/api/v1/organizations/my?roles=LEGAL_REPRESENTATIVE,OWNER,ADMIN,CAMPAIGN_MANAGER,MEMBER`; GET `/api/v1/organizations/my?roles=LEGAL_REPRESENTATIVE,OWNER,CAMPAIGN_MANAGER` |
 | `/campaigns/:id` | `useGetCampaignById` (`apis/campaign/campaignById.ts`) | GET `/api/v1/campaigns/:id` |
 | | `useGetMyJoinRequests` (`apis/campaign/joinCampaign.ts`) — chỉ khi `request_status=PENDING` mà thiếu `join_request_id` | GET `/api/v1/campaigns/volunteers/join-requests/my?campaign_id=&status=12` |
 | | `useJoinCampaign` | POST `/api/v1/campaigns/volunteers/join-requests` body `{ campaign_id }` |
@@ -198,11 +198,12 @@ Ghi chú: `(hook)` = hàm trong `apis/`, path là path gửi tới `VITE_API_URL
 | | `issueCampaignAttendanceQr` (`apis/campaign/campaignAttendance.ts`) | POST `/api/v1/campaigns/:id/attendance-qr` → sinh QR tới `/campaigns/:id?attendance=<token>` |
 | | `checkInCampaignAttendance` (khi URL có `?attendance=`) | POST `/api/v1/campaigns/:id/attendance-check-in` body `{ token }` |
 | | `useSubmitCompletionVerification` (`apis/campaign/submitCompletionVerification.ts`) | POST `/api/v1/campaigns/:id/completion-verification` body `{ value: 1 | -1 }` |
-| | `useGetCampaignVolunteer` (`apis/campaign/campaignVolunteer.ts`) | GET `/api/v1/campaigns/volunteers/approved?campaignId=&limit=100` |
-| | `useGetCampaignManager` (`apis/campaign/campaignManager.ts`) | GET `/api/v1/campaigns/:campaignId/managers?limit=100` |
+| | `useGetCampaignVolunteer` (`apis/campaign/campaignVolunteer.ts`) — chỉ gọi khi `can_manage_campaign`, `request_status === APPROVED` hoặc là platform admin; người khác thấy câu "Only managers and approved volunteers can see the volunteer list." (`CurrentMember.tsx`) | GET `/api/v1/campaigns/volunteers/approved?campaignId=&limit=100&sortBy=createdAt&sortOrder=asc` |
+| | `useGetCampaignManager` (`apis/campaign/campaignManager.ts`) | GET `/api/v1/campaigns/:campaignId/managers?limit=100&sortBy=assignedAt&sortOrder=asc` |
+| | `useAddCampaignManagers` / `useRemoveCampaignManager` (`apis/campaign/campaignManager.ts`; thẻ Managers trong `CurrentMember.tsx`, chỉ khi `can_manage_campaign`): dialog "Add manager" dùng `AutoCompleteUser` với `organizationId` của campaign và `isUserDisabled={(u) => !u.is_member \|\| đã là manager}`; icon `TbUserMinus` + tooltip trên từng manager trừ người tạo (có badge "Creator"), mở dialog xác nhận. Cả hai invalidate `['campaign-managers']` và `['campaign']` | POST `/api/v1/campaigns/:id/add-managers` body `{ user_ids }`; POST `/api/v1/campaigns/:id/remove-manager` body `{ user_id }`; GET `/api/v1/organizations/:id/user-search?q=` |
 | | `useGetCampaignTasks` / `useCreateCampaignTask` / `useUpdateCampaignTask` / `useDeleteCampaignTask` (`apis/campaign/campaignTask.ts`) | GET `/api/v1/campaigns/:id/tasks`; POST `/api/v1/campaigns/:id/tasks`; PUT `/api/v1/campaigns/tasks/:taskId`; DELETE `/api/v1/campaigns/tasks/:taskId` |
 | | `uploadMultipleImages` (evidence của task) | Cloudinary `image/upload` hoặc `video/upload` |
-| | `useGetJoinRequests` / `useProcessJoinCampaign` (tab Join requests, chỉ owner) | GET `/api/v1/campaigns/volunteers/join-requests?campaignId=&status=12`; PUT `/api/v1/campaigns/volunteers/join-requests/process` body `{ request_id, approved }` |
+| | `useGetJoinRequests` / `useProcessJoinCampaign` (tab Join requests, chỉ khi `can_manage_campaign`) | GET `/api/v1/campaigns/volunteers/join-requests?campaignId=&status=12`; PUT `/api/v1/campaigns/volunteers/join-requests/process` body `{ request_id, approved }` |
 
 ### 3.4 Incidents (reports)
 
@@ -226,7 +227,7 @@ Ghi chú: `(hook)` = hàm trong `apis/`, path là path gửi tới `VITE_API_URL
 | (OrganizationCard) | `useCreateOrganizationJoinRequest`, `useCancelJoinRequest`, `useLeaveOrganization` | POST `api/v1/organizations/:id/join-requests`; DELETE `api/v1/organizations/join-requests/cancel` body `{ request_id }`; DELETE `/api/v1/organizations/:id/members/me` |
 | `/organizations/:slug` | `useGetOrganizationBySlug` (`apis/organization/organizationBySlug.ts`) | GET `/api/v1/organizations/by-slug/:slug` |
 | | join/cancel/leave như trên (`.../organizations/[id]/_context/OrganizationDetailContext.tsx`) | |
-| | `useGetCampaigns` (tab campaign) | GET `/api/v1/campaigns?organization_id=...` |
+| | `useGetCampaigns` (tab campaign, `_components/CampaignList.tsx`); nút "Create campaign" khi `permissions.can_create_campaign`, dẫn tới `/campaigns/create?organizationId=<id>` | GET `/api/v1/campaigns?organizationId=...` |
 | | `useGetMembersByOrg` (`apis/organization/organizationById.ts`) | GET `/api/v1/organizations/:organization_id/members` |
 | | `useGetJoinRequestsByOrg` + `useProcessJoinRequest` (khi `permissions.can_approve_members`) | GET `/api/v1/organizations/:organization_id/join-requests`; PUT `api/v1/organizations/join-requests/process` |
 | | `useResendContactEmail` (`permissions.can_edit_org`, khi email chưa verify) | POST `/api/v1/organizations/:id/resend-contact-email` |
@@ -314,6 +315,8 @@ Tổng số file hàm (không tính `models/`): 70; trong đó `apis/auth/update
 | `getCampaignById` / `useGetCampaignById` | GET | `/api/v1/campaigns/:id` | `campaigns/[id]/_context/CampaignDetailContext.tsx` |
 | `markDoneCampaign` / `useMarkDoneCampaign` | PUT | `/api/v1/campaigns/:id/mark-done` | `campaigns/[id]/page.tsx` |
 | `getCampaignManager` / `useGetCampaignManager` | GET | `/api/v1/campaigns/:campaignId/managers` | `campaigns/[id]/_components/CurrentMember.tsx` |
+| `addCampaignManagers` / `useAddCampaignManagers` | POST | `/api/v1/campaigns/:campaignId/add-managers` | `CurrentMember.tsx` |
+| `removeCampaignManager` / `useRemoveCampaignManager` | POST | `/api/v1/campaigns/:campaignId/remove-manager` | `CurrentMember.tsx` |
 | `getCampaignTasks` / `useGetCampaignTasks` | GET | `/api/v1/campaigns/:campaignId/tasks` | `campaigns/[id]/_components/CampaignTask.tsx` |
 | `createCampaignTask` / `useCreateCampaignTask` | POST | `/api/v1/campaigns/:campaignId/tasks` | `components/client/shared/PopoverCreateUpdateTask.tsx` |
 | `updateCampaignTask` / `useUpdateCampaignTask` | PUT | `/api/v1/campaigns/tasks/:id` | `PopoverCreateUpdateTask.tsx` |
@@ -424,7 +427,7 @@ Ngoài `apis/` còn có các lời gọi trực tiếp: chat (`components/client
 
 ### 5.1b Ngữ cảnh tổ chức (Zustand)
 
-`ecolink-client/stores/useOrgContextStore.ts`: `activeOrganizationId | null`, persist localStorage, tự về `null` khi logout. `components/client/layout/OrgContextSwitcher.tsx` nằm trong menu user của `Header.tsx`: "Đang dùng với tư cách: Cá nhân / <tổ chức>", submenu radio liệt kê các tổ chức mình có vai (`useGetMyOrganizations`) kèm `RoleBadge`, lối tắt "Quản lý tổ chức"; tổ chức không còn trong danh sách thì tự về Cá nhân. Chỉ ảnh hưởng hiển thị (highlight ở `/organizations/me`); **không** gửi lên server — server kiểm quyền theo DB mỗi request. Trang campaign chưa dùng ngữ cảnh (phase 4).
+`ecolink-client/stores/useOrgContextStore.ts`: `activeOrganizationId | null`, persist localStorage, tự về `null` khi logout. `components/client/layout/OrgContextSwitcher.tsx` nằm trong menu user của `Header.tsx`: "Đang dùng với tư cách: Cá nhân / <tổ chức>", submenu radio liệt kê các tổ chức mình có vai (`useGetMyOrganizations`) kèm `RoleBadge`, lối tắt "Quản lý tổ chức"; tổ chức không còn trong danh sách thì tự về Cá nhân. **Không** gửi lên server — server kiểm quyền theo DB mỗi request. Nơi dùng: highlight ở `/organizations/me`; `/campaigns/me` mặc định lọc theo tổ chức ngữ cảnh (`CampaignMeContext.tsx > normalizeOrganizationId()`; `organizationId=-1` = chủ động chọn "All"); form `/campaigns/create` chọn sẵn tổ chức ngữ cảnh nếu người dùng tạo được campaign ở đó (sau `?organizationId=`). Trang `/campaigns` (explore) không lọc theo ngữ cảnh.
 
 ### 5.2 Lưu token ở đâu
 
@@ -535,14 +538,18 @@ Client chỉ có **1 role cứng**: `ADMIN_ROLE_ID = "40ed59d7-5d7c-4ab2-88a2-a2
 | Notification bell | có `user` trong store | `Header.tsx`, `NotificationMenu.tsx` (`enabled: Boolean(user)`) |
 | Toàn bộ `/admin/*` | chỉ cần `is_authenticated` (check role bị comment) | `src/layouts/AdminLayout.tsx` |
 | Chat AI | `has_hydrated && accessToken && VITE_API_URL`; ẩn trên `/maps` | `AiChatWidget.tsx > canChat`, `shouldHideOnRoute` |
-| Campaign detail — nút Join | không phải owner, `request_status` ≠ APPROVED và ≠ PENDING | `campaigns/[id]/page.tsx > CampaignDetailBody` |
-| — nút Cancel (hủy xin tham gia) | không phải owner, `request_status === PENDING` | như trên |
+| Campaign detail — nút Join | không `can_manage_campaign`, `request_status` ≠ APPROVED và ≠ PENDING | `campaigns/[id]/page.tsx > CampaignDetailBody` |
+| — nút Cancel (hủy xin tham gia) | không `can_manage_campaign`, `request_status === PENDING` | như trên |
 | — nút Verify (Clean/Not clean) | `campaign.status` ∈ {WAITING_CONFIRMED (7), COMPLETED (17)} (mọi user) | như trên |
-| — nút "Mark done" | `isCampaignOwner` (`campaign.owner.id === user.id`; `campaign.owner` giờ là **người tạo campaign**, server lấy từ `createdBy`) và status ∈ {ACTIVE (1), INREVIEW (9)} | như trên |
-| — banner "awaiting admin" | owner và status = WAITING_CONFIRMED | như trên |
-| — nút "Attendance QR" | `campaign.can_manage_campaign` (owner hoặc manager, do API trả) và status = ACTIVE | `page.tsx`, `CampaignAttendanceQrButton.tsx` |
-| — tab "Join requests" + badge đếm | chỉ `isCampaignOwner` (manager không thấy) | `campaigns/[id]/_components/CampaignTabs.tsx` |
-| — nút "Add task", sửa/xoá task | chỉ `isCampaignOwner`; sửa/xoá ẩn khi task `status === COMPLETED` | `CampaignTask.tsx`, `components/client/shared/CampaignTaskCard.tsx` |
+| — nút "Mark done" | `canManageCampaign` (= `campaign.can_manage_campaign` do API trả: người tạo, manager, hoặc LR / OWNER của tổ chức, đều phải còn là thành viên) và status ∈ {ACTIVE (1), INREVIEW (9)} | như trên, `_context/CampaignDetailContext.tsx` |
+| — banner "awaiting admin" | `canManageCampaign` và status = WAITING_CONFIRMED | như trên |
+| — nút "Attendance QR" | `canManageCampaign` và status = ACTIVE | `page.tsx`, `CampaignAttendanceQrButton.tsx` |
+| — tab "Join requests" + badge đếm | `canManageCampaign` | `campaigns/[id]/_components/CampaignTabs.tsx` |
+| — nút "Add task", sửa/xoá task | `canManageCampaign`; sửa/xoá ẩn khi task `status === COMPLETED` | `CampaignTask.tsx`, `components/client/shared/CampaignTaskCard.tsx` |
+| — danh sách volunteer (thẻ Members) | `canManageCampaign`, `request_status === APPROVED` hoặc `user.roleId === ADMIN_ROLE_ID`; không thì hiện câu giải thích, không gọi API | `CurrentMember.tsx` |
+| — nút "Add manager", icon gỡ manager | `canManageCampaign` (và campaign có `organization_id`); icon gỡ ẩn trên dòng người tạo | `CurrentMember.tsx` |
+| `/campaigns/me` — nút "Add Campaign" | Có ≥ 1 tổ chức với `permissions.can_create_campaign` (`useCampaignCreatorOrganizations`) | `campaigns/me/page.tsx`, `hooks/useCampaignCreatorOrganizations.ts` |
+| Organization detail — nút "Create campaign" (tab campaign) | `permissions.can_create_campaign` | `organizations/[id]/_components/CampaignList.tsx` |
 | Organization detail — tag "Your group" + `RoleBadge` | Có `my_role` (mọi vai) | `OrganizationDetailContext.tsx`, `HeroSection.tsx` |
 | Organization detail — nút "Edit group", "Resend contact email" | `permissions.can_edit_org` (resend thêm điều kiện có contact email và chưa verify) | `HeroSection.tsx`, `GeneralInformation.tsx` |
 | Organization detail — tab "Join requests" | `permissions.can_approve_members` | `OrganizationDetailTabs.tsx` |
@@ -554,7 +561,7 @@ Client chỉ có **1 role cứng**: `ADMIN_ROLE_ID = "40ed59d7-5d7c-4ab2-88a2-a2
 | — nút Join | `!is_owner`, `!is_member`, `joinListingShowsJoinButton(request_status)` | như trên, `modules/OrganizationCard/OrganizationCard.tsx` |
 | — nút Cancel | `joinListingShowsCancelButton(request_status)` | như trên |
 | — nút Leave | `is_member`; owner: xem dòng trên | như trên |
-| Chọn tổ chức khi tạo campaign / filter | chỉ tổ chức `is_owner: true` | `components/form/SelectListOrganization.tsx` |
+| Chọn tổ chức khi tạo campaign / filter | `SelectListOrganization` nhận prop `roles?: OrgMemberRole[]` (gửi `roles=` lên `/organizations/my`); không truyền thì giữ `is_owner: true` (admin campaigns). Form tạo: `CAMPAIGN_CREATOR_ROLES` (LR / OWNER / CAMPAIGN_MANAGER); filter `/campaigns/me`: `ALL_ORG_MEMBER_ROLES` | `components/form/SelectListOrganization.tsx`, `hooks/useCampaignCreatorOrganizations.ts > buildMyOrganizationsSelectParams()` |
 | Application status — "Withdraw" | status ∈ {DRAFT, AWAITING_OWNER_CONFIRMATION, PENDING_REVIEW, NEEDS_REVISION}; có dialog xác nhận | `organizations/apply/status/page.tsx` |
 | — bảng "Owner confirmations" | ẩn khi DRAFT; nút "Resend (n left)" khi AWAITING / NEEDS_REVISION, owner PENDING, còn lượt và qua `next_resend_at`; nút "Replace" khi NEEDS_REVISION và owner DECLINED / EXPIRED | `apply/_components/OwnerConfirmations.tsx` |
 | — "Continue your application" / "Edit application" | status ∈ {DRAFT, NEEDS_REVISION} | như trên; `apply/edit/page.tsx` chặn nếu khác |
@@ -584,7 +591,7 @@ Client chỉ có **1 role cứng**: `ADMIN_ROLE_ID = "40ed59d7-5d7c-4ab2-88a2-a2
 | Reset password | cần `?reset_token=` (thiếu → màn "Invalid Reset Token"); newPassword ≥ 6 | `reset-password/page.tsx` |
 | Activate account | cần `?token=`; newPassword ≥ 8 (comment: "identity-service rejects anything shorter"); confirm phải khớp | `activate-account/page.tsx` |
 | Tạo incident | title bắt buộc; ≥ 1 ảnh, tối đa 10 ảnh, chỉ `image/*`; ảnh nén (cạnh dài ≤ 1280px, JPEG quality 0.5); detailAddress bắt buộc; latitude/longitude bắt buộc (chọn trên bản đồ); severity 1–5 (mặc định 1); `waste_type` = mảng join bằng dấu phẩy | `incidents/create/_components/{Information,FileUpload,Address}.tsx`, `incidents/create/_services/incident.service.ts`, `libs/compressImage.ts`, `constants/severity.ts` |
-| Tạo campaign | organization bắt buộc (chỉ tổ chức sở hữu); title bắt buộc, ≤ 200 (cắt thêm khi gửi); detail_address ≤ 255 (tự cắt); difficulty clamp 1–4; banner ảnh crop + nén; `report_ids` chỉ gồm report `status === TODO (21)`; **start/end date không có rule bắt buộc hay so sánh** | `campaigns/create/_services/campaign.service.ts > transformToApiData()`, `GeneralInformation.tsx`, `LeafletAddress.tsx`, `constants/difficulty.ts` |
+| Tạo campaign | organization bắt buộc (chỉ tổ chức mình có vai LR / OWNER / CAMPAIGN_MANAGER); title bắt buộc, ≤ 200 (cắt thêm khi gửi); detail_address ≤ 255 (tự cắt); difficulty clamp 1–4; banner ảnh crop + nén; `report_ids` chỉ gồm report `status === TODO (21)`; **start/end date không có rule bắt buộc hay so sánh** | `campaigns/create/_services/campaign.service.ts > transformToApiData()`, `GeneralInformation.tsx`, `LeafletAddress.tsx`, `constants/difficulty.ts` |
 | Task (tạo/sửa) | title bắt buộc; status bắt buộc khi sửa (TODO/IN_PROGRESS/COMPLETED); scheduled_date, time from/to bắt buộc, to > from; khi status = COMPLETED phải có mô tả kết quả hoặc media; tối đa 20 file evidence; video ≤ 100 MB; ảnh được nén; chỉ image/video | `components/client/shared/PopoverCreateUpdateTask.tsx` |
 | SOS | content bắt buộc; phone bắt buộc, regex `/^[0-9+\s\-(). ]{7,20}$/` | `maps/_components/SOSForm.tsx` |
 | Đổi quà | phone `required`, `minLength=7`, `maxLength=32` (thuộc tính HTML); pickupLocation `required`, `maxLength=1000` | `gifts/_components/RedeemGiftDialog.tsx` |
@@ -624,7 +631,7 @@ Client chỉ có **1 role cứng**: `ADMIN_ROLE_ID = "40ed59d7-5d7c-4ab2-88a2-a2
 2. `ADMIN_ROLE_ID` là UUID cứng (`constants/roles.ts`) — phụ thuộc seed DB identity; đổi seed sẽ làm mất link Admin.
 3. Không có guard nào cho `/campaigns/create`, `/campaigns/me`, `/incidents/create`, `/incidents/me`, `/organizations/me`, `/profile/*`, `/maps`: chặn thật chỉ là 401 → redirect. Trang `/profile/account` với user ẩn danh không gọi API khi tải nên sẽ hiển thị form rỗng.
 4. Người đã đăng nhập vẫn vào được `/sign-in`, `/sign-up` (không redirect ngược).
-5. Campaign manager (`can_manage_campaign`) chỉ thấy nút Attendance QR; tab Join requests và quản lý task chỉ dành cho owner (`isCampaignOwner`) — cần xác nhận có đúng nghiệp vụ không (server có `add-managers`).
+5. ~~Campaign manager chỉ thấy nút Attendance QR~~ — đã sửa 2026-09-27: mọi nút quản lý ở trang chi tiết dùng `can_manage_campaign`; có UI thêm / gỡ manager.
 6. `IUpdateUserRequest` có trường `roleId` (`apis/user/updateUser.ts`) — client không gửi, nhưng cần xác nhận `PUT /api/v1/users/:id` phía identity không cho user tự đổi `roleId` (mass-assignment).
 7. Admin campaigns/incidents dùng list công khai `GET /api/v1/campaigns` và `GET /api/v1/reports/search` (không phải `/all`) — cần xác nhận admin có thấy đủ bản ghi mọi trạng thái (INACTIVE, PENDING...).
 8. `sign-in?redirect=` được `router.push` nguyên văn (không kiểm tra) (`sign-in/page.tsx > resolveRedirect()`); react-router chỉ điều hướng nội bộ nên rủi ro thấp, nhưng nên xác nhận.

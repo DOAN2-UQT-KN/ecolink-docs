@@ -1,7 +1,7 @@
 # 04 — Máy trạng thái
 
 > Mã số trạng thái theo `GlobalStatus` (`ecolink-server/shared/da2-constants/src/global-status.ts`). Xem bảng đầy đủ ở [01-data-model.md §6.1](01-data-model.md).
-> "Mgr(table)" nghĩa là người dùng có dòng trong `campaign_managers`. "canManage" nghĩa là `createdBy` hoặc manager (`campaign_manager.service.ts > canManageCampaign()`).
+> "canManage" nghĩa là người quản lý campaign: thành viên active của tổ chức sở hữu campaign và là người tạo, manager trong `campaign_managers`, hoặc LR / OWNER (`INC/modules/campaign/campaign-access.service.ts`, BR-159). "canDelete" = người tạo hoặc LR / OWNER.
 > Đường dẫn viết tắt giống [02-business-flows.md](02-business-flows.md).
 
 ## 1. Report (`reports.status`, `isVerify`, `aiVerified`)
@@ -29,8 +29,8 @@ stateDiagram-v2
 | PENDING / INACTIVE / … → TODO 21 (isVerify=true) | Admin | Chưa được duyệt, hoặc đang bị ban | Thông báo REPORT_APPROVED cho chủ report | `adminVerifyReport()` |
 | bất kỳ (≠ 2) → INACTIVE 2 | Admin | Có lý do | Thông báo REPORT_REJECTED. Từ 2 sang 2 thì chỉ đổi lý do | `adminBanReport()` |
 | bất kỳ (≠ 17) → COMPLETED 17 | Admin | Không kiểm tra trạng thái nguồn | Outbox REPORT_COMPLETION_GREEN_POINTS; thông báo REPORT_STATUS | `adminMarkReportDone()` |
-| TODO 21 → INPROCESS 22 | Owner tổ chức (tạo campaign) hoặc `createdBy` (sửa campaign) | Report chưa thuộc campaign nào | Gán campaignId | `INC/modules/campaign/campaign.service.ts > assignReportsToCampaign()` |
-| INPROCESS 22 → TODO 21 | `createdBy` (xoá campaign / đổi reportIds) hoặc admin (ban campaign) | — | campaignId = null | `deleteCampaign()`, `banCampaignAndUnlinkReports()`, `updateCampaign()` |
+| TODO 21 → INPROCESS 22 | Người có `CAMPAIGN_CREATE` (tạo campaign) hoặc canManage (sửa campaign) | Report chưa thuộc campaign nào | Gán campaignId | `INC/modules/campaign/campaign.service.ts > assignReportsToCampaign()` |
+| INPROCESS 22 → TODO 21 | canDelete (xoá campaign), canManage (đổi reportIds) hoặc admin (ban campaign) | — | campaignId = null | `deleteCampaign()`, `banCampaignAndUnlinkReports()`, `updateCampaign()` |
 | INPROCESS 22 → COMPLETED 17 | Admin duyệt hoàn thành campaign | Campaign đang ở 7 | **Không** phát outbox điểm cho report | `adminFinalizeCampaignCompletion()` |
 | bất kỳ (không bị ban) → PENDING 12, aiVerified=false | Chủ report | Report không bị ban | Enqueue ANALYZE_REPORT. Nếu `isVerify` đã true thì report bị kẹt (99) | `addReportImages()` |
 | aiVerified false → true | Worker | Có kết quả predict | aiRecommendation, ai_analysis_logs | `report-ai-analysis.service.ts > analyzeReport()` |
@@ -51,21 +51,21 @@ stateDiagram-v2
   WAITING_CONFIRMED_7 --> ACTIVE_1: admin từ chối hoàn thành
   COMPLETED_17 --> [*]
   note right of PENDING_12
-    createdBy có thể PUT status bất kỳ
+    người quản lý có thể PUT status bất kỳ
     (bỏ qua mọi chuyển trạng thái) - lỗ hổng
   end note
 ```
 
 | Từ → sang | Ai | Điều kiện | Side effect | File |
 |---|---|---|---|---|
-| (mới) → PENDING 12 | Owner tổ chức | BR-150..BR-153 | Người tạo thành manager; report 21 → 22; TRANSLATE_TEXT; thông báo CAMPAIGN_CREATED cho thành viên | `createCampaign()` |
+| (mới) → PENDING 12 | Thành viên có `CAMPAIGN_CREATE` (LR / OWNER / CAMPAIGN_MANAGER) | BR-150..BR-153 | Người tạo thành manager; report 21 → 22; TRANSLATE_TEXT; thông báo CAMPAIGN_CREATED cho thành viên | `createCampaign()` |
 | 12 / 4 / 5 / 2 → ACTIVE 1 | Admin | — | rejectReason = reason \|\| null; thông báo CAMPAIGN_VERIFY_INVITE cho người dân trong 5 km | `adminVerifyCampaign()` |
 | 12 / 4 / 5 / 1 → INACTIVE 2 | Admin | Có lý do | Gỡ report (22 → 21); không gửi thông báo | `banCampaignAndUnlinkReports()` |
-| 1 / 9 → WAITING_CONFIRMED 7 | Mgr(table) | Mọi task đều 17 | Thông báo CAMPAIGN_COMPLETION_PENDING_ADMIN (admin trong env) và COMPLETION_VERIFY_INVITE (người dân gần) | `submitCampaignCompletionForAdminApproval()` |
+| 1 / 9 → WAITING_CONFIRMED 7 | canManage | Mọi task đều 17 | Thông báo CAMPAIGN_COMPLETION_PENDING_ADMIN (admin trong env) và COMPLETION_VERIFY_INVITE (người dân gần) | `submitCampaignCompletionForAdminApproval()` |
 | 7 → COMPLETED 17 | Admin | Mọi task 17; có tier | Report và SOS → 17; outbox CAMPAIGN_COMPLETION_GREEN_POINTS; thông báo CAMPAIGN_DONE và APPROVED_BY_ADMIN | `adminFinalizeCampaignCompletion()` |
 | 7 → ACTIVE 1 | Admin | Có lý do | rejectReason; thông báo REJECTED_BY_ADMIN | `adminRejectCampaign()` |
-| bất kỳ → bất kỳ | `createdBy` | `PUT /campaigns/:id` với `status` | **Không có kiểm soát** (99) | `updateCampaign()` |
-| → xoá mềm | `createdBy` | — | Gỡ report | `deleteCampaign()` |
+| bất kỳ → bất kỳ | canManage | `PUT /campaigns/:id` với `status` | **Không có kiểm soát** (99) | `updateCampaign()` |
+| → xoá mềm | canDelete | — | Gỡ report | `deleteCampaign()` |
 
 Không có code nào chuyển campaign sang INREVIEW (9). Trạng thái này chỉ xuất hiện trong điều kiện của mark-done.
 
@@ -84,8 +84,8 @@ stateDiagram-v2
 | Từ → sang | Ai | Điều kiện | Side effect | File |
 |---|---|---|---|---|
 | (mới) → 12 | User đăng nhập | Chưa có yêu cầu nào chưa bị xoá | Thông báo VOLUNTEER_REQUEST cho các manager | `campaign_joining_request.service.ts > createJoinRequest()` |
-| 12 → 14 | Mgr(table) | Còn chỗ theo `maxVolunteers` | VOLUNTEER_APPROVED | `processJoinRequest()` |
-| 12 → xoá mềm | Mgr(table), khi từ chối | — | VOLUNTEER_REJECTED | `processJoinRequest()` |
+| 12 → 14 | canManage | Còn chỗ theo `maxVolunteers` | VOLUNTEER_APPROVED | `processJoinRequest()` |
+| 12 → xoá mềm | canManage, khi từ chối | — | VOLUNTEER_REJECTED | `processJoinRequest()` |
 | 12 → xoá mềm | Chính người xin | — | — | `cancelJoinRequest()` |
 | 14 → ? | — | Không có API rời hoặc huỷ sau khi được duyệt | — | — |
 
@@ -111,22 +111,22 @@ stateDiagram-v2
 
 | Từ → sang | Ai | Điều kiện | Side effect | File |
 |---|---|---|---|---|
-| (mới) → INREVIEW 9 | Mgr(table) | — | Gắn kết quả nháp (luôn rỗng) | `campaign_submission.service.ts > createSubmission()` |
-| 9 / 6 / 12 → APPROVED 14 hoặc REJECTED 18 | Mgr(table), kể cả chính người nộp | — | Không có | `processSubmission()` |
+| (mới) → INREVIEW 9 | canManage | — | Gắn kết quả nháp (luôn rỗng) | `campaign_submission.service.ts > createSubmission()` |
+| 9 / 6 / 12 → APPROVED 14 hoặc REJECTED 18 | canManage, kể cả chính người nộp | — | Không có | `processSubmission()` |
 
 ## 6. SOS (`sos.status`)
 
 ```mermaid
 stateDiagram-v2
   [*] --> ACTIVE_1: user gửi SOS (campaign ACTIVE)
-  ACTIVE_1 --> COMPLETED_17: user bất kỳ bấm solved
+  ACTIVE_1 --> COMPLETED_17: người quản lý campaign hoặc admin bấm solved
   ACTIVE_1 --> COMPLETED_17: admin duyệt hoàn thành campaign
 ```
 
 | Từ → sang | Ai | Điều kiện | File |
 |---|---|---|---|
 | (mới) → 1 | User đăng nhập | Campaign ACTIVE, có toạ độ | `INC/modules/sos/sos.service.ts > create()` |
-| 1 → 17 | **User đăng nhập bất kỳ** | — | `solveSos()` |
+| 1 → 17 | Platform admin hoặc canManage của campaign (BR-192) | Sai → 403 `SOS_PERMISSION_DENIED` | `solveSos()` |
 | 1 → 17 | Admin, gián tiếp | Duyệt hoàn thành campaign | `adminFinalizeCampaignCompletion()` |
 
 ## 7. Đơn đăng ký tổ chức (`organization_applications.status`) và owner (`organization_application_owners.status`)

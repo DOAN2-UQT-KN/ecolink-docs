@@ -33,12 +33,12 @@ Ecolink là nền tảng kết nối cộng đồng để **phát hiện và d�
 | Vai trò | Là ai | Muốn làm gì | Được làm | Không được làm |
 |---|---|---|---|---|
 | **Khách** | Người chưa đăng nhập | Tìm hiểu, đăng ký tài khoản, nộp hồ sơ tổ chức | Đăng ký, đăng nhập, xem danh sách quà và bảng xếp hạng, **nộp hồ sơ đăng ký tổ chức** (không cần tài khoản) | Xem báo cáo, chiến dịch, bản đồ (sẽ được yêu cầu đăng nhập) |
-| **Người dùng** (người dân) | Người có tài khoản cá nhân | Báo cáo rác, theo dõi, bình chọn, tham gia | Gửi và sửa báo cáo của mình; bình chọn và lưu báo cáo hoặc chiến dịch; xin tham gia chiến dịch hoặc tổ chức; gửi yêu cầu khẩn cấp (SOS); chat với trợ lý AI; đổi quà; cài đặt thông báo | Duyệt nội dung; tạo chiến dịch (chỉ owner của tổ chức được tạo) |
+| **Người dùng** (người dân) | Người có tài khoản cá nhân | Báo cáo rác, theo dõi, bình chọn, tham gia | Gửi và sửa báo cáo của mình; bình chọn và lưu báo cáo hoặc chiến dịch; xin tham gia chiến dịch hoặc tổ chức; gửi yêu cầu khẩn cấp (SOS); chat với trợ lý AI; đổi quà; cài đặt thông báo | Duyệt nội dung; tạo chiến dịch (chỉ owner hoặc quản lý chiến dịch của tổ chức được tạo) |
 | **Tình nguyện viên** | Người dùng đã được chấp nhận vào một chiến dịch | Làm việc trong chiến dịch và nhận điểm | Nhận việc được giao, cập nhật kết quả, điểm danh bằng mã QR, nhận điểm khi chiến dịch hoàn thành | Quản lý chiến dịch |
-| **Owner tổ chức** (gồm người đại diện pháp lý) | Người dùng cá nhân được gắn vai owner sau khi hồ sơ được duyệt, hoặc qua **đề xuất thêm owner** được các owner khác đồng ý. Một tổ chức có thể có nhiều owner (tối đa 5 lúc đăng ký); một người làm owner tối đa 3 tổ chức. Tổ chức **không** có tài khoản đăng nhập riêng | Quản lý tổ chức và chiến dịch | Mọi quyền của Admin tổ chức, cộng: nâng / hạ vai Admin, **đề xuất thêm owner**, **đề xuất thu hồi owner khác**, đồng ý / từ chối đề xuất của owner khác, **tự hạ vai hoặc rời tổ chức** (khi còn owner khác; người đại diện pháp lý phải chọn người thay, người thay xác nhận và các owner khác đồng ý); **tạo chiến dịch**; sửa và xoá chiến dịch do mình tạo | Tự tạo tổ chức mà không qua thẩm định; rời tổ chức khi là owner duy nhất |
-| **Admin tổ chức** | Thành viên được owner nâng vai | Vận hành tổ chức thay owner | Sửa thông tin tổ chức; duyệt người xin gia nhập và lời mời; đổi vai / gỡ Quản lý chiến dịch và Thành viên | Đụng tới owner hoặc admin khác; đề xuất owner; (quyền với chiến dịch theo vai: phase 4) |
-| **Quản lý chiến dịch của tổ chức** (vai trong tổ chức) | Thành viên được owner / admin gán vai | Chạy chiến dịch cho tổ chức | Mời thành viên (cần duyệt). Quyền tạo chiến dịch theo vai đã khai báo nhưng **chưa áp dụng** (phase 4) | Quản lý thành viên |
-| **Người quản lý chiến dịch** | Owner đã tạo chiến dịch và những người được thêm làm quản lý | Vận hành chiến dịch | Duyệt người tham gia, tạo và giao việc, tạo mã điểm danh, báo hoàn thành chiến dịch, thêm hoặc bớt người quản lý | Tự duyệt hoàn thành chiến dịch (cần quản trị viên) |
+| **Owner tổ chức** (gồm người đại diện pháp lý) | Người dùng cá nhân được gắn vai owner sau khi hồ sơ được duyệt, hoặc qua **đề xuất thêm owner** được các owner khác đồng ý. Một tổ chức có thể có nhiều owner (tối đa 5 lúc đăng ký); một người làm owner tối đa 3 tổ chức. Tổ chức **không** có tài khoản đăng nhập riêng | Quản lý tổ chức và chiến dịch | Mọi quyền của Admin tổ chức, cộng: nâng / hạ vai Admin, **đề xuất thêm owner**, **đề xuất thu hồi owner khác**, đồng ý / từ chối đề xuất của owner khác, **tự hạ vai hoặc rời tổ chức** (khi còn owner khác; người đại diện pháp lý phải chọn người thay, người thay xác nhận và các owner khác đồng ý); **tạo chiến dịch**; quản lý, sửa và xoá **mọi** chiến dịch của tổ chức (kể cả chiến dịch người khác tạo) | Tự tạo tổ chức mà không qua thẩm định; rời tổ chức khi là owner duy nhất |
+| **Admin tổ chức** | Thành viên được owner nâng vai | Vận hành tổ chức thay owner | Sửa thông tin tổ chức; duyệt người xin gia nhập và lời mời; đổi vai / gỡ Quản lý chiến dịch và Thành viên | Đụng tới owner hoặc admin khác; đề xuất owner; tạo hoặc quản lý chiến dịch (trừ khi được thêm làm người quản lý của một chiến dịch) |
+| **Quản lý chiến dịch của tổ chức** (vai trong tổ chức) | Thành viên được owner / admin gán vai | Chạy chiến dịch cho tổ chức | Mời thành viên (cần duyệt); **tạo chiến dịch** cho tổ chức (tự thành người quản lý chiến dịch đó) | Quản lý thành viên; quản lý chiến dịch người khác tạo (trừ khi được thêm làm người quản lý) |
+| **Người quản lý chiến dịch** | Người đã tạo chiến dịch, những người được thêm làm quản lý (phải là thành viên của tổ chức), và mọi owner của tổ chức. Rời tổ chức là mất quyền quản lý | Vận hành chiến dịch | Sửa chiến dịch, duyệt người tham gia, xem danh sách tình nguyện viên, tạo và giao việc, tạo mã điểm danh, báo hoàn thành chiến dịch, thêm hoặc bớt người quản lý, đóng SOS của chiến dịch | Tự duyệt hoàn thành chiến dịch (cần quản trị viên); gỡ người tạo khỏi danh sách quản lý; xoá chiến dịch (chỉ người tạo hoặc owner) |
 | **Thành viên tổ chức** | Người dùng được owner / admin chấp nhận yêu cầu gia nhập, hoặc nhận lời mời | Theo dõi hoạt động của tổ chức | Nhận thông báo khi tổ chức mở chiến dịch mới; **mời người khác** (lời mời chờ owner / admin duyệt); rời tổ chức | Quản lý tổ chức |
 | **Người được mời vào tổ chức** | Người dùng đã có tài khoản được một thành viên mời | Nhận hoặc từ chối | Mở link trong email (không cần đăng nhập), bấm Chấp nhận hoặc Từ chối trong 7 ngày | Vào tổ chức khi chưa tự chấp nhận |
 | **Người nộp hồ sơ tổ chức** | Người lập hồ sơ, không cần tài khoản; bắt buộc là một trong các owner | Đăng ký tổ chức lên Ecolink | Xác thực email bằng mã, lưu nháp, khai danh sách owner, nộp hồ sơ và giấy tờ, gửi lại email xác nhận cho owner, theo dõi, sửa, rút hồ sơ qua đường link trong email | — |
@@ -72,13 +72,13 @@ Trạng thái: ✅ đã có · 🟡 đang làm dở / có hạn chế · ❌ ch�
 | Cập nhật thông tin tổ chức | Owner / Admin tổ chức sửa thông tin; đổi email liên hệ thì phải xác minh lại email đó | Owner, Admin tổ chức | ✅ |
 | Xác minh email liên hệ | Gửi đường link xác minh về email liên hệ | Owner, Admin tổ chức | ✅ |
 | Gia nhập tổ chức | Người dùng xin gia nhập, owner / admin duyệt hoặc từ chối (đều nhận thông báo); thành viên có thể rời | Người dùng, owner, admin | ✅ |
-| Vai trong tổ chức | 5 vai: người đại diện pháp lý, owner, admin, quản lý chiến dịch, thành viên; trang tổ chức hiện nhãn vai của từng người và ẩn / hiện nút theo quyền | Mọi người đăng nhập | ✅ Quyền với chiến dịch theo vai: 🟡 phase 4 |
+| Vai trong tổ chức | 5 vai: người đại diện pháp lý, owner, admin, quản lý chiến dịch, thành viên; trang tổ chức hiện nhãn vai của từng người và ẩn / hiện nút theo quyền | Mọi người đăng nhập | ✅ (kể cả quyền với chiến dịch theo vai) |
 | Đổi vai, gỡ thành viên | Owner nâng / hạ Admin, Quản lý chiến dịch, Thành viên; Admin đổi Quản lý chiến dịch / Thành viên; không ai đụng được owner | Owner, Admin tổ chức | ✅ |
 | Mời thành viên | Thành viên nào cũng mời được người đã có tài khoản (tìm theo tên / email, email hiển thị bị che bớt); lời mời cần owner / admin duyệt, rồi người được mời bấm chấp nhận qua email | Mọi thành viên | ✅ |
 | Đề xuất thêm owner | Owner chọn người có sẵn hoặc nhập email (chưa có tài khoản cũng được); từng người xác nhận qua email **và** mọi owner khác đồng ý là có hiệu lực — **không cần quản trị viên nền tảng**. Người chưa có tài khoản được tạo tài khoản lúc đó và nhận email kích hoạt | Owner | ✅ |
 | Thu hồi owner | Owner đề xuất thu hồi một owner khác (người đó giữ vai Admin / Thành viên hoặc bị gỡ); mọi owner còn lại phải đồng ý; tổ chức chỉ có 2 owner thì có hiệu lực ngay. Người bị thu hồi được báo nhưng không phủ quyết được | Owner | ✅ |
 | Owner tự rút lui | Owner tự hạ xuống Admin / Thành viên hoặc rời tổ chức, có hiệu lực ngay, miễn còn owner khác; owner duy nhất phải thêm owner khác trước | Owner | ✅ |
-| Chọn ngữ cảnh tổ chức | Menu người dùng cho chọn "Cá nhân" hoặc một tổ chức mình có vai, có lối tắt quản lý tổ chức | Người dùng có vai trong tổ chức | ✅ (chưa lọc trang chiến dịch — phase 4) |
+| Chọn ngữ cảnh tổ chức | Menu người dùng cho chọn "Cá nhân" hoặc một tổ chức mình có vai, có lối tắt quản lý tổ chức | Người dùng có vai trong tổ chức | ✅ Trang "Chiến dịch của tôi" mặc định lọc theo tổ chức đang chọn; form tạo chiến dịch chọn sẵn tổ chức đó |
 | Duyệt hoặc chặn tổ chức | Quản trị viên chặn tổ chức vi phạm, hoặc bỏ chặn | Quản trị viên | 🟡 Tổ chức bị chặn vẫn tạo được chiến dịch |
 
 ### 3.3 Xác minh và dấu tích xanh
@@ -94,14 +94,14 @@ Trạng thái: ✅ đã có · 🟡 đang làm dở / có hạn chế · ❌ ch�
 ### 3.4 Chiến dịch
 | Tính năng | Mô tả | Ai dùng | Trạng thái |
 |---|---|---|---|
-| Tạo chiến dịch | Owner tạo chiến dịch cho tổ chức: tiêu đề, mô tả, ảnh bìa, thời gian, địa điểm, **mức độ khó** (quyết định số người tối đa và số điểm thưởng), gắn các điểm rác cần xử lý | Owner | ✅ |
-| Sửa và xoá chiến dịch | | Người tạo chiến dịch | 🟡 Giao diện chưa có chỗ sửa; hệ thống cho phép tự đổi trạng thái (mục 10) |
+| Tạo chiến dịch | Owner hoặc quản lý chiến dịch của tổ chức tạo chiến dịch (từ "Chiến dịch của tôi" hoặc tab chiến dịch trên trang tổ chức): tiêu đề, mô tả, ảnh bìa, thời gian, địa điểm, **mức độ khó** (quyết định số người tối đa và số điểm thưởng), gắn các điểm rác cần xử lý | Owner, quản lý chiến dịch của tổ chức | ✅ |
+| Sửa và xoá chiến dịch | Sửa: người quản lý chiến dịch; xoá: người tạo hoặc owner | Người quản lý / owner | 🟡 Giao diện chưa có chỗ sửa; hệ thống cho phép tự đổi trạng thái (mục 10) |
 | Duyệt chiến dịch | Quản trị viên duyệt, khi đó người dân quanh khu vực 5 km được mời tham gia; hoặc chặn | Quản trị viên | ✅ |
 | Đăng ký tham gia | Tình nguyện viên xin tham gia; người quản lý duyệt, có giới hạn số người theo mức độ khó | Người dùng, quản lý | ✅ |
-| Quản lý người quản lý | Thêm hoặc bớt người quản lý chiến dịch | Quản lý | ✅ |
+| Quản lý người quản lý | Thêm người quản lý (chỉ chọn được thành viên của tổ chức) hoặc bớt người quản lý (trừ người tạo) ngay trên trang chiến dịch | Quản lý | ✅ |
 | Công việc | Tạo việc, giao cho tình nguyện viên, cập nhật kết quả kèm ảnh hoặc video | Quản lý, tình nguyện viên | ✅ |
 | Điểm danh QR | Quản lý hiển thị mã QR, tình nguyện viên quét để điểm danh | Quản lý, tình nguyện viên | ✅ |
-| Yêu cầu khẩn cấp (SOS) | Gửi yêu cầu khẩn cấp tại chiến dịch đang diễn ra; hiện trên bản đồ | Người dùng | 🟡 Chưa có thông báo; ai cũng đánh dấu "đã giải quyết" được |
+| Yêu cầu khẩn cấp (SOS) | Gửi yêu cầu khẩn cấp tại chiến dịch đang diễn ra; hiện trên bản đồ | Người dùng; người quản lý chiến dịch và quản trị viên đóng SOS | 🟡 Chưa có thông báo |
 | Báo hoàn thành | Khi mọi việc xong, quản lý báo hoàn thành; người dân quanh khu vực được mời xác nhận khu vực "đã sạch" | Quản lý, người dân | ✅ |
 | Duyệt hoàn thành và trao điểm | Quản trị viên duyệt, tình nguyện viên **đã điểm danh** nhận điểm; hoặc từ chối để chiến dịch tiếp tục | Quản trị viên | ✅ |
 | Nộp kết quả (submission) | Quản lý nộp bộ kết quả và duyệt nội bộ | Quản lý | 🟡 Chưa gắn với luồng hoàn thành, hiện không có tác dụng |
@@ -240,12 +240,12 @@ flowchart TD
 ```
 
 ### 4.4 Tổ chức mở chiến dịch
-1. Owner của tổ chức vào "Tạo chiến dịch", chọn tổ chức, nhập thông tin, chọn mức độ khó và chọn các điểm rác đã được duyệt cần xử lý.
+1. Owner hoặc quản lý chiến dịch của tổ chức vào "Tạo chiến dịch" (hoặc nút "Tạo chiến dịch" ở tab chiến dịch của trang tổ chức), chọn tổ chức (được chọn sẵn theo tổ chức đang dùng), nhập thông tin, chọn mức độ khó và chọn các điểm rác đã được duyệt cần xử lý.
 2. Chiến dịch được tạo ở trạng thái **chờ duyệt**. Thành viên tổ chức nhận thông báo "tổ chức có chiến dịch mới".
 3. Quản trị viên duyệt, chiến dịch **đang hoạt động**, và người dân trong bán kính 5 km được mời tham gia.
 
 Các trường hợp thường gặp:
-- Người tạo không phải owner của tổ chức: bị từ chối (Admin / Quản lý chiến dịch của tổ chức chưa tạo được — phase 4).
+- Người không phải owner hay quản lý chiến dịch của tổ chức (Admin tổ chức, Thành viên): bị từ chối; nút tạo chiến dịch không hiện.
 - Điểm rác đã thuộc chiến dịch khác hoặc chưa được duyệt: không chọn được.
 - Chiến dịch bị chặn: các điểm rác được trả về danh sách chờ để chiến dịch khác nhận. Tổ chức **không nhận thông báo** về việc bị chặn.
 
@@ -293,7 +293,7 @@ Các trường hợp thường gặp:
 ### 4.7 Yêu cầu khẩn cấp (SOS)
 1. Tại một chiến dịch đang diễn ra, người dùng gửi SOS kèm nội dung và số điện thoại.
 2. SOS hiện trên bản đồ tại vị trí chiến dịch (bản đồ tự làm mới mỗi 10 giây).
-3. Người hỗ trợ đánh dấu "đã giải quyết". Khi chiến dịch hoàn thành, mọi SOS của chiến dịch cũng tự đóng.
+3. Người quản lý chiến dịch (hoặc quản trị viên) đánh dấu "đã giải quyết". Khi chiến dịch hoàn thành, mọi SOS của chiến dịch cũng tự đóng.
 
 Các trường hợp thường gặp:
 - Chiến dịch chưa hoạt động hoặc không có vị trí: không gửi được SOS.
@@ -415,10 +415,14 @@ Mã BR-xxx dùng để đối chiếu với `docs/03-business-rules.md`.
 
 ### 5.7 Chiến dịch
 - **BR-150:** Chiến dịch cần tiêu đề và mức độ khó; vị trí và thời gian là tuỳ chọn.
-- **BR-151:** Chỉ **owner** (kể cả người đại diện pháp lý) tạo được chiến dịch cho tổ chức mình.
+- **BR-151:** Chỉ **owner** (kể cả người đại diện pháp lý) và **quản lý chiến dịch** của tổ chức tạo được chiến dịch cho tổ chức đó.
 - **BR-152:** Mức độ khó phải thuộc danh sách mức độ do quản trị viên cấu hình.
 - **BR-153:** Chiến dịch mới chờ quản trị viên duyệt; người tạo tự động là người quản lý.
-- **BR-154:** Chỉ người tạo sửa hoặc xoá được chiến dịch. Xoá thì các điểm rác được trả lại danh sách chờ.
+- **BR-154:** Người quản lý chiến dịch sửa được chiến dịch; chỉ người tạo hoặc owner của tổ chức xoá được. Xoá thì các điểm rác được trả lại danh sách chờ.
+- **BR-155, BR-156:** Người quản lý được thêm phải là thành viên của tổ chức; không gỡ được người tạo khỏi danh sách quản lý.
+- **BR-157:** Rời hoặc bị gỡ khỏi tổ chức thì tự động thôi quản lý mọi chiến dịch của tổ chức.
+- **BR-158:** Danh sách tình nguyện viên chỉ người quản lý, tình nguyện viên đã được chấp nhận và quản trị viên xem được.
+- **BR-159:** Người quản lý chiến dịch = người tạo, người được thêm làm quản lý, hoặc owner của tổ chức, với điều kiện vẫn là thành viên của tổ chức.
 - **BR-160:** Quản trị viên duyệt hoặc chặn chiến dịch; chặn phải có lý do.
 - **BR-161:** Khi được duyệt, người dân trong 5 km quanh chiến dịch được mời tham gia.
 - **BR-162:** Chiến dịch bị chặn thì các điểm rác được trả lại danh sách chờ.
@@ -431,7 +435,7 @@ Mã BR-xxx dùng để đối chiếu với `docs/03-business-rules.md`.
 - **BR-172:** Số tình nguyện viên được chấp nhận không vượt quá giới hạn của mức độ khó.
 - **BR-173:** Người bị từ chối có thể xin lại.
 - **BR-174:** Người xin chỉ huỷ được khi yêu cầu còn đang chờ.
-- **BR-175:** Người tạo và người quản lý quản lý được công việc, người quản lý khác và mã điểm danh.
+- **BR-175:** Người quản lý chiến dịch quản lý được công việc, người quản lý khác và mã điểm danh.
 - **BR-176:** Công việc có 3 mức ưu tiên; mặc định là trung bình.
 - **BR-177:** Chỉ giao việc cho tình nguyện viên đã được chấp nhận.
 - **BR-178, BR-179:** Tình nguyện viên chỉ cập nhật kết quả và trạng thái của việc được giao cho mình.
@@ -439,10 +443,11 @@ Mã BR-xxx dùng để đối chiếu với `docs/03-business-rules.md`.
 - **BR-182:** Người dân chỉ xác nhận "đã sạch" hoặc "chưa sạch" sau khi chiến dịch báo hoàn thành.
 - **BR-183:** Chỉ người quản lý nộp và duyệt bộ kết quả.
 - **BR-184:** Danh sách hiển thị tối đa 100 mục mỗi trang.
+- **BR-185:** "Chiến dịch của tôi" của owner gồm mọi chiến dịch của tổ chức mình.
 
 ### 5.8 Yêu cầu khẩn cấp
 - **BR-190, BR-191:** SOS chỉ gửi được tại chiến dịch đang hoạt động và có vị trí; cần nội dung (tối đa 2000 ký tự) và số điện thoại hợp lệ; vị trí SOS lấy theo vị trí chiến dịch.
-- **BR-192:** SOS đã giải quyết thì không cần xử lý thêm.
+- **BR-192:** Chỉ người quản lý chiến dịch hoặc quản trị viên đóng được SOS; SOS đã giải quyết thì không cần xử lý thêm.
 
 ### 5.9 Thông báo
 - **BR-200:** Mỗi thông báo trong ứng dụng gửi cho đúng một người; email về hồ sơ tổ chức gửi thẳng tới địa chỉ email người nộp.
@@ -612,17 +617,19 @@ Có = được · Không = không được · ĐK = có điều kiện
 | Sửa hoặc xoá báo cáo | Không | ĐK: chỉ báo cáo của mình, chưa bị chặn | ĐK | ĐK | ĐK | Không |
 | Duyệt, chặn, đánh dấu báo cáo đã xử lý | Không | Không | Không | Không | Không | Có |
 | Bình chọn, lưu | Không | Có | Có | Có | Có | Có |
-| Tạo chiến dịch | Không | Không | Không | Không | Có | Không |
-| Sửa hoặc xoá chiến dịch | Không | Không | Không | ĐK: chỉ người tạo | ĐK: chiến dịch mình tạo | Không |
+| Tạo chiến dịch | Không | Không | Không | ĐK: có vai quản lý chiến dịch trong tổ chức | Có | Không |
+| Sửa hoặc xoá chiến dịch | Không | Không | Không | Sửa: Có; xoá: ĐK chỉ người tạo | Có (mọi chiến dịch của tổ chức) | Không |
 | Duyệt hoặc chặn chiến dịch | Không | Không | Không | Không | Không | Có |
 | Xin tham gia chiến dịch | Không | Có | — | Có | Có | Có |
-| Duyệt người tham gia | Không | Không | Không | Có | ĐK: nếu còn là quản lý | Không |
-| Tạo và giao việc, tạo mã điểm danh | Không | Không | Không | Có | Có | Không |
+| Duyệt người tham gia | Không | Không | Không | Có | Có | Không |
+| Tạo và giao việc, tạo mã điểm danh, thêm / bớt người quản lý | Không | Không | Không | Có | Có | Không |
+| Xem danh sách tình nguyện viên | Không | Không | Có | Có | Có | Có |
 | Cập nhật kết quả việc | Không | Không | ĐK: việc được giao | Có | Có | Không |
 | Điểm danh | Không | Không | Có | — | — | — |
-| Báo hoàn thành chiến dịch | Không | Không | Không | Có | ĐK: nếu còn là quản lý | Không |
+| Báo hoàn thành chiến dịch | Không | Không | Không | Có | Có | Không |
 | Duyệt hoàn thành, trao điểm | Không | Không | Không | Không | Không | Có |
 | Gửi SOS | Không | ĐK: chiến dịch đang hoạt động | ĐK | ĐK | ĐK | ĐK |
+| Đóng SOS | Không | Không | Không | Có | Có | Có |
 | Sửa thông tin tổ chức, duyệt thành viên và lời mời | Không | Không | Không | Không | Có (Admin tổ chức cũng có) | Không |
 | Mời người vào tổ chức | Không | ĐK: là thành viên tổ chức (cần duyệt) | ĐK | ĐK | Có (gửi luôn) | Không |
 | Đổi vai, gỡ thành viên (không phải owner) | Không | Không | Không | Không | Có (Admin tổ chức: trừ admin khác) | Không |
@@ -636,8 +643,8 @@ Có = được · Không = không được · ĐK = có điều kiện
 | Quản lý quà, đơn đổi quà, cấu hình điểm, mùa, huy hiệu | Không | Không | Không | Không | Không | Có |
 | Chat với trợ lý AI | Không | Có | Có | Có | Có | Có |
 
-> Cột "Quản lý chiến dịch" ở đây là người quản lý **một chiến dịch** (người tạo và người được thêm). Vai "Quản lý chiến dịch" và "Admin" **trong tổ chức** đã có và quản lý được tổ chức theo bảng trên, nhưng quyền với chiến dịch theo vai tổ chức sẽ áp dụng ở phase 4.
-> Bảng trên là quyền **theo thiết kế thể hiện trong code**. Hiện có một số chỗ hệ thống **cho phép nhiều hơn** thiết kế, ví dụ ai cũng đổi được trạng thái đơn quà hoặc đóng SOS. Các chỗ này được liệt kê ở mục 10.
+> Cột "Quản lý chiến dịch" ở đây là người quản lý **một chiến dịch** (người tạo và người được thêm, đều phải còn là thành viên tổ chức), trừ dòng "Tạo chiến dịch" là vai "Quản lý chiến dịch" **trong tổ chức**. Cột "Owner tổ chức" quản lý được mọi chiến dịch của tổ chức mình. Vai "Admin" trong tổ chức không có quyền với chiến dịch.
+> Bảng trên là quyền **theo thiết kế thể hiện trong code**. Hiện có một số chỗ hệ thống **cho phép nhiều hơn** thiết kế, ví dụ ai cũng đổi được trạng thái đơn quà. Các chỗ này được liệt kê ở mục 10.
 > Chi tiết kỹ thuật: xem `docs/05-permissions.md`.
 
 ---
@@ -733,15 +740,15 @@ Phần này viết lại các vấn đề trong `docs/99-open-issues.md` theo g�
 | 12 | ~~Email kích hoạt bị lỗi~~ | **Đã giải quyết (26/09/2026):** người dùng tự gửi lại từ trang đăng nhập | — |
 | 13 | ~~Email liên hệ tổ chức đã có tài khoản cá nhân~~ | **Đã giải quyết (26/09/2026):** tổ chức không còn tài khoản riêng; owner đã có tài khoản được gắn vai trực tiếp | — |
 | 14 | **Hạn mức 3 tổ chức cho mỗi owner** | Cố định 3, tính theo tài khoản (cả owner lẫn người đại diện pháp lý); không có ngoại lệ | Có cần ngoại lệ không? |
-| 15 | **Ai được tạo chiến dịch** | Chỉ owner (kể cả người đại diện pháp lý). Vai quản lý chiến dịch / admin tổ chức đã gán được (Phase 2) và trong ma trận quyền đã khai báo quyền tạo chiến dịch, nhưng chưa áp dụng (Phase 4) | Có muốn thành viên được tạo không? |
-| 16 | **Ai quản lý chiến dịch** | Có 3 cách hiểu khác nhau về "người quản lý". Người quản lý có thể gỡ cả người tạo | Chuẩn hoá vai trò: chủ chiến dịch, quản lý, tình nguyện viên |
+| 15 | **Ai được tạo chiến dịch** | Owner (kể cả người đại diện pháp lý) và vai quản lý chiến dịch của tổ chức (từ 27/09/2026). Admin tổ chức và thành viên thường không tạo được | Có muốn thành viên thường được tạo không? |
+| 16 | ~~Ai quản lý chiến dịch~~ | **Đã giải quyết (27/09/2026):** một quy tắc chung — người tạo, người được thêm (phải là thành viên tổ chức) và owner của tổ chức; rời tổ chức là mất quyền; không gỡ được người tạo | — |
 | 17 | **Điểm thưởng chiến dịch** | Chỉ người đã điểm danh nhận điểm, nhưng mọi người được chấp nhận đều nhận thông báo "hoàn thành" | Người không điểm danh có được ghi nhận gì không? |
 | 18 | **Điểm cho người báo cáo** | Được điểm khi quản trị viên đánh dấu trực tiếp, nhưng **không** được điểm khi báo cáo được xử lý qua chiến dịch. Mức điểm mặc định là 0 | Người báo cáo có nên nhận điểm khi chiến dịch xử lý điểm rác của họ không? Bao nhiêu điểm? |
 | 19 | **Chiến dịch không có công việc nào** | Vẫn báo hoàn thành được | Có bắt buộc phải có công việc không? |
 | 20 | **Rời chiến dịch** | Đã được chấp nhận thì không rời được; người bị từ chối có thể xin lại ngay | Cho phép rời không? Có giới hạn số lần xin lại không? |
 | 21 | **Xác nhận "đã sạch" của cộng đồng** | Chỉ để tham khảo, không ảnh hưởng quyết định | Có dùng làm điều kiện duyệt không? |
 | 22 | **Nộp kết quả (submission)** | Có chức năng nhưng không gắn với luồng hoàn thành | Giữ lại (và gắn vào luồng hoàn thành) hay bỏ? |
-| 23 | **SOS** | Không báo cho ai; ai cũng đóng được | Ai cần nhận SOS (quản lý, quản trị viên, lực lượng cứu hộ)? Ai được đóng? |
+| 23 | **SOS** | Không báo cho ai. Chỉ người quản lý chiến dịch và quản trị viên đóng được (từ 27/09/2026) | Ai cần nhận SOS (quản lý, quản trị viên, lực lượng cứu hộ)? |
 | 24 | **Đơn đổi quà** | Không báo cho người đổi; huỷ đơn không trả lại tồn kho; điểm hoàn có hạn dùng mới | Có thông báo không? Huỷ đơn có trả lại quà vào kho không? Hạn dùng của điểm hoàn tính thế nào? |
 | 25 | **Hai hệ điểm song song** | "Điểm xanh" (dùng cho lịch sử và bảng xếp hạng cũ) và "điểm tiêu dùng / điểm xếp hạng" (dùng để đổi quà và xếp hạng mùa). Đổi quà không trừ điểm xanh | Người dùng nhìn thấy loại điểm nào? Có gộp lại không? |
 | 26 | **Mùa giải và huy hiệu** | Đã cấu hình được nhưng giao diện chưa có. Huy hiệu chưa được trao cho ai. Mùa không tự chuyển | Thời điểm ra mắt? Ai phụ trách mở và đóng mùa? |
