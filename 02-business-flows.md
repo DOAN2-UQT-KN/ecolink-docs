@@ -517,15 +517,15 @@ sequenceDiagram
 ```
 
 ### F18e — Thu hồi owner khác (REMOVE_OWNER)
-1. Owner mở menu trên dòng một owner khác → "Đề xuất thu hồi": chọn vai người đó giữ lại (ADMIN / MEMBER) hoặc gỡ khỏi tổ chức, nhập lý do.
+1. Owner bấm icon Remove (người-dấu-trừ) trên dòng một owner khác → modal thu hồi: người đó sẽ thành MEMBER (không có lựa chọn vai), nhập lý do.
 2. `POST /:id/owner-changes {type:"REMOVE_OWNER", target_user_id, demote_to, reason}` (BR-343): target phải là owner, khác mình; một REMOVE_OWNER mở mỗi target (BR-342). Approver = mọi owner trừ người đề xuất và target. Target nhận `ORG_OWNER_REMOVAL_PROPOSED` (website + email), không phủ quyết được.
 3. Không còn approver (tổ chức 2 owner) → áp dụng ngay trong request tạo. Còn approver → chờ tất cả đồng ý (một người từ chối → REJECTED; quá 14 ngày → WITHDRAWN).
-4. Áp dụng: target hạ xuống `demote_to` hoặc bị xoá mềm membership; nhận `ORG_MEMBERSHIP_CHANGED`; các owner nhận `ORG_OWNER_CHANGE_DECIDED`; `reconcileOpenChanges` (BR-346). Trigger `ORG_MUST_HAVE_OWNER` vẫn bảo vệ; hai owner thu hồi nhau cùng lúc thì dòng owner bị khoá nên chỉ một bên thắng, bên kia REJECTED ("Người đề xuất không còn là owner.").
+4. Áp dụng: target hạ xuống `demote_to` (mặc định MEMBER); nhận `ORG_MEMBERSHIP_CHANGED`; các owner nhận `ORG_OWNER_CHANGE_DECIDED`; `reconcileOpenChanges` (BR-346). Trigger `ORG_MUST_HAVE_OWNER` vẫn bảo vệ; hai owner thu hồi nhau cùng lúc thì dòng owner bị khoá nên chỉ một bên thắng, bên kia REJECTED ("Người đề xuất không còn là owner.").
 - **File:** `owner-change.service.ts > create()`, `owner-change-executor.ts > applyLocked(), demoteOrRemove()`.
 
 ### F18g — Owner tự hạ vai / rời tổ chức
-1. `PATCH /api/v1/organizations/:id/members/me/role {role: ADMIN|MEMBER}` hoặc `DELETE /api/v1/organizations/:id/members/me` (BR-348).
-2. Transaction khoá các dòng owner của tổ chức (`FOR UPDATE`); chỉ còn mình là owner → 409 ORG_MUST_HAVE_OWNER (client ẩn Hạ vai / Rời và gợi ý thêm owner khác trước). Ngược lại cập nhật vai / xoá mềm ngay.
+1. Owner bấm icon Remove trên dòng của chính mình → modal hạ vai → `PATCH /api/v1/organizations/:id/members/me/role` (`role` mặc định MEMBER) (BR-348). Card Owners không còn nút Rời; owner đã hạ vai thành MEMBER mới dùng nút Rời ở đầu trang (`DELETE /members/me` cho owner vẫn còn ở API).
+2. Transaction khoá các dòng owner của tổ chức (`FOR UPDATE`); chỉ còn mình là owner → 409 ORG_MUST_HAVE_OWNER (client vô hiệu icon Remove, tooltip gợi ý thêm owner khác trước). Ngược lại cập nhật vai / xoá mềm ngay.
 3. Sau commit: `reconcileOpenChanges` — owner change do người này tạo bị huỷ, owner change đang chờ người này duyệt có thể được áp dụng; các owner còn lại nhận `ORG_OWNER_LEFT`.
 - **File:** `INC/modules/organization/organization.service.ts > leaveOrganization(), stepDown(), ownerStepOut()`.
 

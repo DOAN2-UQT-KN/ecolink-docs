@@ -108,7 +108,7 @@ Cột:
 | `MEMBER_INVITE` — mời người có tài khoản làm MEMBER, tìm user | ✅ | ✅ | ✅ | ✅ |
 | `MEMBER_MANAGE` — đổi vai, gỡ thành viên | ✅ | ⚠️¹ | ❌ | ❌ |
 | `OWNER_PROPOSE` — owner change: thêm owner, thu hồi owner khác; xem / đồng ý / từ chối owner change | ✅ | ❌ | ❌ | ❌ |
-| `CAMPAIGN_CREATE`, `CAMPAIGN_MANAGE_ANY` | ✅ | ✅ | chỉ `CAMPAIGN_CREATE` | ❌ |
+| `CAMPAIGN_CREATE`, `CAMPAIGN_MANAGE_ANY` | ✅ | ❌ (ADMIN không có quyền campaign) | chỉ `CAMPAIGN_CREATE` | ❌ |
 
 ¹ `assignableRoles(actor)`: owner gán được `ADMIN`, `CAMPAIGN_MANAGER`, `MEMBER`; admin chỉ gán được `CAMPAIGN_MANAGER`, `MEMBER`. `canActOnMember(actor, target)`: không ai đổi vai / gỡ owner hoặc LR qua đây (vai owner chỉ đổi qua owner change được các owner khác đồng ý, hoặc owner tự rút lui), admin không tác động admin khác, không tự tác động chính mình (`INC/modules/organization/organization.service.ts > changeMemberRole(), removeMember()`).
 

@@ -353,7 +353,7 @@ erDiagram
 | code | varchar(16) | **unique** | `ORG-XXXXXXXX` |
 | type | varchar(16) | default `NEW_ORG` | `ApplicationType`; `ADD_OWNER` / `REMOVE_OWNER` = owner change (F18d–F18e), quyết trong tổ chức. Giá trị cũ `TRANSFER_OWNER` (tính năng đã gỡ) chỉ còn ở các dòng lịch sử; migration `20260927100000_drop_owner_transfer` chuyển các dòng đang mở sang WITHDRAWN |
 | targetUserId | uuid? | | REMOVE_OWNER: owner bị thu hồi (migration `20260926160000_org_owner_changes`) |
-| demoteToRole | varchar(32)? | | REMOVE_OWNER: vai người bị thu hồi giữ lại (`ADMIN` / `MEMBER`); null = rời tổ chức |
+| demoteToRole | varchar(32)? | | REMOVE_OWNER: vai người bị thu hồi giữ lại (`ADMIN` / `MEMBER`, mặc định MEMBER; dòng cũ có thể null = đã rời) |
 | orgType | varchar(32)? | | `OrgType`; bắt buộc khi nộp |
 | status | varchar(32) | default `DRAFT` | `ApplicationStatus` |
 | lane | varchar(1)? | | `A` / `B`, do admin đặt khi duyệt |
