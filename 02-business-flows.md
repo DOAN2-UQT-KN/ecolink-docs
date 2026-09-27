@@ -31,7 +31,6 @@
 | F18c | Đổi vai, gỡ thành viên (không phải owner) | Tổ chức |
 | F18d | Đề xuất thêm owner (owner change ADD_OWNER) | Tổ chức |
 | F18e | Thu hồi owner khác (REMOVE_OWNER) | Tổ chức |
-| F18f | Chuyển giao vai owner (TRANSFER_OWNER) | Tổ chức |
 | F18g | Owner tự hạ vai / rời tổ chức | Tổ chức |
 | F19 | Tạo báo cáo sự cố (report) và phân tích AI | Sự cố |
 | F20 | Chủ report sửa, thêm ảnh, xoá ảnh, xoá report | Sự cố |
@@ -489,11 +488,11 @@ sequenceDiagram
 ### F18c — Đổi vai, gỡ thành viên
 - `PATCH /api/v1/organizations/:id/members/:userId/role {role}` (BR-331): cần `MEMBER_MANAGE`; `role ∈ assignableRoles(actor)`; `canActOnMember(actor, target)`; cập nhật `organization_members.role` (`changeMembershipRole()`); website `ORG_MEMBERSHIP_CHANGED` tới người bị đổi.
 - `DELETE /api/v1/organizations/:id/members/:userId` (BR-332): cùng giới hạn; xoá mềm; `ORG_MEMBERSHIP_CHANGED` (`removed`).
-- Owner / LR không đổi vai hay gỡ được qua đây — vai owner chỉ đổi qua owner change (F18d–F18f) hoặc tự rút lui (F18g).
+- Owner / LR không đổi vai hay gỡ được qua đây — vai owner chỉ đổi qua owner change (F18d–F18e) hoặc tự rút lui (F18g).
 - **File:** `organization.service.ts > changeMemberRole(), removeMember()`, `organization-membership.service.ts > changeMembershipRole()`.
 
 ### F18d — Đề xuất thêm owner (ADD_OWNER)
-Owner change được quyết **trong tổ chức**, không qua admin nền tảng. Ba loại ADD_OWNER / REMOVE_OWNER / TRANSFER_OWNER dùng chung bảng `organization_applications`, bảng approval `organization_owner_change_approvals` và `OwnerChangeExecutor` (BR-339..BR-347).
+Owner change được quyết **trong tổ chức**, không qua admin nền tảng. Hai loại ADD_OWNER / REMOVE_OWNER dùng chung bảng `organization_applications`, bảng approval `organization_owner_change_approvals` và `OwnerChangeExecutor` (BR-339..BR-347).
 1. Owner mở "Đề xuất thêm owner", mỗi dòng chọn tài khoản có sẵn (AutoComplete, email đầy đủ) hoặc gõ email chưa có tài khoản, kèm họ tên; một lý do chung.
 2. `POST /api/v1/organizations/:id/owner-changes {type:"ADD_OWNER", owners:[{user_id?, email?, full_name}], reason}` (BR-319): tạo đơn `type = ADD_OWNER`, `organizationId`, `submitterEmail` = email JWT, `profile` = snapshot tổ chức (+ `proposalReason`, `proposerName`, `subjectNames`), status AWAITING_OWNER_CONFIRMATION; chốt approver = mọi owner trừ người đề xuất (hạn 14 ngày). Mỗi người được đề xuất nhận `ORG_OWNER_CONFIRMATION_REQUEST` (`isAddOwner`); mỗi approver nhận `ORG_OWNER_CHANGE_APPROVAL_REQUEST` (website + email).
 3. Người được đề xuất xác nhận / từ chối như F11. Từ chối hoặc hết hạn → WITHDRAWN, người đề xuất nhận email kèm link trang tổ chức (BR-320).
@@ -524,16 +523,9 @@ sequenceDiagram
 4. Áp dụng: target hạ xuống `demote_to` hoặc bị xoá mềm membership; nhận `ORG_MEMBERSHIP_CHANGED`; các owner nhận `ORG_OWNER_CHANGE_DECIDED`; `reconcileOpenChanges` (BR-346). Trigger `ORG_MUST_HAVE_OWNER` vẫn bảo vệ; hai owner thu hồi nhau cùng lúc thì dòng owner bị khoá nên chỉ một bên thắng, bên kia REJECTED ("Người đề xuất không còn là owner.").
 - **File:** `owner-change.service.ts > create()`, `owner-change-executor.ts > applyLocked(), demoteOrRemove()`.
 
-### F18f — Chuyển giao vai owner (TRANSFER_OWNER)
-1. Owner mở "Chuyển giao" trên dòng của mình: chọn người nhận trong các thành viên **không phải owner**, chọn vai mình giữ sau khi chuyển (ADMIN / MEMBER / rời), lý do.
-2. `POST /:id/owner-changes {type:"TRANSFER_OWNER", target_user_id, demote_to, reason}` (BR-344): kiểm người nhận là member không phải owner, trần 3 tổ chức; tạo 1 candidate với email người nhận, gửi `ORG_OWNER_CONFIRMATION_REQUEST` (`isTransfer`). Không có approver.
-3. Người nhận chấp nhận qua link (trang `/organizations/owner-confirm`). Sau commit → `tryFinalize`: trong một transaction, người nhận nhận đúng vai của người chuyển (OWNER hoặc LEGAL_REPRESENTATIVE, source `OWNER_TRANSFER`), người chuyển hạ vai / rời. Lỗi giữa chừng → rollback toàn bộ, tổ chức vẫn còn owner cũ.
-4. Người nhận nhận `ORG_MEMBERSHIP_CHANGED`; người chuyển và các owner nhận `ORG_OWNER_CHANGE_DECIDED`. Người nhận từ chối / hết hạn → WITHDRAWN.
-- **File:** `owner-change.service.ts > create()`, `owner-change-executor.ts > applyLocked()`, `owner-confirmation.service.ts > confirm()`.
-
 ### F18g — Owner tự hạ vai / rời tổ chức
 1. `PATCH /api/v1/organizations/:id/members/me/role {role: ADMIN|MEMBER}` hoặc `DELETE /api/v1/organizations/:id/members/me` (BR-348).
-2. Transaction khoá các dòng owner của tổ chức (`FOR UPDATE`); chỉ còn mình là owner → 409 ORG_MUST_HAVE_OWNER (client gợi ý chuyển giao trước). Ngược lại cập nhật vai / xoá mềm ngay.
+2. Transaction khoá các dòng owner của tổ chức (`FOR UPDATE`); chỉ còn mình là owner → 409 ORG_MUST_HAVE_OWNER (client ẩn Hạ vai / Rời và gợi ý thêm owner khác trước). Ngược lại cập nhật vai / xoá mềm ngay.
 3. Sau commit: `reconcileOpenChanges` — owner change do người này tạo bị huỷ, owner change đang chờ người này duyệt có thể được áp dụng; các owner còn lại nhận `ORG_OWNER_LEFT`.
 - **File:** `INC/modules/organization/organization.service.ts > leaveOrganization(), stepDown(), ownerStepOut()`.
 

@@ -196,7 +196,7 @@ erDiagram
     string code UK
     string status
     string lane
-    string type "NEW_ORG|ADD_OWNER|REMOVE_OWNER|TRANSFER_OWNER"
+    string type "NEW_ORG|ADD_OWNER|REMOVE_OWNER"
     uuid targetUserId
     string demoteToRole
     string submitterEmail
@@ -342,7 +342,7 @@ erDiagram
 
 | Bảng | Field chính | Ràng buộc |
 |---|---|---|
-| OrganizationMember (`organization_members`) | organizationId, userId, **role** (`OrgMemberRole`, default `MEMBER`), source (`MembershipSource`: APPLICATION_APPROVAL / JOIN_REQUEST / INVITATION / OWNER_TRANSFER / INTERNAL), sourceRef (uuid, vd id đơn), deletedAt | PK kép `(organizationId, userId)` = một vai mỗi người mỗi tổ chức; index `(userId, role)`. Owner của tổ chức = membership vai `LEGAL_REPRESENTATIVE` hoặc `OWNER` (không còn `organizations.ownerId`) |
+| OrganizationMember (`organization_members`) | organizationId, userId, **role** (`OrgMemberRole`, default `MEMBER`), source (`MembershipSource`: APPLICATION_APPROVAL / JOIN_REQUEST / INVITATION / INTERNAL), sourceRef (uuid, vd id đơn), deletedAt | PK kép `(organizationId, userId)` = một vai mỗi người mỗi tổ chức; index `(userId, role)`. Owner của tổ chức = membership vai `LEGAL_REPRESENTATIVE` hoặc `OWNER` (không còn `organizations.ownerId`) |
 | OrganizationJoiningRequest (`organization_joining_requests`) | organizationId, requesterId, status (12 / 14 / 18), deletedAt (xoá mềm nghĩa là đã huỷ) | |
 | OrganizationChannel (`organization_channels`) | organizationId (cascade), type (`FACEBOOK_PAGE` / `WEBSITE` / `ZALO_OA`), url, isPrimary | Chỉ được ghi lúc duyệt đơn |
 | OrganizationViolation (`organization_violations`) | organizationId, campaignId?, severity (`MINOR` / `MAJOR`), reason | [CHƯA HOÀN THIỆN] không có code ghi |
@@ -351,9 +351,9 @@ erDiagram
 | Field | Kiểu | Ràng buộc / default | Ý nghĩa |
 |---|---|---|---|
 | code | varchar(16) | **unique** | `ORG-XXXXXXXX` |
-| type | varchar(16) | default `NEW_ORG` | `ApplicationType`; `ADD_OWNER` / `REMOVE_OWNER` / `TRANSFER_OWNER` = owner change (F18d–F18f), quyết trong tổ chức |
-| targetUserId | uuid? | | REMOVE_OWNER: owner bị thu hồi; TRANSFER_OWNER: thành viên nhận vai (migration `20260926160000_org_owner_changes`) |
-| demoteToRole | varchar(32)? | | REMOVE / TRANSFER: vai người rút lui giữ lại (`ADMIN` / `MEMBER`); null = rời tổ chức |
+| type | varchar(16) | default `NEW_ORG` | `ApplicationType`; `ADD_OWNER` / `REMOVE_OWNER` = owner change (F18d–F18e), quyết trong tổ chức. Giá trị cũ `TRANSFER_OWNER` (tính năng đã gỡ) chỉ còn ở các dòng lịch sử; migration `20260927100000_drop_owner_transfer` chuyển các dòng đang mở sang WITHDRAWN |
+| targetUserId | uuid? | | REMOVE_OWNER: owner bị thu hồi (migration `20260926160000_org_owner_changes`) |
+| demoteToRole | varchar(32)? | | REMOVE_OWNER: vai người bị thu hồi giữ lại (`ADMIN` / `MEMBER`); null = rời tổ chức |
 | orgType | varchar(32)? | | `OrgType`; bắt buộc khi nộp |
 | status | varchar(32) | default `DRAFT` | `ApplicationStatus` |
 | lane | varchar(1)? | | `A` / `B`, do admin đặt khi duyệt |
@@ -564,12 +564,12 @@ Mọi cột `status` kiểu Int ở incident, notification và reward (job) đ�
 | `KycStatus` | NOT_SUBMITTED, APPROVED, EXPIRED, REVOKED | Kết luận về giấy tờ pháp lý. Code chỉ ghi APPROVED |
 | `TrustTier` | NONE, BASIC, VERIFIED | Cấp tin cậy. VERIFIED là **Blue Tick**. BASIC không được dùng |
 | `ApplicationStatus` | DRAFT, AWAITING_OWNER_CONFIRMATION, PENDING_REVIEW, NEEDS_REVISION, APPROVED, REJECTED, WITHDRAWN | Vòng đời của đơn (xem 04 §7). "Đơn mở" (`OPEN_APPLICATION_STATUSES`) gồm DRAFT, AWAITING_OWNER_CONFIRMATION, PENDING_REVIEW, NEEDS_REVISION; sửa được (`EDITABLE_APPLICATION_STATUSES`) khi DRAFT, NEEDS_REVISION |
-| `ApplicationType` | NEW_ORG, ADD_OWNER, REMOVE_OWNER, TRANSFER_OWNER | Ba loại sau là owner change (`OWNER_CHANGE_TYPES`, `isOwnerChangeType()`) trên tổ chức có sẵn (`organizationId` là cột thường, `profile` là snapshot tổ chức + `proposalReason`, `proposerName`, `subjectNames`) |
+| `ApplicationType` | NEW_ORG, ADD_OWNER, REMOVE_OWNER | Hai loại sau là owner change (`OWNER_CHANGE_TYPES`, `isOwnerChangeType()`) trên tổ chức có sẵn (`organizationId` là cột thường, `profile` là snapshot tổ chức + `proposalReason`, `proposerName`, `subjectNames`) |
 | `OwnerApprovalStatus` | PENDING, APPROVED, REJECTED, EXPIRED | Câu trả lời của một owner trên owner change (04 §7b) |
 | `OwnerCandidateStatus` | PENDING, CONFIRMED, DECLINED, EXPIRED | Trạng thái xác nhận của một owner |
 | `OrgMemberRole` | LEGAL_REPRESENTATIVE, OWNER, ADMIN, CAMPAIGN_MANAGER, MEMBER | `OWNER_ROLES` = LEGAL_REPRESENTATIVE, OWNER. ADMIN / CAMPAIGN_MANAGER gán qua "đổi vai" (BR-331) |
 | `OrgPermission` | ORG_EDIT, MEMBER_APPROVE, MEMBER_INVITE, MEMBER_MANAGE, OWNER_PROPOSE, CAMPAIGN_CREATE, CAMPAIGN_MANAGE_ANY | Ma trận theo vai ở `DC/org-permissions.ts` (xem 05 §2.3) |
-| `MembershipSource` | APPLICATION_APPROVAL, JOIN_REQUEST, INVITATION, OWNER_TRANSFER, INTERNAL | Nguồn gốc membership; OWNER_TRANSFER = nhận chuyển giao vai owner |
+| `MembershipSource` | APPLICATION_APPROVAL, JOIN_REQUEST, INVITATION, INTERNAL | Nguồn gốc membership |
 | `InvitationStatus` | PENDING_APPROVAL, SENT, ACCEPTED, DECLINED, REJECTED, CANCELLED, EXPIRED | Lời mời thành viên (04 §7c); `OPEN_INVITATION_STATUSES` = PENDING_APPROVAL, SENT |
 | `ApplicationDocType` | ESTABLISHMENT_DECISION, BUSINESS_LICENSE, REP_ID_CARD, OTHER | Loại giấy tờ |
 | `OrganizationChannelType` | FACEBOOK_PAGE, WEBSITE, ZALO_OA | Kênh chính thức |

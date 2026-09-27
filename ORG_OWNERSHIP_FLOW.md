@@ -12,10 +12,10 @@ Sep 26, 2026 · @Minh
 > - Endpoint tìm user đặt ở incident (`GET /organizations/:id/user-search`) để quyết định che email theo vai; identity chỉ có route nội bộ `/users/search`, `/users/lookup-by-ids`.
 > - `membershipVersion` vẫn **không cần**: không có ngữ cảnh tổ chức trong JWT, mọi kiểm tra đọc DB mỗi request; bộ chọn ngữ cảnh chỉ lưu ở client.
 >
-> **Đã làm (Phase 3, 2026-09-26):** luồng **đi ra** của owner và bỏ bước admin nền tảng duyệt thêm owner. Ba loại "owner change" (`ADD_OWNER`, `REMOVE_OWNER`, `TRANSFER_OWNER`) dùng chung `organization_applications`, bảng approval `organization_owner_change_approvals` và `owner-change-executor.ts` (chi tiết: `02-business-flows.md` F18d–F18g, `03-business-rules.md` BR-339..BR-349, `04-state-machines.md` §7b). Quyết định của chủ sản phẩm khác thiết kế gốc:
+> **Đã làm (Phase 3, 2026-09-26):** luồng **đi ra** của owner và bỏ bước admin nền tảng duyệt thêm owner. Hai loại "owner change" (`ADD_OWNER`, `REMOVE_OWNER`) dùng chung `organization_applications`, bảng approval `organization_owner_change_approvals` và `owner-change-executor.ts` (chi tiết: `02-business-flows.md` F18d, F18e, F18g, `03-business-rules.md` BR-339..BR-349, `04-state-machines.md` §7b). Quyết định của chủ sản phẩm khác thiết kế gốc:
 > - **Thêm owner không cần admin nền tảng**: người được đề xuất xác nhận qua email **và** mọi owner khác đồng ý là áp dụng ngay (tài khoản cho email mới tạo lúc áp dụng).
 > - **Thu hồi owner khác**: mọi owner còn lại (trừ người đề xuất và người bị thu hồi) phải đồng ý; tổ chức 2 owner thì có hiệu lực ngay. Người bị thu hồi không phủ quyết.
-> - **Chuyển giao**: chỉ cho thành viên hiện tại không phải owner; người nhận chấp nhận qua email là đủ, owner khác chỉ được báo. Người nhận nhận đúng vai của người chuyển (kể cả người đại diện pháp lý).
+> - **Chuyển giao**: đã bỏ chuyển giao theo quyết định sản phẩm (2026-09-27); owner cuối phải thêm owner khác trước khi rời. Migration `20260927100000_drop_owner_transfer` huỷ các đề xuất chuyển giao còn mở.
 > - **Owner tự hạ vai / rời**: có hiệu lực ngay khi còn owner khác; owner cuối bị chặn `ORG_MUST_HAVE_OWNER`.
 > - Admin nền tảng can thiệp trực tiếp vai owner (tranh chấp, owner mất liên lạc): **để sau**.
 >
@@ -650,7 +650,7 @@ Gợi ý: cho phép người dùng tự yêu cầu gửi lại email kích hoạ
 | Người thứ 4 xác nhận nhưng user đó đã có 3 tổ chức | Chặn ngay lúc nộp; chặn lại lúc duyệt |
 | Token xác nhận bị lộ | Chấp nhận — tương đương truy cập được email. Có `confirmIp` và `confirmUA` để truy vết |
 | Quản trị viên duyệt đúng lúc một candidate vừa hết hạn | Transaction kèm `FOR UPDATE` trên application, một trong hai thua |
-| Owner duy nhất rời tổ chức sau này | `ORG_MUST_HAVE_OWNER` chặn; phải chuyển giao trước |
+| Owner duy nhất rời tổ chức sau này | `ORG_MUST_HAVE_OWNER` chặn; phải thêm owner khác trước |
 | Email candidate gõ sai, gửi tới người lạ | Họ bấm "Tôi không liên quan", hồ sơ về `NEEDS_REVISION` |
 
 ### Bất biến cần bảo vệ
@@ -673,7 +673,7 @@ Bốn case đáng viết test trước khi merge, vì cả bốn đều là **l�
 | --- | --- |
 | Duyệt hai hồ sơ cùng lúc cho user đã có 2 tổ chức | Một thành công, một `OWNER_QUOTA_EXCEEDED` |
 | Duyệt hồ sơ có email đã là User active | Không tạo User mới, membership được tạo, gửi email "đã gắn vai" |
-| Chuyển giao owner rồi rollback giữa chừng | Tổ chức vẫn còn đúng một owner là người cũ |
+| Thay đổi owner lỗi giữa chừng rồi rollback | Tổ chức giữ nguyên các owner cũ |
 | Thu hồi owner cuối cùng | `ORG_MUST_HAVE_OWNER`, không có gì được ghi |
 
 ## Câu hỏi cần chốt
@@ -716,4 +716,4 @@ Những điểm dưới đây thiết kế chưa quyết được thay chủ s�
 
 1. Cập nhật mục 4.3 trong tài liệu hiện hành, trỏ sang tài liệu này
 2. Lập kế hoạch migration từ các tài khoản tổ chức đang có sang mô hình `Organization` + `OrgMembership`
-3. Thiết kế **luồng đi ra**: thu hồi vai owner, owner tự rời tổ chức, chuyển giao quyền. Luồng vào giờ đã chặt, luồng ra thì chưa có gì
+3. Thiết kế **luồng đi ra**: thu hồi vai owner, owner tự rời tổ chức. Luồng vào giờ đã chặt, luồng ra thì chưa có gì

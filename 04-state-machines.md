@@ -189,7 +189,7 @@ stateDiagram-v2
 | bất kỳ → gỡ (`removedAt`) | Người nộp (lưu nháp) | Không xoá bản ghi; event OWNER_CANDIDATE_REMOVED; thêm lại thì về PENDING | `syncOwners()` |
 | CONFIRMED / EXPIRED → PENDING | Người nộp (nộp lại) | Reset do BR-306, hoặc cấp link mới cho EXPIRED | `submitApplication()` |
 
-### 7b. Owner change (`type` = `ADD_OWNER` / `REMOVE_OWNER` / `TRANSFER_OWNER`)
+### 7b. Owner change (`type` = `ADD_OWNER` / `REMOVE_OWNER`)
 
 Dùng chung bảng và state `organization_applications`, nhưng không có DRAFT / NEEDS_REVISION / PENDING_REVIEW: quyết trong tổ chức, không qua admin nền tảng; bị từ chối là kết thúc.
 
@@ -204,11 +204,11 @@ stateDiagram-v2
   WITHDRAWN --> [*]
 ```
 
-"Đủ điều kiện" = mọi candidate (ADD: người được đề xuất; TRANSFER: người nhận; REMOVE: không có) CONFIRMED **và** mọi approval APPROVED hoặc void (approver không còn là owner) — BR-339.
+"Đủ điều kiện" = mọi candidate (ADD: người được đề xuất; REMOVE: không có) CONFIRMED **và** mọi approval APPROVED hoặc void (approver không còn là owner) — BR-339.
 
 | Từ → sang | Ai | Điều kiện | Side effect | File |
 |---|---|---|---|---|
-| (mới) → AWAITING_OWNER_CONFIRMATION | Người có `OWNER_PROPOSE` | BR-319 / BR-343 / BR-344, BR-342 | Chốt approver; email xác nhận candidate; ORG_OWNER_CHANGE_APPROVAL_REQUEST; REMOVE: ORG_OWNER_REMOVAL_PROPOSED | `owner-change.service.ts > create()` |
+| (mới) → AWAITING_OWNER_CONFIRMATION | Người có `OWNER_PROPOSE` | BR-319 / BR-343, BR-342 | Chốt approver; email xác nhận candidate; ORG_OWNER_CHANGE_APPROVAL_REQUEST; REMOVE: ORG_OWNER_REMOVAL_PROPOSED | `owner-change.service.ts > create()` |
 | AWAITING → APPROVED | Hệ thống sau hành động cuối (tạo, đồng ý, xác nhận, owner rời) hoặc sweeper | BR-345 | Cấp / hạ / gỡ membership; outbox ORG_OWNER_ONBOARD (ADD); ORG_OWNER_CHANGE_DECIDED, ORG_MEMBERSHIP_CHANGED; `reconcileOpenChanges` | `owner-change-executor.ts > tryFinalize()` |
 | AWAITING → REJECTED | Approver (từ chối) / hệ thống (lỗi vĩnh viễn) | BR-341, BR-345 | `rejectReason`; ORG_OWNER_CHANGE_DECIDED | `owner-change.service.ts > reject()`, `owner-change-executor.ts > end()` |
 | AWAITING → WITHDRAWN | Người đề xuất (huỷ) / candidate (từ chối) / sweeper (hết hạn) / đồng bộ | BR-320, BR-321, BR-340, BR-346 | `reviewNote`; link chờ hết hạn; báo người đã xác nhận | `cancel()`, `decline()`, `expireOverdue()`, `sweep()`, `reconcileOpenChanges()` |
@@ -268,7 +268,6 @@ stateDiagram-v2
 | isEmailVerified | true → false | Owner | Đổi contactEmail | Gửi link mới | `updateOrganization()` |
 | owner | (mới) → membership `LEGAL_REPRESENTATIVE` / `OWNER` | Admin (duyệt đơn) | Trần 3 tổ chức dưới advisory lock | Outbox ORG_OWNER_ONBOARD | `organization-membership.service.ts > grantMembership()` |
 | owner | membership vai khác → `OWNER` | Hệ thống (áp dụng ADD_OWNER) | Candidate xác nhận + owner khác đồng ý; trần 3 tổ chức dưới advisory lock | Outbox ORG_OWNER_ONBOARD | `owner-change-executor.ts > applyLocked()` |
-| owner | member → vai của người chuyển (OWNER / LR); người chuyển → ADMIN / MEMBER / rời | Hệ thống (áp dụng TRANSFER_OWNER) | Người nhận chấp nhận; trần 3 tổ chức; một transaction | ORG_MEMBERSHIP_CHANGED, ORG_OWNER_CHANGE_DECIDED | `applyLocked()` |
 | owner | owner → ADMIN / MEMBER / xoá mềm | Hệ thống (áp dụng REMOVE_OWNER) | Mọi owner còn lại đồng ý (không còn ai → ngay) | ORG_MEMBERSHIP_CHANGED | `applyLocked() > demoteOrRemove()` |
 | owner | owner → ADMIN / MEMBER / rời | Chính owner | Còn owner khác (khoá dòng owner) | ORG_OWNER_LEFT; `reconcileOpenChanges` | `organization.service.ts > stepDown(), leaveOrganization()` |
 | owner | owner cuối cùng → rời / xoá / hạ vai | — | **Bị chặn**: 409 ORG_MUST_HAVE_OWNER ở code và trigger DB | — | `ownerStepOut()`, trigger `organization_members_owner_guard` |

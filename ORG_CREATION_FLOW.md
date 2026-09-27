@@ -298,7 +298,6 @@ Dữ liệu tổ chức / hồ sơ cũ là dữ liệu dev nên bị xoá, khôn
     link `/organizations/owner-confirm` và mọi owner khác đồng ý thì áp dụng ngay. Từ chối hoặc
     hết hạn thì huỷ. F18d, BR-319..BR-322.
   - Thu hồi owner khác (`REMOVE_OWNER`): mọi owner còn lại đồng ý; 2 owner thì có hiệu lực ngay. F18e.
-  - Chuyển giao (`TRANSFER_OWNER`): cho thành viên không phải owner, người nhận chấp nhận qua email. F18f.
   - Chung: BR-339..BR-348, `04-state-machines.md` §7b.
 - **Owner tự hạ vai / rời** khi còn owner khác: F18g, BR-348.
 - **Mời thành viên**, **đổi vai / gỡ thành viên** theo ma trận quyền tổ chức: F18b, F18c,
@@ -319,7 +318,7 @@ Dữ liệu tổ chức / hồ sơ cũ là dữ liệu dev nên bị xoá, khôn
   (`npx jest`).
 - Integration: `src/__it__/org-ownership.it.test.ts` (Testcontainers, `npm run test:it`) — race
   trần 3 tổ chức, owner đã có tài khoản, trigger `ORG_MUST_HAVE_OWNER`, áp dụng owner change ADD_OWNER nâng
-  MEMBER lên OWNER, chuyển giao bị rollback giữa chừng, hai owner rời cùng lúc, hai owner thu hồi nhau cùng lúc, owner cuối không rời / hạ vai được, hai lần chấp nhận lời mời đồng thời. Cần Docker; trên Apple Silicon pull sẵn
+  MEMBER lên OWNER, ADD_OWNER lỗi sau khi đã cấp vai người đầu tiên thì rollback toàn bộ, hai owner rời cùng lúc, hai owner thu hồi nhau cùng lúc, owner cuối không rời / hạ vai được, hai lần chấp nhận lời mời đồng thời. Cần Docker; trên Apple Silicon pull sẵn
   `postgis/postgis:17-3.5` bản `linux/amd64`.
 
 Kịch bản thủ công (cần `npm run dev` + `npm run dev:worker` của incident và notification):
