@@ -110,6 +110,8 @@ Cột:
 | `OWNER_PROPOSE` — owner change: thêm owner, thu hồi owner khác; xem / đồng ý / từ chối owner change | ✅ | ❌ | ❌ | ❌ |
 | `CAMPAIGN_CREATE`, `CAMPAIGN_MANAGE_ANY` | ✅ | ❌ (ADMIN không có quyền campaign) | chỉ `CAMPAIGN_CREATE` | ❌ |
 
+> Người đại diện pháp lý không thể tự hạ vai / rời hay bị thu hồi nếu không có người thay (BR-344): người thay xác nhận qua email, các owner còn lại đồng ý.
+
 ¹ `assignableRoles(actor)`: owner gán được `ADMIN`, `CAMPAIGN_MANAGER`, `MEMBER`; admin chỉ gán được `CAMPAIGN_MANAGER`, `MEMBER`. `canActOnMember(actor, target)`: không ai đổi vai / gỡ owner hoặc LR qua đây (vai owner chỉ đổi qua owner change được các owner khác đồng ý, hoặc owner tự rút lui), admin không tác động admin khác, không tự tác động chính mình (`INC/modules/organization/organization.service.ts > changeMemberRole(), removeMember()`).
 
 **Owner change** (BR-339..BR-348): quyết trong tổ chức, không qua admin nền tảng.

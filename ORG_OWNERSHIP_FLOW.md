@@ -17,6 +17,7 @@ Sep 26, 2026 · @Minh
 > - **Thu hồi owner khác**: mọi owner còn lại (trừ người đề xuất và người bị thu hồi) phải đồng ý; tổ chức 2 owner thì có hiệu lực ngay. Người bị thu hồi không phủ quyết.
 > - **Chuyển giao**: đã bỏ chuyển giao theo quyết định sản phẩm (2026-09-27); owner cuối phải thêm owner khác trước khi rời. Migration `20260927100000_drop_owner_transfer` huỷ các đề xuất chuyển giao còn mở.
 > - **Owner tự hạ vai / rời**: có hiệu lực ngay khi còn owner khác; owner cuối bị chặn `ORG_MUST_HAVE_OWNER`.
+> - **Người đại diện pháp lý (2026-09-27)**: không được bỏ trống. Thu hồi LR hoặc LR tự hạ vai phải chọn **người thay** (owner có sẵn, tài khoản có sẵn hoặc email mới); người thay xác nhận qua email, các owner còn lại đồng ý; khi áp dụng người thay thành LR, LR cũ thành MEMBER (BR-344). Owner bị hạ vai mặc định xuống MEMBER; ADMIN không có quyền campaign.
 > - Admin nền tảng can thiệp trực tiếp vai owner (tranh chấp, owner mất liên lạc): **để sau**.
 >
 > **Còn lại [CHƯA HOÀN THIỆN]:** Admin nền tảng can thiệp vai owner. Phase 4 — quyền quản lý chiến dịch theo vai (`CAMPAIGN_CREATE`, `CAMPAIGN_MANAGE_ANY` mới khai báo), sửa các chỗ thiếu kiểm quyền campaign / SOS, lọc trang chiến dịch theo ngữ cảnh. Vòng đời riêng của dấu tích xanh.
