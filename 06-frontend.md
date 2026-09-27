@@ -11,7 +11,7 @@
 | Thành phần | Công nghệ | Bằng chứng |
 |---|---|---|
 | Build / dev server | Vite 7 (port 5173 cho cả `dev` và `preview`), CSR thuần | `ecolink-client/vite.config.ts`, `ecolink-client/package.json > scripts` |
-| UI | React 19.2, Tailwind 4, Radix/shadcn (`components/ui`), antd 6 (Image preview), sonner (toast) | `ecolink-client/package.json` |
+| UI | React 19.2, Tailwind 4, Radix/shadcn (`components/ui`), antd 6 (Image preview, Dropdown), sonner (toast) | `ecolink-client/package.json` |
 | Routing | `react-router-dom` 7, `createBrowserRouter` | `ecolink-client/src/routes/index.tsx > router` |
 | Server state | TanStack Query v5 (wrapper `useGet`/`usePost`) | `ecolink-client/hooks/reactQuery.ts`, `ecolink-client/libs/queryClient.ts` |
 | Client state | Zustand + `persist` (localStorage key `auth_store`) | `ecolink-client/stores/useAuthStore.ts` |
@@ -610,6 +610,7 @@ Client chỉ có **1 role cứng**: `ADMIN_ROLE_ID = "40ed59d7-5d7c-4ab2-88a2-a2
 - `SEVERITY_LEVEL` 1–5 (Low, Moderate, Substantial, Severe, Critical) (`constants/severity.ts`); `DIFFICULTY_LEVEL` 1–4 (Easy..Very Hard) (`constants/difficulty.ts`); `PRIORITY` URGENT 1, MEDIUM 2, LOW 3 (`constants/priority.ts`).
 - Trạng thái hồ sơ tổ chức: DRAFT, AWAITING_OWNER_CONFIRMATION, PENDING_REVIEW, NEEDS_REVISION, APPROVED, REJECTED, WITHDRAWN; trạng thái owner: PENDING, CONFIRMED, DECLINED, EXPIRED (`constants/organizationApplicationStatus.ts`).
 - Mã lỗi API → câu i18n: `constants/apiErrorMessages.ts > apiErrorMessage()` (chèn `{{email}}` lấy từ phần sau `": "` của message), được `hooks/reactQuery.ts > usePost` ưu tiên trước message của server.
+- Tag/nhãn: mọi tag (trạng thái, vai trò, độ ưu tiên, nhãn ngữ cảnh "Your group"/"You", loại marker trên bản đồ, tag trang chủ) render bằng `components/ui/Pill.tsx`. Pill là `rounded-full border px-2 py-0.5 text-xs`, có `tone` neutral/green/red/amber/orange/cyan/blue/lime/brand, và `isDark` cho admin. Bảng màu và nhãn dùng chung nằm ở `constants/statusTone.ts`: `STATUS_TONE`, `STATUS_LABEL`, `PRIORITY_TONE`, `GIFT_REDEEM_TONE`. `TagStatus`/`StatusTag`/`ChangeStatus`/`ChangePriority`/`RoleBadge` đều bọc `Pill`; antd `Tag` không còn được dùng. Số đếm (unread, join request) vẫn dùng `components/ui/badge.tsx`.
 - Notification preferences: `campaign_new`, `campaign_nearby_verify`, `campaign_done`, `campaign_completion_rejected`, `volunteer_request`, `report_status` (mặc định true) (`constants/notificationPreferences.ts`).
 - `PAYOUT_METRIC_OPTIONS`: CRP, VRP, ORG_AGGREGATE (`constants/gamification.ts`) — không nơi nào dùng.
 
