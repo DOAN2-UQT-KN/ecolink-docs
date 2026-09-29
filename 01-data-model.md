@@ -127,6 +127,10 @@ erDiagram
   CampaignResult ||--o{ CampaignResultFile : ""
   Campaign ||--o{ CampaignCompletionVerification : ""
   Campaign ||--o{ Sos : ""
+  Campaign ||--o{ CampaignMeetingPoint : "1–5 điểm tập kết"
+  CampaignMeetingPoint ||--o{ CampaignMeetingPointReport : ""
+  Report ||--o{ CampaignMeetingPointReport : ""
+  Campaign ||--o{ CampaignStatusLog : "audit"
   Report {
     uuid id PK
     uuid campaignId FK
@@ -147,6 +151,16 @@ erDiagram
     datetime endDate
     float latitude
     float longitude
+    datetime revisionDeadline
+  }
+  CampaignMeetingPoint {
+    uuid id PK
+    uuid campaignId FK
+    float latitude
+    float longitude
+    float radiusKm
+    int slots
+    uuid leaderUserId
   }
   Sos {
     int id PK "autoincrement"
@@ -270,11 +284,18 @@ erDiagram
 | title | varchar(200) | NOT NULL | Kèm titleVi và titleEn |
 | banner | varchar(2048)? | | |
 | description (+Vi/En) | text? | | |
-| status | int | default 12, index | `GlobalStatus` |
-| rejectReason | text? | | Dùng chung cho lý do ban và lý do từ chối hoàn thành |
-| startDate, endDate | datetime? | | Không được validate thứ tự ngày |
-| detailAddress | varchar(255)? | | |
-| latitude, longitude, radiusKm | float? | | |
+| status | int | default 12 ở DB, index | `GlobalStatus`; code tạo mới luôn ghi DRAFT (4). Tên theo vòng đời ở `DC/campaign-lifecycle.ts > CampaignStatus` (xem 04 §2) |
+| rejectReason | text? | | Lý do lần duyệt gần nhất (yêu cầu chỉnh sửa, chặn, ban) hoặc lý do từ chối hoàn thành; duyệt thì xoá |
+| startDate, endDate | datetime? | | Thứ tự ngày, ≥ 48h, ≤ 12h, cùng ngày được kiểm khi gửi duyệt (BR-164); bản nháp để trống được |
+| detailAddress | varchar(255)? | | Bản sao của điểm tập kết đầu tiên, ghi mỗi lần lưu điểm tập kết (`replaceMeetingPoints()`) |
+| latitude, longitude, radiusKm | float? | | Như trên (dùng cho bản đồ, mời người dân ở gần, SOS) |
+| contactName | varchar(120)? | | Người liên hệ (bắt buộc khi gửi duyệt) |
+| contactPhone | varchar(20)? | | SĐT liên hệ; chỉ trả cho người quản lý, admin, volunteer đã được duyệt |
+| safetyNotes | text? | | Dụng cụ, trang phục, rủi ro |
+| requirements | jsonb? | | `{minAge, skills[], bringOwnTools}`; difficulty ≥ 3 thì mặc định minAge 18 |
+| revisionDeadline | datetime? | | Hạn nộp lại khi NEEDS_REVISION (19) = lúc yêu cầu chỉnh sửa + 7 ngày |
+| submittedAt | datetime? | | Lần gửi duyệt gần nhất |
+| lastSubmittedSnapshot | jsonb? | | Nội dung đã gửi duyệt lần trước; nộp lại thì diff với bản này được ghi vào `campaign_status_logs.changes` |
 | difficulty | int | default 1 | Level bên reward-service `difficulties.level` |
 | organizationId | uuid | NOT NULL, FK → organizations | |
 | createdBy | uuid? | index | Người tạo, được coi là "owner" của campaign |
@@ -282,6 +303,9 @@ erDiagram
 | Bảng | Field chính | Ràng buộc |
 |---|---|---|
 | CampaignManager (`campaign_managers`) | campaignId, userId, assignedBy, assignedAt, deletedAt | PK kép (campaignId, userId) |
+| CampaignMeetingPoint (`campaign_meeting_points`) | campaignId, name? (≤120), latitude, longitude, detailAddress? (≤255), radiusKm, gatherAt?, slots? (null = không giới hạn riêng), leaderUserId? (manager phụ trách), sortOrder, deletedAt | index campaignId; 1–5 điểm mỗi campaign (kiểm khi gửi duyệt) |
+| CampaignMeetingPointReport (`campaign_meeting_point_reports`) | meetingPointId (cascade), reportId, campaignId | PK kép (meetingPointId, reportId); **unique (campaignId, reportId)**. Lưu lựa chọn điểm rác của cả bản nháp, **không khoá** report; khoá thật vẫn là `reports.campaignId` + status 22 (một cột nên mỗi report chỉ thuộc một campaign) |
+| CampaignStatusLog (`campaign_status_logs`) | campaignId, type (`STATUS_CHANGE` \| `EDIT`), event (submit, approve, block, … hoặc `edit`), fromStatus?, toStatus?, actorId?, actorRole (`manager` \| `admin` \| `system`), reason?, changes (jsonb: diff `{field: {from, to}}`) | index (campaignId, createdAt); ghi ở `INC/modules/campaign/campaign-state-machine.ts > transitionCampaign(), logCampaignEdit()` |
 | CampaignJoiningRequest (`campaign_joining_requests`) | campaignId?, volunteerId?, status (default 12) | **Không có unique** (campaignId, volunteerId) |
 | CampaignAttendanceCheckIn (`campaign_attendance_check_ins`) | campaignId (cascade), userId, checkedInAt | **unique (campaignId, userId)** |
 | CampaignTask (`campaign_tasks`) | campaignId?, title/titleVi/titleEn, description*, priority (default 2; DTO 1..3), status (default 12), scheduledDate, scheduledTime varchar(50) | |
@@ -537,23 +561,27 @@ Mọi cột `status` kiểu Int ở incident, notification và reward (job) đ�
 
 | Giá trị | Tên | Dùng ở |
 |---|---|---|
-| 1 | `_STATUS_ACTIVE` | Campaign đã duyệt; Organization hoạt động; SOS đang mở; Season ACTIVE; User ACTIVE (identity có enum riêng, cùng số) |
-| 2 | `_STATUS_INACTIVE` | Report, Campaign, Organization bị ban; Season INACTIVE; User bị ban |
+| 1 | `_STATUS_ACTIVE` | Campaign đã duyệt (ACTIVE); Organization hoạt động; SOS đang mở; Season ACTIVE; User ACTIVE (identity có enum riêng, cùng số) |
+| 2 | `_STATUS_INACTIVE` | Report, Organization bị ban; Campaign bị chặn / ban (BLOCKED); Season INACTIVE; User bị ban |
 | 3 | `_STATUS_DELETED` | Không dùng. identity dùng số 3 cho `PENDING_ACTIVATION` với nghĩa khác |
-| 4 | `_STATUS_DRAFT` | Chỉ xuất hiện trong điều kiện chuyển trạng thái của campaign và organization |
-| 5 | `_STATUS_NEW` | Chỉ xuất hiện trong điều kiện chuyển trạng thái của campaign |
+| 4 | `_STATUS_DRAFT` | Campaign nháp (DRAFT); điều kiện chuyển trạng thái của organization |
+| 5 | `_STATUS_NEW` | Không còn dùng cho campaign |
 | 6 | `_STATUS_WAITING_APPROVED` | Submission được xem là "chờ duyệt" |
 | 7 | `_STATUS_WAITING_CONFIRMED` | Campaign chờ admin duyệt hoàn thành |
-| 9 | `_STATUS_INREVIEW` | Campaign (được phép mark-done), Submission mới, Organization |
+| 9 | `_STATUS_INREVIEW` | Campaign cũ (LEGACY_IN_REVIEW, vẫn được mark-done), Submission mới, Organization |
 | 11 | `_STATUS_CANCELED` | BackgroundJob bị huỷ |
-| 12 | `_STATUS_PENDING` | Mặc định: Report mới, Campaign mới, Join request, Job, Outbox |
+| 12 | `_STATUS_PENDING` | Mặc định: Report mới, Join request, Job, Outbox; Campaign chờ duyệt (PENDING_REVIEW) |
 | 14 | `_STATUS_APPROVED` | Join request được duyệt, Submission được duyệt |
 | 17 | `_STATUS_COMPLETED` | Report, Campaign, Task, SOS, Job hoàn tất |
 | 18 | `_STATUS_REJECTED` | Organization join request bị từ chối, Submission bị từ chối |
 | 21 | `_STATUS_TODO` | Report đã được duyệt, chờ gán vào campaign; Task mới |
 | 22 | `_STATUS_INPROCESS` | Report đang nằm trong campaign; Task đã được giao; Job đang chạy |
 | 23 | `_STATUS_FAILED` | Job hoặc outbox thất bại |
-| 8, 10, 13, 15, 16, 19, 20, 24, 25 | REVIEWED, ASSIGNED, VERIFIED, RECEIVED, CONFIRMED, RETURNED, OBSOLETE, CLOSED, REPROCESS | Không được dùng trong logic |
+| 19 | `_STATUS_RETURNED` | Campaign cần chỉnh sửa (NEEDS_REVISION) |
+| 20 | `_STATUS_OBSOLETE` | Campaign hết hạn duyệt (EXPIRED) |
+| 8, 10, 13, 15, 16, 24, 25 | REVIEWED, ASSIGNED, VERIFIED, RECEIVED, CONFIRMED, CLOSED, REPROCESS | Không được dùng trong logic |
+
+Vòng đời campaign dùng tên riêng trong `DC/campaign-lifecycle.ts > CampaignStatus` (DRAFT 4, PENDING_REVIEW 12, NEEDS_REVISION 19, ACTIVE 1, PENDING_COMPLETION 7, LEGACY_IN_REVIEW 9, COMPLETED 17, BLOCKED 2, EXPIRED 20) cùng các tập trạng thái và hằng số tinh chỉnh (xem 03 §8, 04 §2).
 
 ### 6.2 Từ vựng đơn đăng ký tổ chức và trust (`ecolink-server/shared/da2-constants/src/organization-trust.ts`)
 
@@ -581,11 +609,12 @@ Mọi cột `status` kiểu Int ở incident, notification và reward (job) đ�
 ### 6.3 Notification (`notification-service/prisma/schema.prisma`, `ecolink-server/shared/da2-constants/src/notification-preferences.ts`)
 
 - `NotificationType`: `EMAIL`, `WEBSITE` (in-app).
-- `NotificationKind` (42 giá trị). Bảng dưới liệt kê từng kind, key preference tương ứng và nơi phát:
+- `NotificationKind` (47 giá trị). Bảng dưới liệt kê từng kind, key preference tương ứng và nơi phát:
 
 | Kind | Preference key | Có nơi phát? |
 |---|---|---|
-| CAMPAIGN_CREATED | campaignNew | Có |
+| CAMPAIGN_CREATED, CAMPAIGN_APPROVED | campaignNew | Có |
+| CAMPAIGN_PENDING_REVIEW, CAMPAIGN_REVISION_REQUESTED, CAMPAIGN_BLOCKED, CAMPAIGN_EXPIRED (migration `20260930100000_campaign_review_kinds`) | (luôn gửi) | Có |
 | CAMPAIGN_VERIFY_INVITE, CAMPAIGN_COMPLETION_VERIFY_INVITE | campaignNearbyVerify | Có |
 | CAMPAIGN_DONE, CAMPAIGN_COMPLETION_APPROVED_BY_ADMIN | campaignDone | Có |
 | CAMPAIGN_COMPLETION_REJECTED_BY_ADMIN | campaignCompletionRejected | Có |

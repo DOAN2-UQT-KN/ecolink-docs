@@ -119,7 +119,7 @@ Cột:
 - REMOVE_OWNER: mọi owner trừ người đề xuất và người bị thu hồi đồng ý; tổ chức có 2 owner thì có hiệu lực ngay. Người bị thu hồi không phủ quyết được.
 - Owner tự hạ vai / rời: có hiệu lực ngay khi còn owner khác.
 
-`CAMPAIGN_CREATE` được kiểm ở `createCampaign()` (`orgAccessService.assertOrgPermission()`); `CAMPAIGN_MANAGE_ANY` cho LR / OWNER quản lý mọi campaign của tổ chức (`INC/modules/campaign/campaign-access.service.ts`, xem §2.5).
+`CAMPAIGN_CREATE` được kiểm ở `createCampaign()` và `GET /campaigns/create-eligibility` (`INC/modules/campaign/campaign-eligibility.service.ts > assertCanCreateDraft(), get()`; không có quyền thì `hidden=true`, client ẩn nút tạo); `CAMPAIGN_MANAGE_ANY` cho LR / OWNER quản lý mọi campaign của tổ chức (`INC/modules/campaign/campaign-access.service.ts`, xem §2.5).
 
 Mọi response tổ chức có người xem (`GET /:id`, `/by-slug/:slug`, `/`, `/my`) kèm `my_role`, `is_owner`, `is_member` và `permissions { can_edit_org, can_approve_members, can_invite, can_manage_members, can_propose_owners, can_create_campaign, can_manage_all_campaigns, assignable_roles }` (`permissionsFor(role)`); client ẩn / hiện nút theo object này.
 
@@ -170,11 +170,16 @@ Cột **Owner tổ chức** là thành viên vai `LEGAL_REPRESENTATIVE` / `OWNER
 
 | Hành động | User | Owner tổ chức | createdBy | Manager | Volunteer | Admin | Nơi kiểm tra |
 |---|---|---|---|---|---|---|---|
-| Tạo campaign | ❌ | ✅ | | | | ❌ (trừ khi có vai) | `createCampaign()`, `assertOrgPermission(CAMPAIGN_CREATE)`: vai LR / OWNER / CAMPAIGN_MANAGER; sai → 403 `ORG_PERMISSION_DENIED` |
-| Xem danh sách, chi tiết (mọi status), task, manager, submission | 🔓 ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | `authenticate` |
-| Sửa campaign (kể cả `status`, report, manager) | ❌ | ✅ 🔓 (đổi được status) | ✅ 🔓 | ✅ 🔓 | ❌ | ❌ | `campaignAccessService.assertCanManage()` |
-| Xoá campaign | ❌ | ✅ | ✅ | ❌ | ❌ | ❌ | `assertCanDelete()` |
-| Duyệt hoặc ban campaign | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | `campaign.controller.ts > adminVerifyCampaign` |
+| Xem điều kiện tạo (`GET /campaigns/create-eligibility`) | ✅ (`hidden=true`) | ✅ | | | | ✅ | `campaignEligibilityService.get()`; `NO_PERMISSION` khi vai không có `CAMPAIGN_CREATE` |
+| Tạo campaign (nháp) | ❌ | ✅ | | | | ❌ (trừ khi có vai) | `createCampaign()` → `assertCanCreateDraft()`: vai LR / OWNER / CAMPAIGN_MANAGER (sai → 403 `ORG_PERMISSION_DENIED`) và tổ chức status 1 (sai → 403 `CAMPAIGN_CREATE_NOT_ALLOWED`) |
+| Gửi duyệt / nộp lại (`POST /:id/submit`) | ❌ | ✅ | ✅ | ✅ | ❌ | ❌ | `campaign-lifecycle.service.ts > submit()` → `assertCanManage()` + `assertCanSubmit()` (BR-163) |
+| Xem danh sách (`GET /campaigns`) | ⚠️ chỉ 1 / 7 / 9 / 17 | ⚠️ như User | ⚠️ như User | ⚠️ như User | ⚠️ như User | ⚠️ mọi status trừ DRAFT | `campaign.controller.ts > getCampaigns` (`publicOnly`, `excludeDrafts`); campaign của mình ở `GET /campaigns/my` |
+| Xem chi tiết | ⚠️ chỉ 1 / 7 / 9 / 17 | ✅ | ✅ | ✅ | ⚠️ như User | ⚠️ mọi status trừ DRAFT | `getCampaignById()`: DRAFT chỉ người quản lý, 12 / 19 / 2 / 20 người quản lý hoặc admin, còn lại 404. `contactPhone` chỉ người quản lý, admin, volunteer |
+| Xem task, manager, submission | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | `authenticate` |
+| Sửa campaign (nội dung, điểm tập kết, manager; không đổi được `status`) | ❌ | ✅ | ✅ | ✅ | ❌ | ❌ | `campaignAccessService.assertCanManage()`; sau khi duyệt chỉ trường tự do (409 `CAMPAIGN_NOT_EDITABLE`, BR-154) |
+| Xoá campaign | ❌ | ✅ | ✅ | ❌ | ❌ | ❌ | `assertCanDelete()`; chỉ 4 / 12 / 19 / 2 / 20 (409 `CAMPAIGN_NOT_DELETABLE`) |
+| Xem lịch sử (`GET /:id/history`) | ❌ | ✅ | ✅ | ✅ | ❌ | ✅ | `campaign-lifecycle.service.ts > getHistory()` |
+| Duyệt, yêu cầu chỉnh sửa, chặn hoặc ban (`PUT /:id/review`, alias `/verify`) | ❌ | ❌ | ❌ | ❌ | ❌ | ⚠️ trừ campaign của tổ chức mà admin là thành viên (403 `CAMPAIGN_REVIEW_CONFLICT_OF_INTEREST`) | `campaign.controller.ts > reviewCampaign` (JWT role admin), `campaign-lifecycle.service.ts > review()` |
 | Thêm hoặc gỡ manager | ❌ | ✅ | ✅ | ✅ | ❌ | ❌ | `assertCanManage()`; người được thêm phải là thành viên (422 `CAMPAIGN_MANAGER_NOT_MEMBER`); không gỡ được người tạo (422 `CANNOT_REMOVE_CAMPAIGN_CREATOR`) |
 | Tạo, sửa, xoá, giao task | ❌ | ✅ | ✅ | ✅ | ❌ | ❌ | `canManageCampaign()` → `campaignAccessService.canManage()` |
 | Cập nhật kết quả task | ❌ | ✅ | ✅ | ✅ | ⚠️ (task được giao) | ❌ | `updateTaskResult()` |
@@ -236,7 +241,7 @@ Chi tiết từng vấn đề ở [99-open-issues.md](99-open-issues.md) mục A
 3. `/api/v1/roles/*` không yêu cầu đăng nhập.
 4. `request-password-reset` trả token reset trong response.
 5. `PATCH /admin/gift-redemptions/:id/status` thiếu kiểm tra admin.
-6. `PUT /campaigns/:id` cho người quản lý campaign đổi `status` tuỳ ý.
+6. ~~`PUT /campaigns/:id` cho người quản lý campaign đổi `status` tuỳ ý~~ — đã sửa: body có `status` bị từ chối, mọi chuyển trạng thái đi qua `transitionCampaign()` (04 §2).
 7. Trạng thái job AI không kiểm tra quyền. Danh sách thành viên tổ chức cũng không có guard — cần xác nhận. (Danh sách volunteer đã duyệt và giải quyết SOS đã kiểm quyền từ 2026-09-27.)
 8. Guard `/admin` phía client bị comment out.
 9. ~~Refresh token đổi claim `role` thành UUID~~ — đã sửa (`refreshAccessToken()` dùng tên role).

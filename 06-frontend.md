@@ -80,6 +80,7 @@ Nguồn: `ecolink-client/src/routes/index.tsx > router`. Tổng: **45 route entr
 | `/` | `app/(pages)/(main)/(hompage)/page.tsx > Home` | Main | Không (nếu có token thì gọi `getMe` để làm mới user) | — | Không |
 | `/campaigns` | `app/(pages)/(main)/campaigns/(search)/page.tsx` | Main | Tab explore: tuỳ server `GET /api/v1/campaigns`; tab `?tab=mine` gọi `/campaigns/my` (server `authenticate`) | — | Không |
 | `/campaigns/create` | `app/(pages)/(main)/campaigns/create/page.tsx > CreateCampaignPage` | Main | Có (qua API 401) | UI chỉ cho chọn tổ chức mình có vai LR / OWNER / CAMPAIGN_MANAGER và `permissions.can_create_campaign`; nhận `?organizationId=` để chọn sẵn | Không |
+| `/campaigns/:id/edit` | `app/(pages)/(main)/campaigns/[id]/edit/page.tsx > EditCampaignPage` (đăng ký ở `src/routes/index.tsx`) | Main | Có (qua API 401) | Chỉ khi `can_manage_campaign` và status ∈ {DRAFT 4, PENDING_REVIEW 12, NEEDS_REVISION 19} (`CAMPAIGN_EDITABLE_STATUSES`); khác thì hiện "This campaign can no longer be edited here". Có banner trạng thái (lý do của admin, hạn nộp lại) | Không |
 | `/campaigns/me` | `app/(pages)/(main)/campaigns/me/page.tsx` | Main | Có (qua API 401) | — | Không |
 | `/campaigns/:id` | `app/(pages)/(main)/campaigns/[id]/page.tsx > CampaignDetailPage` | Main | Tuỳ server `GET /campaigns/:id` | Hành động ẩn/hiện theo `can_manage_campaign` (mục 7) | Không |
 | `/incidents` | `app/(pages)/(main)/incidents/(search)/page.tsx` | Main | Có (qua API 401 — `GET /reports/search` có `authenticate`, `ecolink-server/services/incident-service/src/modules/report/report.routes.ts`) | — | Không |
@@ -187,9 +188,11 @@ Ghi chú: `(hook)` = hàm trong `apis/`, path là path gửi tới `VITE_API_URL
 | | `useGetReports` (`apis/incident/getReport.ts`) — tab "explore" của IncidentList | GET `/api/v1/reports/search?page=1&limit=20&status=21 (TODO)` |
 | | `useGetSavedResources` (`apis/saved-resource/getSavedResource.ts`) — tab "saved" | GET `api/v1/incident/saved-resources?resource_type=report...` |
 | | `useSaveResource`, `useUpvote`, `useDownvote` (qua `modules/ReportDetailCard`) | POST `/api/v1/incident/saved-resources/save`; POST `/api/v1/incident/votes/upvote` / `downvote` |
-| | `uploadToCloudinary` (banner) → `useCreateCampaign` (`apis/campaign/createCampaign.ts`) | Cloudinary → POST `/api/v1/campaigns` → push `/campaigns/me` |
+| | `CampaignForm` (`create/_components/CampaignForm.tsx`, dùng chung cho `/campaigns/:id/edit`) + `_context/CampaignContext.tsx`: "Lưu nháp" = `uploadToCloudinary` (banner) → `useCreateCampaign` (`apis/campaign/createCampaign.ts`) lần đầu, `useUpdateCampaign` (`apis/campaign/updateCampaign.ts`) các lần sau; "Gửi duyệt" / "Nộp lại" = validate form → lưu → `useSubmitCampaign` (`apis/campaign/submitCampaign.ts`) → push `/campaigns/me`. Lỗi `details` của server được gắn vào từng field (`form.setError`, message dịch theo `code`) + danh sách tóm tắt; `CAMPAIGN_REPORTS_TAKEN` tô các report cần bỏ | Cloudinary → POST `/api/v1/campaigns` hoặc PUT `/api/v1/campaigns/:id` → POST `/api/v1/campaigns/:id/submit` |
+| | `useGetCreateEligibility` (`apis/campaign/getCreateEligibility.ts`): giới hạn difficulty cho tổ chức chưa xác thực | GET `/api/v1/campaigns/create-eligibility?organizationId=` |
+| | `useGetMembersByOrg` (`MeetingPointsEditor.tsx`, chọn trưởng điểm) | GET `/api/v1/organizations/:id/members?page=1&limit=100` |
 | | Nominatim (`LeafletAddress.tsx`) | GET `https://nominatim.openstreetmap.org/reverse` và `/search` |
-| `/campaigns/me` | `useGetMyCampaigns` (`app/(pages)/(main)/campaigns/me/_context/CampaignMeContext.tsx`); filter tổ chức `SelectListOrganization allOptions roles={ALL_ORG_MEMBER_ROLES}` (`_components/FormFilter.tsx`): URL không có `organizationId` → lọc theo `activeOrganizationId`; chọn "All" ghi `organizationId=-1` vào URL để bỏ lọc mà không bị mặc định ghi đè. Nút "Add Campaign" chỉ hiện khi `useCampaignCreatorOrganizations()` có ≥ 1 tổ chức (`campaigns/me/page.tsx`) | GET `/api/v1/campaigns/my?is_owner=true&organizationId=` (server: BR-185); GET `/api/v1/organizations/my?roles=LEGAL_REPRESENTATIVE,OWNER,ADMIN,CAMPAIGN_MANAGER,MEMBER`; GET `/api/v1/organizations/my?roles=LEGAL_REPRESENTATIVE,OWNER,CAMPAIGN_MANAGER` |
+| `/campaigns/me` | `useGetMyCampaigns` (`app/(pages)/(main)/campaigns/me/_context/CampaignMeContext.tsx`); filter tổ chức `SelectListOrganization allOptions roles={ALL_ORG_MEMBER_ROLES}` (`_components/FormFilter.tsx`): URL không có `organizationId` → lọc theo `activeOrganizationId`; chọn "All" ghi `organizationId=-1` vào URL để bỏ lọc mà không bị mặc định ghi đè. Tab trạng thái: Draft, Pending review, Needs revision, Active, Waiting confirmed, Completed, Blocked, Expired. Nút "Add Campaign" (`CreateCampaignButton`) chỉ hiện khi `useCampaignCreatorOrganizations()` có ≥ 1 tổ chức, kiểm eligibility cho tổ chức ngữ cảnh (hoặc tổ chức đầu tiên) (`campaigns/me/page.tsx`). Cột thao tác (`_components/DataTable.tsx`): Sửa → `/campaigns/:id/edit`, Gửi duyệt / Nộp lại (`useSubmitCampaign`, lỗi thì mở trang sửa), Xoá (`useDeleteCampaign`, `apis/campaign/deleteCampaign.ts`) | GET `/api/v1/campaigns/my?is_owner=true&organizationId=` (server: BR-185); GET `/api/v1/organizations/my?roles=LEGAL_REPRESENTATIVE,OWNER,ADMIN,CAMPAIGN_MANAGER,MEMBER`; GET `/api/v1/organizations/my?roles=LEGAL_REPRESENTATIVE,OWNER,CAMPAIGN_MANAGER`; GET `/api/v1/campaigns/create-eligibility`; POST `/api/v1/campaigns/:id/submit`; DELETE `/api/v1/campaigns/:id` |
 | `/campaigns/:id` | `useGetCampaignById` (`apis/campaign/campaignById.ts`) | GET `/api/v1/campaigns/:id` |
 | | `useGetMyJoinRequests` (`apis/campaign/joinCampaign.ts`) — chỉ khi `request_status=PENDING` mà thiếu `join_request_id` | GET `/api/v1/campaigns/volunteers/join-requests/my?campaign_id=&status=12` |
 | | `useJoinCampaign` | POST `/api/v1/campaigns/volunteers/join-requests` body `{ campaign_id }` |
@@ -227,7 +230,7 @@ Ghi chú: `(hook)` = hàm trong `apis/`, path là path gửi tới `VITE_API_URL
 | (OrganizationCard) | `useCreateOrganizationJoinRequest`, `useCancelJoinRequest`, `useLeaveOrganization` | POST `api/v1/organizations/:id/join-requests`; DELETE `api/v1/organizations/join-requests/cancel` body `{ request_id }`; DELETE `/api/v1/organizations/:id/members/me` |
 | `/organizations/:slug` | `useGetOrganizationBySlug` (`apis/organization/organizationBySlug.ts`) | GET `/api/v1/organizations/by-slug/:slug` |
 | | join/cancel/leave như trên (`.../organizations/[id]/_context/OrganizationDetailContext.tsx`) | |
-| | `useGetCampaigns` (tab campaign, `_components/CampaignList.tsx`); nút "Create campaign" khi `permissions.can_create_campaign`, dẫn tới `/campaigns/create?organizationId=<id>` | GET `/api/v1/campaigns?organizationId=...` |
+| | `useGetCampaigns` (tab campaign, `_components/CampaignList.tsx`); nút "Create campaign" (`CreateCampaignButton`) khi `permissions.can_create_campaign`, ẩn / khoá theo eligibility, dẫn tới `/campaigns/create?organizationId=<id>` | GET `/api/v1/campaigns?organizationId=...`; GET `/api/v1/campaigns/create-eligibility` |
 | | `useGetMembersByOrg` (`apis/organization/organizationById.ts`) | GET `/api/v1/organizations/:organization_id/members` |
 | | `useGetJoinRequestsByOrg` + `useProcessJoinRequest` (khi `permissions.can_approve_members`) | GET `/api/v1/organizations/:organization_id/join-requests`; PUT `api/v1/organizations/join-requests/process` |
 | | `useResendContactEmail` (`permissions.can_edit_org`, khi email chưa verify) | POST `/api/v1/organizations/:id/resend-contact-email` |
@@ -268,9 +271,10 @@ Ghi chú: `(hook)` = hàm trong `apis/`, path là path gửi tới `VITE_API_URL
 | Màn hình | Hàm api (file) | Method + path |
 |---|---|---|
 | `/admin` | — (placeholder) | — |
-| `/admin/campaigns` | `useGetCampaigns` (`.../admin/campaigns/_context/CampaignContext.tsx`) | GET `/api/v1/campaigns` (list công khai, không phải `/all`) |
+| `/admin/campaigns` | `useGetCampaigns` (`.../admin/campaigns/_context/CampaignContext.tsx`); filter status (Pending review, Needs revision, Active, Waiting confirmed, Completed, Blocked, Expired — không có Draft) và tổ chức (gửi `organizationId`; trước đây gửi nhầm `organization_id`) | GET `/api/v1/campaigns` (server trả mọi status trừ DRAFT cho admin); tab Pending review thêm `excludeMemberOrgs=true` |
 | | `useGetMyOrganizations` (filter tổ chức qua `SelectListOrganization`) | GET `/api/v1/organizations/my?is_owner=true` |
-| | `useVerifyCampaign` (`apis/campaign/processCampaign.ts`) | PUT `/api/v1/campaigns/:id/verify` body `{ status: 1 (ACTIVE) }` hoặc `{ status: 2 (INACTIVE), reject_reason }` |
+| | `useReviewCampaign` (`apis/campaign/reviewCampaign.ts`, trong `ReviewCampaignConfirm.tsx`) | PUT `/api/v1/campaigns/:id/review` body `{ decision: "approve" \| "request_revision" \| "block", reason }` |
+| | `useGetCampaignHistory` (`apis/campaign/getCampaignHistory.ts`, lịch sử thay đổi trong `ReviewCampaignConfirm.tsx`) | GET `/api/v1/campaigns/:id/history` |
 | | `useReviewCampaignCompletion` | PUT `/api/v1/campaigns/:id/completion-review` body `{ decision: "approve"|"reject", rejectReason }` |
 | `/admin/incidents` | `useGetIncidents` (`apis/incident/getIncidents.ts` → `getReports`) | GET `/api/v1/reports/search` (không phải `/all`) |
 | | `useVerifyReport` / `useBanReport` | PUT `/api/v1/reports/:id/verify`; PUT `/api/v1/reports/:id/ban` body `{ reject_reason }` |
@@ -322,7 +326,13 @@ Tổng số file hàm (không tính `models/`): 70; trong đó `apis/auth/update
 | `updateCampaignTask` / `useUpdateCampaignTask` | PUT | `/api/v1/campaigns/tasks/:id` | `PopoverCreateUpdateTask.tsx` |
 | `deleteCampaignTask` / `useDeleteCampaignTask` | DELETE | `/api/v1/campaigns/tasks/:id` (kèm body) | `CampaignTask.tsx` |
 | `getCampaignVolunteer` / `useGetCampaignVolunteer` | GET | `/api/v1/campaigns/volunteers/approved` | `CurrentMember.tsx` |
-| `createCampaign` / `useCreateCampaign` | POST | `/api/v1/campaigns` | `campaigns/create/_context/CampaignContext.tsx` |
+| `createCampaign` / `useCreateCampaign` | POST | `/api/v1/campaigns` | `campaigns/create/_context/CampaignContext.tsx` (lưu nháp lần đầu) |
+| `updateCampaign` / `useUpdateCampaign` (`apis/campaign/updateCampaign.ts`) | PUT | `/api/v1/campaigns/:id` | `campaigns/create/_context/CampaignContext.tsx` (lưu nháp / sửa) |
+| `submitCampaign` / `useSubmitCampaign` | POST | `/api/v1/campaigns/:id/submit` | `CampaignContext.tsx`, `campaigns/me/_components/DataTable.tsx` |
+| `deleteCampaign` / `useDeleteCampaign` | DELETE | `/api/v1/campaigns/:id` | `campaigns/me/_components/DataTable.tsx` |
+| `getCreateEligibility` / `useGetCreateEligibility` | GET | `/api/v1/campaigns/create-eligibility` | `components/client/shared/CreateCampaignButton.tsx`, `CampaignContext.tsx` |
+| `reviewCampaign` / `useReviewCampaign` | PUT | `/api/v1/campaigns/:id/review` | `admin/campaigns/_components/ReviewCampaignConfirm.tsx` |
+| `getCampaignHistory` / `useGetCampaignHistory` | GET | `/api/v1/campaigns/:id/history` | `ReviewCampaignConfirm.tsx` |
 | `getCampaigns` / `useGetCampaigns` | GET | `/api/v1/campaigns` | campaigns search, organizations `[id]/CampaignList`, admin campaigns |
 | `getMyCampaigns` / `useGetMyCampaigns` | GET | `/api/v1/campaigns/my` | campaigns search (tab mine), `campaigns/me` |
 | `getAllCampaigns` | GET | `/api/v1/campaigns/all` | `maps/_components/MapPage.tsx` |
@@ -332,10 +342,8 @@ Tổng số file hàm (không tính `models/`): 70; trong đó `apis/auth/update
 | `getMyJoinRequests` / `useGetMyJoinRequests` (campaign) | GET | `/api/v1/campaigns/volunteers/join-requests/my` | `CampaignDetailContext.tsx` |
 | `cancelJoinCampaign` / `useCancelJoinCampaign` | DELETE | `/api/v1/campaigns/volunteers/join-requests/cancel` (body) | `CampaignDetailContext.tsx` |
 | `processJoinCampaign` / `useProcessJoinCampaign` | PUT | `/api/v1/campaigns/volunteers/join-requests/process` | `CampaignJoinRequest.tsx` |
-| `verifyCampaign` / `useVerifyCampaign` | PUT | `/api/v1/campaigns/:id/verify` | `admin/campaigns/_components/VerifyCampaignConfirm.tsx` |
 | `reviewCampaignCompletion` / `useReviewCampaignCompletion` | PUT | `/api/v1/campaigns/:id/completion-review` | `admin/campaigns/_components/CompletionReviewCampaignConfirm.tsx` |
 | `submitCompletionVerification` / `useSubmitCompletionVerification` | POST | `/api/v1/campaigns/:campaignId/completion-verification` | `CampaignCompletionVerifyButton.tsx` |
-| `updateCampaignMe` / `useUpdateCampaignMe` (nằm ngoài `apis/`: `app/(pages)/(main)/campaigns/me/_services/campaignMe.service.ts`) | PUT | `/api/v1/campaigns/:id` | chỉ `UpdateCampaignPopover.tsx` — mà component này **không được render ở đâu** → thực tế UNUSED |
 | `registerChatMedia` | POST | `/api/v1/chat/media` | `components/client/ai-chat/AiChatWidget.tsx` |
 | `getAdminGiftRedemptions` / `useGetAdminGiftRedemptions` | GET | `/api/v1/admin/gift-redemptions` | `admin/gifts/_components/RedeemsTable.tsx` |
 | `updateGiftRedemptionStatus` / `useUpdateGiftRedemptionStatus` | PATCH | `/api/v1/admin/gift-redemptions/:id/status` | `RedeemsTable.tsx` |
@@ -548,8 +556,9 @@ Client chỉ có **1 role cứng**: `ADMIN_ROLE_ID = "40ed59d7-5d7c-4ab2-88a2-a2
 | — nút "Add task", sửa/xoá task | `canManageCampaign`; sửa/xoá ẩn khi task `status === COMPLETED` | `CampaignTask.tsx`, `components/client/shared/CampaignTaskCard.tsx` |
 | — danh sách volunteer (thẻ Members) | `canManageCampaign`, `request_status === APPROVED` hoặc `user.roleId === ADMIN_ROLE_ID`; không thì hiện câu giải thích, không gọi API | `CurrentMember.tsx` |
 | — nút "Add manager", icon gỡ manager | `canManageCampaign` (và campaign có `organization_id`); icon gỡ ẩn trên dòng người tạo | `CurrentMember.tsx` |
-| `/campaigns/me` — nút "Add Campaign" | Có ≥ 1 tổ chức với `permissions.can_create_campaign` (`useCampaignCreatorOrganizations`) | `campaigns/me/page.tsx`, `hooks/useCampaignCreatorOrganizations.ts` |
-| Organization detail — nút "Create campaign" (tab campaign) | `permissions.can_create_campaign` | `organizations/[id]/_components/CampaignList.tsx` |
+| `/campaigns/me` — nút "Add Campaign" | Có ≥ 1 tổ chức với `permissions.can_create_campaign` (`useCampaignCreatorOrganizations`); rồi `CreateCampaignButton`: `eligibility.hidden` → ẩn; `!can_create` → khoá và hiện lý do (`CAMPAIGN_CREATE_BLOCK_REASON_LABEL`); tổ chức chưa xác thực → nhãn "Unverified organization" | `campaigns/me/page.tsx`, `hooks/useCampaignCreatorOrganizations.ts`, `components/client/shared/CreateCampaignButton.tsx` |
+| `/campaigns/me` — Sửa / Gửi duyệt / Xoá | Sửa: `can_manage_campaign` và status ∈ {4, 12, 19}; Gửi duyệt ("Nộp lại" khi 19): `can_manage_campaign` và status ∈ {4, 19}; Xoá: `can_delete_campaign` và status ∈ {4, 12, 19, 2, 20} (`constants/campaignLifecycle.ts`) | `campaigns/me/_components/DataTable.tsx` |
+| Organization detail — nút "Create campaign" (tab campaign) | `permissions.can_create_campaign`, rồi `CreateCampaignButton` như trên | `organizations/[id]/_components/CampaignList.tsx` |
 | Organization detail — tag "Your group" + `RoleBadge` | Có `my_role` (mọi vai) | `OrganizationDetailContext.tsx`, `HeroSection.tsx` |
 | Organization detail — nút "Edit group", "Resend contact email" | `permissions.can_edit_org` (resend thêm điều kiện có contact email và chưa verify) | `HeroSection.tsx`, `GeneralInformation.tsx` |
 | Organization detail — tab "Join requests" | `permissions.can_approve_members` | `OrganizationDetailTabs.tsx` |
@@ -566,8 +575,9 @@ Client chỉ có **1 role cứng**: `ADMIN_ROLE_ID = "40ed59d7-5d7c-4ab2-88a2-a2
 | — bảng "Owner confirmations" | ẩn khi DRAFT; nút "Resend (n left)" khi AWAITING / NEEDS_REVISION, owner PENDING, còn lượt và qua `next_resend_at`; nút "Replace" khi NEEDS_REVISION và owner DECLINED / EXPIRED | `apply/_components/OwnerConfirmations.tsx` |
 | — "Continue your application" / "Edit application" | status ∈ {DRAFT, NEEDS_REVISION} | như trên; `apply/edit/page.tsx` chặn nếu khác |
 | Owner confirm — nút Xác nhận / "I'm not involved" | `active && status === PENDING && !expired`; cảnh báo khi `session_email_mismatch` | `organizations/owner-confirm/page.tsx` |
-| Admin campaigns — "Ban" | status = ACTIVE | `admin/campaigns/_components/DataTable.tsx` |
-| — "Verify" (approve/ban) | status ∉ {INACTIVE, COMPLETED, WAITING_CONFIRMED} và ≠ ACTIVE | như trên |
+| Admin campaigns — "Ban" | status = ACTIVE (1) → `ReviewCampaignConfirm` chế độ ban (`decision=block`, lý do bắt buộc) | `admin/campaigns/_components/DataTable.tsx` |
+| — "Review" (duyệt / yêu cầu chỉnh sửa / chặn) | status = PENDING_REVIEW (12). Duyệt chỉ bật khi tick đủ 6 mục checklist; yêu cầu chỉnh sửa và chặn cần lý do; hiện lịch sử thay đổi từ lần yêu cầu chỉnh sửa gần nhất | `ReviewCampaignConfirm.tsx` |
+| — "Completion review" | status = PENDING_COMPLETION (7) | `CompletionReviewCampaignConfirm.tsx` |
 | — "Completion review" | status = WAITING_CONFIRMED | như trên |
 | Admin incidents — preview + verify/ban | ẩn khi status = INACTIVE; mode `verify` nếu status = PENDING, còn lại `ban` | `admin/incidents/_components/DataTable.tsx` |
 | Dấu tick cạnh tên tổ chức | Chỉ hiện `BlueTickBadge` khi `trust_tier === "VERIFIED" && !tick_suspended`; không còn icon ✅/❌ theo `is_email_verified` (email đã bắt buộc xác minh bằng OTP trước khi nộp đơn). Áp dụng cho card tìm kiếm, trang chi tiết (ngay cạnh tên tổ chức trong `HeroSection.tsx`), bảng My organizations, bảng admin Organizations. Hover/focus vào tick hiện tooltip giải thích ý nghĩa | `components/ui/BlueTickBadge.tsx > isBlueTickVisible()`, `BlueTickBadge` |
@@ -591,7 +601,7 @@ Client chỉ có **1 role cứng**: `ADMIN_ROLE_ID = "40ed59d7-5d7c-4ab2-88a2-a2
 | Reset password | cần `?reset_token=` (thiếu → màn "Invalid Reset Token"); newPassword ≥ 6 | `reset-password/page.tsx` |
 | Activate account | cần `?token=`; newPassword ≥ 8 (comment: "identity-service rejects anything shorter"); confirm phải khớp | `activate-account/page.tsx` |
 | Tạo incident | title bắt buộc; ≥ 1 ảnh, tối đa 10 ảnh, chỉ `image/*`; ảnh nén (cạnh dài ≤ 1280px, JPEG quality 0.5); detailAddress bắt buộc; latitude/longitude bắt buộc (chọn trên bản đồ); severity 1–5 (mặc định 1); `waste_type` = mảng join bằng dấu phẩy | `incidents/create/_components/{Information,FileUpload,Address}.tsx`, `incidents/create/_services/incident.service.ts`, `libs/compressImage.ts`, `constants/severity.ts` |
-| Tạo campaign | organization bắt buộc (chỉ tổ chức mình có vai LR / OWNER / CAMPAIGN_MANAGER); title bắt buộc, ≤ 200 (cắt thêm khi gửi); detail_address ≤ 255 (tự cắt); difficulty clamp 1–4; banner ảnh crop + nén; `report_ids` chỉ gồm report `status === TODO (21)`; **start/end date không có rule bắt buộc hay so sánh** | `campaigns/create/_services/campaign.service.ts > transformToApiData()`, `GeneralInformation.tsx`, `LeafletAddress.tsx`, `constants/difficulty.ts` |
+| Tạo / sửa campaign | "Lưu nháp" chỉ cần organization và title; "Gửi duyệt" chạy đủ rule của form trước (server vẫn là nơi kiểm cuối, BR-164): title 10–120 (cắt khi gửi); mô tả ≥ 100 ký tự sau khi bỏ HTML; banner bắt buộc, sau nén ≤ 5 MB; chọn một ngày + giờ bắt đầu / kết thúc, kết thúc sau bắt đầu, ≤ 12h, bắt đầu ≥ 48h nữa; difficulty clamp 1–4 và bị giới hạn theo `eligibility.max_difficulty` (tổ chức chưa xác thực); người liên hệ + SĐT, ghi chú an toàn (`ContactAndSafety.tsx`); 1–5 điểm tập kết (`MeetingPointsEditor.tsx`): tên, trưởng điểm chọn từ thành viên tổ chức, giờ tập trung, slots, bán kính, vị trí `LeafletAddress` riêng từng điểm, `IncidentList` riêng từng điểm (lọc theo bán kính, bỏ report đã thuộc điểm khác), các điểm cách nhau ≤ 5 km; detail_address ≤ 255 (tự cắt) | `campaigns/create/_services/campaign.service.ts > transformToApiData()`, `GeneralInformation.tsx`, `ContactAndSafety.tsx`, `MeetingPointsEditor.tsx`, `UploadBanner.tsx`, `constants/campaignLifecycle.ts`, `constants/difficulty.ts` |
 | Task (tạo/sửa) | title bắt buộc; status bắt buộc khi sửa (TODO/IN_PROGRESS/COMPLETED); scheduled_date, time from/to bắt buộc, to > from; khi status = COMPLETED phải có mô tả kết quả hoặc media; tối đa 20 file evidence; video ≤ 100 MB; ảnh được nén; chỉ image/video | `components/client/shared/PopoverCreateUpdateTask.tsx` |
 | SOS | content bắt buộc; phone bắt buộc, regex `/^[0-9+\s\-(). ]{7,20}$/` | `maps/_components/SOSForm.tsx` |
 | Đổi quà | phone `required`, `minLength=7`, `maxLength=32` (thuộc tính HTML); pickupLocation `required`, `maxLength=1000` | `gifts/_components/RedeemGiftDialog.tsx` |
@@ -604,7 +614,7 @@ Client chỉ có **1 role cứng**: `ADMIN_ROLE_ID = "40ed59d7-5d7c-4ab2-88a2-a2
 | — review | consent phải `true` | `StepReview.tsx` |
 | — luồng | Cổng OTP chỉ có bước email; trình soạn nháp có profile → contact → owners → documents → review. "Continue" validate bước rồi lưu im lặng; "Save draft" lưu có toast; ảnh chọn từ máy được upload Cloudinary trước khi lưu; submit = lưu + `POST /submit` | `ApplicationContext.tsx > next(), saveDraft(), submit()` |
 | Sửa tổ chức (owner) | name bắt buộc; contact email bắt buộc + regex | `organizations/me/_components/UpdateOrganizationPopover.tsx` |
-| Admin ban/reject (campaign, incident, organization, user) | lý do bắt buộc (trim), `maxLength=5000` | `VerifyCampaignConfirm.tsx`, `CompletionReviewCampaignConfirm.tsx`, `VerifyIncidentConfirm.tsx`, `ApproveOrganizationConfirm.tsx`, `BanUserConfirm.tsx` |
+| Admin ban/reject (campaign, incident, organization, user) | lý do bắt buộc (trim), `maxLength=5000` | `ReviewCampaignConfirm.tsx`, `CompletionReviewCampaignConfirm.tsx`, `VerifyIncidentConfirm.tsx`, `ApproveOrganizationConfirm.tsx`, `BanUserConfirm.tsx` |
 | Admin duyệt hồ sơ | REJECT cần lý do; REQUEST_INFO cần ≥ 1 lý do (các lý do nối bằng dấu phẩy), chọn "Other" phải nhập text; APPROVE + waive documents cần lý do waive | `ApplicationReviewDialog.tsx` |
 | Admin gift | name, description bắt buộc; greenPoints ≥ 0; stock số nguyên ≥ 0 trừ khi "unlimited" (gửi `null`); ảnh bắt buộc khi tạo (khi sửa giữ `gift.mediaId` nếu không chọn ảnh mới) | `admin/gifts/_components/GiftFormDialog.tsx`, `_services/gift-form.service.ts` |
 | Chat AI | ≤ 8 ảnh/tin nhắn | `AiChatWidget.tsx` |
@@ -633,7 +643,7 @@ Client chỉ có **1 role cứng**: `ADMIN_ROLE_ID = "40ed59d7-5d7c-4ab2-88a2-a2
 4. Người đã đăng nhập vẫn vào được `/sign-in`, `/sign-up` (không redirect ngược).
 5. ~~Campaign manager chỉ thấy nút Attendance QR~~ — đã sửa 2026-09-27: mọi nút quản lý ở trang chi tiết dùng `can_manage_campaign`; có UI thêm / gỡ manager.
 6. `IUpdateUserRequest` có trường `roleId` (`apis/user/updateUser.ts`) — client không gửi, nhưng cần xác nhận `PUT /api/v1/users/:id` phía identity không cho user tự đổi `roleId` (mass-assignment).
-7. Admin campaigns/incidents dùng list công khai `GET /api/v1/campaigns` và `GET /api/v1/reports/search` (không phải `/all`) — cần xác nhận admin có thấy đủ bản ghi mọi trạng thái (INACTIVE, PENDING...).
+7. Admin campaigns/incidents dùng list công khai `GET /api/v1/campaigns` và `GET /api/v1/reports/search` (không phải `/all`). Phần campaign: server trả cho admin mọi trạng thái trừ DRAFT (BR-187). Phần incident — cần xác nhận admin có thấy đủ bản ghi mọi trạng thái (INACTIVE, PENDING...).
 8. `sign-in?redirect=` được `router.push` nguyên văn (không kiểm tra) (`sign-in/page.tsx > resolveRedirect()`); react-router chỉ điều hướng nội bộ nên rủi ro thấp, nhưng nên xác nhận.
 
 ### 10.2 Path client gọi mà gateway không proxy / không khớp server
@@ -671,7 +681,6 @@ Các prefix gateway có nhưng client **không dùng**: `/api/v1/roles`, `/api/v
 | `modules/ReportDetailCard/_services/voting.service.ts` | Mock vote ngẫu nhiên (`Math.random`); không nơi nào import (vote thật dùng `apis/vote`) |
 | `app/(pages)/(auth)/authenticate/page.tsx` | Nút "Sign up with Google" không có `onClick` |
 | `app/(pages)/(admin)/admin/page.tsx`, `admin/settings/page.tsx` | Placeholder ("Dashboard content goes here", "Admin settings placeholder.") |
-| `app/(pages)/(main)/campaigns/me/_components/UpdateCampaignPopover.tsx` + `_services/campaignMe.service.ts` | Component sửa campaign (PENDING sửa hết, ACTIVE chỉ sửa ngày) không được render ở đâu → owner không có UI sửa campaign |
 | `app/(pages)/(main)/organizations/create/*` | Route `/organizations/create` đã redirect sang `/apply`; thư mục còn `OrganizationImageUpload.tsx`, `organization.service.ts` (`organizations/me/_components/UpdateOrganizationPopover.tsx` vẫn import `organization.service`, `upload.service` và `OrganizationImageUpload`, nên chưa xoá được thư mục) |
 | `app/(pages)/(main)/gifts/_context/GiftContext.tsx > onViewMore()` | push `/gifts/:id` — route không tồn tại; hàm cũng không được component nào gọi |
 | `components/client/layout/Header.tsx` (menu nav) links `/about`, `/mission`, `/partnership`, `/support` | Không có route → NotFound |
@@ -686,11 +695,11 @@ Các prefix gateway có nhưng client **không dùng**: `/api/v1/roles`, `/api/v
 
 ### 10.5 Nghi bug / thiếu validation
 
-1. Tạo campaign không bắt buộc và không so sánh `start_date`/`end_date` ở client (`GeneralInformation.tsx`).
+1. ~~Tạo campaign không bắt buộc và không so sánh `start_date`/`end_date` ở client~~ — đã sửa: "Gửi duyệt" bắt buộc ngày, giờ bắt đầu / kết thúc và kiểm thứ tự (`GeneralInformation.tsx`); "Lưu nháp" vẫn cho để trống.
 2. Hồ sơ tổ chức không yêu cầu tối thiểu 1 tài liệu ở client, dù comment trong `application.service.ts` nói lane B cần giấy tờ — phụ thuộc hoàn toàn server.
 3. `IncidentContext.onSubmit`: upload Cloudinary lỗi chỉ `console.error`, người dùng không nhận thông báo.
 4. Cloudinary preset fallback `"example"` nếu thiếu env — upload âm thầm thất bại.
 5. Nominatim bị gọi trực tiếp từ trình duyệt ở 5 component (không qua proxy có User-Agent như `vite/reverseGeocode.ts`) — có thể bị rate-limit/chính sách sử dụng Nominatim.
 6. Tên hàm trùng lặp giữa domain (`useGetMyJoinRequests` ở `apis/campaign/joinCampaign.ts` và `apis/organization/joinRequest.ts`; `useGetMembersByOrg`/`useGetJoinRequestsByOrg` ở 2 file) — dễ import nhầm.
 7. Body hủy xin tham gia không nhất quán: campaign gửi `{ requestId }` (camelCase), organization gửi `{ request_id }` (`apis/campaign/joinCampaign.ts`, `OrganizationDetailContext.tsx`); completion-review gửi `rejectReason` trong khi các API khác gửi `reject_reason` (`apis/campaign/processCampaign.ts`). Incident-service có middleware `camelCaseRequestBody` nên có thể vẫn chạy — cần xác nhận.
-8. Admin campaign "Verify" dùng `status: STATUS.ACTIVE (1)` để duyệt và `STATUS.INACTIVE (2)` để ban (`VerifyCampaignConfirm.tsx`); admin organization tương tự (`ApproveOrganizationConfirm.tsx`) — cần đối chiếu enum server.
+8. ~~Admin campaign "Verify" dùng `status` 1 / 2~~ — campaign đã chuyển sang `PUT /:id/review` với `decision` (`ReviewCampaignConfirm.tsx`). Admin organization vẫn dùng `status: STATUS.ACTIVE (1)` / `STATUS.INACTIVE (2)` (`ApproveOrganizationConfirm.tsx`) — cần đối chiếu enum server.

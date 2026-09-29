@@ -1,6 +1,6 @@
 # 00 — Tổng quan hệ thống Ecolink
 
-> Tài liệu này được viết dựa trên source code tại thời điểm 2026-09-26. Phạm vi gồm `ecolink-server/` (gateway, 5 service, 3 thư viện dùng chung) và `ecolink-client/` (web). Hai phần **không** thuộc phạm vi: `ecolink-mobile`, `ecolink-research-lab`, `ecolink-image-dedup-benchmark`.
+> Tài liệu này được viết dựa trên source code tại thời điểm 2026-09-30. Phạm vi gồm `ecolink-server/` (gateway, 5 service, 3 thư viện dùng chung) và `ecolink-client/` (web). Hai phần **không** thuộc phạm vi: `ecolink-mobile`, `ecolink-research-lab`, `ecolink-image-dedup-benchmark`.
 > Mọi đường dẫn tính từ thư mục gốc `/Users/ngoc/ecolink`.
 
 ## Mục lục tài liệu
@@ -30,7 +30,7 @@ Ecolink là nền tảng cộng đồng về môi trường. Code thể hiện c
 
 - **Báo cáo điểm rác/ô nhiễm (report/incident):** người dùng gửi ảnh, toạ độ và mức độ nghiêm trọng. Hệ thống dùng AI phân tích ảnh và sinh gợi ý xử lý. Admin duyệt hoặc ban report (`incident-service/src/modules/report`).
 - **Tổ chức (organization):** người nộp lập **đơn đăng ký** (xác thực email bằng OTP, lưu nháp, kèm giấy tờ pháp lý và danh sách owner). Mỗi owner tự xác nhận qua email, rồi admin thẩm định; duyệt thì hệ thống tạo tổ chức và gắn vai owner cho từng người (tổ chức **không** có tài khoản đăng nhập riêng). Tổ chức có thể được gắn **Blue Tick** (`trustTier = VERIFIED`) (`incident-service/src/modules/organization_application`).
-- **Chiến dịch (campaign):** owner của tổ chức tạo chiến dịch dọn dẹp, có thể gắn các report cần xử lý. Admin duyệt chiến dịch. Tình nguyện viên xin tham gia, được giao task và điểm danh bằng QR. Khi xong, manager gửi hoàn thành, admin duyệt, và người tham gia nhận **điểm xanh** (`incident-service/src/modules/campaign`).
+- **Chiến dịch (campaign):** owner hoặc quản lý chiến dịch của tổ chức tạo bản nháp chiến dịch dọn dẹp với 1–5 điểm tập kết, mỗi điểm gom các report cần xử lý, rồi gửi duyệt (report bị khoá từ lúc này). Admin duyệt, yêu cầu chỉnh sửa hoặc chặn; chờ duyệt quá hạn thì hết hạn. Tình nguyện viên xin tham gia, được giao task và điểm danh bằng QR. Khi xong, manager gửi hoàn thành, admin duyệt, và người tham gia nhận **điểm xanh** (`incident-service/src/modules/campaign`).
 - **SOS:** yêu cầu khẩn cấp gắn với một chiến dịch đang hoạt động (`incident-service/src/modules/sos`).
 - **Vote và lưu (bookmark)** cho report và campaign.
 - **Điểm thưởng và gamification:** điểm xanh, ví SP có hạn dùng, điểm xếp hạng CRP/VRP theo season, bảng xếp hạng, badge, đổi quà (`reward-service`).
@@ -238,7 +238,8 @@ Bảng chỉ ghi tên biến và ý nghĩa, không ghi giá trị. Chi tiết c�
 | `OTP_RATE_*`, `APPLICATION_RATE_*`, `APPLICATION_RATE_LIMIT_DISABLED` | incident | Rate limit cho endpoint đơn tổ chức |
 | `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` | incident | Ký upload tài liệu private |
 | `PUBLIC_INCIDENT_API_URL`, `FRONTEND_APP_URL`, `APP_NAME` | incident (identity dùng `FRONTEND_APP_URL`, `APP_NAME` cho email gửi lại kích hoạt) | Tạo link trong email |
-| `CAMPAIGN_COMPLETION_ADMIN_NOTIFY_USER_IDS` | incident | Danh sách user id admin nhận thông báo khi có campaign chờ duyệt hoàn thành |
+| `CAMPAIGN_ADMIN_NOTIFY_USER_IDS` | incident | Danh sách user id admin nhận thông báo khi có campaign chờ duyệt (gửi duyệt / nộp lại) và chờ duyệt hoàn thành; chưa đặt thì đọc tên cũ `CAMPAIGN_COMPLETION_ADMIN_NOTIFY_USER_IDS` |
+| `CAMPAIGN_LIFECYCLE_INTERVAL_MS`, `CAMPAIGN_LIFECYCLE_ENABLED` | incident (worker) | Chu kỳ job hết hạn duyệt campaign và dọn bản nháp quá 30 ngày (mặc định 15 phút) / tắt job |
 | `REPORT_COMPLETION_GREEN_POINTS` | incident | Số điểm xanh khi report được đánh dấu hoàn thành (mặc định 0) |
 | `AI_PREDICT_URL` | incident | Endpoint model nhận diện rác |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` | notification | Gửi email (`SMTP_HOST` rỗng thì không gửi, chỉ lưu DB) |

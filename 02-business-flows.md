@@ -38,9 +38,10 @@
 | F22 | Admin đánh dấu report đã xử lý và cộng điểm | Sự cố |
 | F23 | Vote report/campaign và thưởng mốc vote | Tương tác |
 | F24 | Lưu (bookmark) report/campaign | Tương tác |
-| F25 | Tạo chiến dịch | Chiến dịch |
+| F25 | Tạo chiến dịch (nháp) và gửi duyệt | Chiến dịch |
 | F26 | Sửa và xoá chiến dịch | Chiến dịch |
-| F27 | Admin duyệt hoặc ban chiến dịch và mời người dân ở gần | Chiến dịch |
+| F27 | Admin duyệt, yêu cầu chỉnh sửa, chặn hoặc ban chiến dịch và mời người dân ở gần | Chiến dịch |
+| F27b | Hết hạn duyệt và dọn bản nháp (job) | Chiến dịch |
 | F28 | Tình nguyện viên xin tham gia chiến dịch | Chiến dịch |
 | F29 | Quản lý manager của chiến dịch | Chiến dịch |
 | F30 | Quản lý task | Chiến dịch |
@@ -431,7 +432,7 @@ sequenceDiagram
    - Từ chối: request REJECTED (18). Gửi `VOLUNTEER_REJECTED`.
 3. Người xin: `DELETE /join-requests/cancel {requestId}` → xoá mềm (chỉ khi PENDING).
 4. Thành viên: `DELETE /:id/members/me` → xoá mềm membership. Owner rời được khi còn owner khác (F18g, BR-348); owner cuối cùng → 409 ORG_MUST_HAVE_OWNER (BR-088).
-- **Ý nghĩa của thành viên:** khi tổ chức tạo campaign, các thành viên nhận thông báo `CAMPAIGN_CREATED` (F25).
+- **Ý nghĩa của thành viên:** khi campaign của tổ chức được admin duyệt, các thành viên nhận thông báo `CAMPAIGN_APPROVED` (F27). `CAMPAIGN_CREATED` lúc gửi duyệt chỉ tới owner và manager (F25).
 - **File:** `INC/modules/organization/organization.service.ts > createJoinRequest(), processJoinRequest(), cancelJoinRequest(), leaveOrganization()`.
 
 ```mermaid
@@ -645,28 +646,38 @@ sequenceDiagram
 
 ## D. Chiến dịch (campaign)
 
-### F25 — Tạo chiến dịch
-- **Actor:** thành viên có quyền `CAMPAIGN_CREATE` trong tổ chức (vai `LEGAL_REPRESENTATIVE`, `OWNER` hoặc `CAMPAIGN_MANAGER`).
+### F25 — Tạo chiến dịch (nháp) và gửi duyệt
+- **Actor:** thành viên có quyền `CAMPAIGN_CREATE` trong tổ chức (vai `LEGAL_REPRESENTATIVE`, `OWNER` hoặc `CAMPAIGN_MANAGER`) tạo nháp; người quản lý campaign (BR-159) gửi duyệt.
 - **Điều kiện tiên quyết:**
-  - Tổ chức tồn tại (không kiểm tra status).
-  - Difficulty có tier tương ứng ở reward.
-  - Các report được gắn phải ở TODO và chưa thuộc campaign nào (BR-150..BR-153).
-- **Luồng chính:**
-  1. `/campaigns/create` (hoặc `/campaigns/create?organizationId=<id>` từ tab campaign của trang tổ chức): client tải `GET /organizations/my?roles=LEGAL_REPRESENTATIVE,OWNER,CAMPAIGN_MANAGER` (chỉ giữ tổ chức có `permissions.can_create_campaign`), `GET /reports/search?status=21`, `GET /incident/saved-resources`. Tổ chức chọn sẵn: `?organizationId=` → tổ chức ngữ cảnh (nếu tạo được ở đó) → trống. Upload banner lên Cloudinary.
-  2. `POST /api/v1/campaigns {organizationId, title, description?, banner?, startDate?, endDate?, detailAddress?, latitude?, longitude?, radiusKm?, difficulty, reportIds[]}`.
+  - Tổ chức tồn tại và status 1 (BR-151); các giới hạn của tổ chức (BR-163).
+  - Difficulty có tier tương ứng ở reward (BR-152).
+  - Report được chọn ở TODO và chưa thuộc campaign nào (BR-110).
+- **Luồng chính — tạo nháp:**
+  1. `/campaigns/create` (hoặc `?organizationId=<id>` từ tab campaign của trang tổ chức / `/campaigns/me`): nút "Tạo chiến dịch" (`CreateCampaignButton`) gọi `GET /api/v1/campaigns/create-eligibility?organizationId=` → `{canCreate, hidden, reasons[], isVerified, maxDifficulty, openCount/openLimit, reviewQueueCount/reviewQueueLimit}`; `hidden` thì ẩn nút, `!canCreate` thì khoá nút và hiện lý do. Form tải tổ chức, report TODO, thành viên tổ chức (chọn trưởng điểm); upload banner lên Cloudinary.
+  2. "Lưu nháp": `POST /api/v1/campaigns {organizationId, title, description?, banner?, startDate?, endDate?, difficulty, contactName?, contactPhone?, safetyNotes?, requirements?, meetingPoints[]}` (mỗi điểm: `name?, latitude, longitude, detailAddress?, radiusKm, gatherAt?, slots?, leaderUserId?, reportIds[]`; kiểu cũ `latitude/longitude/radiusKm/reportIds` vẫn nhận, thành 1 điểm).
   3. `campaign.service.ts > createCampaign()`:
-     - Kiểm tra org tồn tại và `orgAccessService.assertOrgPermission(orgId, userId, CAMPAIGN_CREATE)` (BR-151).
+     - `campaignEligibilityService.assertCanCreateDraft()` (quyền + tổ chức không bị khoá).
      - Gọi reward `GET /internal/v1/difficulties/level/:l`.
-     - `validateReportIds`.
-     - Chạy transaction Serializable: tạo campaign (**PENDING 12**), upsert người tạo vào `campaign_managers`, report TODO → INPROCESS (22) và gán `campaignId`.
+     - `campaignLifecycleService.assertReportsSelectable()` (report TODO, chưa thuộc campaign nào); trưởng điểm phải là thành viên active (`campaignManagerService.assertAllMembers()`).
+     - Transaction Serializable: tạo campaign **DRAFT 4**, upsert người tạo vào `campaign_managers`, `replaceMeetingPoints()` ghi `campaign_meeting_points` và `campaign_meeting_point_reports`, chép toạ độ / bán kính / địa chỉ của điểm đầu tiên sang `campaigns` (bản đồ, mời người ở gần, SOS). **Không khoá report**, không gửi thông báo.
   4. Enqueue `TRANSLATE_TEXT` (CAMPAIGN).
-  5. Gửi thông báo `CAMPAIGN_CREATED` cho thành viên tổ chức (trừ người tạo), có lọc theo preference.
+  5. Sửa nháp: `/campaigns/:id/edit` → `PUT /campaigns/:id` (F26).
+- **Luồng chính — gửi duyệt:** "Gửi duyệt" (hoặc "Nộp lại" khi NEEDS_REVISION) → `POST /api/v1/campaigns/:id/submit` → `campaign-lifecycle.service.ts > submit()`:
+  1. canManage; kiểm tier difficulty (ngoài transaction, gọi HTTP).
+  2. Transaction Serializable:
+     - `campaignEligibilityService.assertCanSubmit()` kiểm lại giới hạn (BR-163).
+     - `validateCampaignForSubmit()` kiểm toàn bộ nội dung (BR-164); có lỗi → 400 `CAMPAIGN_INVALID` với `details[{field, code, message}]` liệt kê mọi lỗi.
+     - `syncReportLocks()` khoá report 21 → 22 bằng compare-and-set (BR-169); bị campaign khác lấy trước → 409 `CAMPAIGN_REPORTS_TAKEN {reportIds}`.
+     - Người tạo và các trưởng điểm được upsert thành manager.
+     - `transitionCampaign()` event `submit` (4 → 12) hoặc `resubmit` (19 → 12); lưu `submittedAt`, `requirements` (đã thêm mặc định), `lastSubmittedSnapshot`; nộp lại thì diff với snapshot trước vào `campaign_status_logs.changes`.
+  3. Sau commit: `CAMPAIGN_PENDING_REVIEW` cho admin trong `CAMPAIGN_ADMIN_NOTIFY_USER_IDS`; `CAMPAIGN_CREATED` cho owner + manager (trừ người gửi; **không** gửi khi nộp lại). Thành viên thường chỉ nhận thông báo khi campaign được duyệt (F27).
 - **Luồng lỗi:**
-  - 404 không có tổ chức; 403 `ORG_PERMISSION_DENIED` khi vai không có `CAMPAIGN_CREATE`.
-  - 400 difficulty không hợp lệ (cũng xảy ra khi reward service chết).
-  - 400 reportIds không hợp lệ.
-- **Dữ liệu thay đổi:** `campaigns`, `campaign_managers`, `reports`, `background_jobs`.
-- **File:** `INC/modules/campaign/campaign.controller.ts > createCampaign`, `campaign.service.ts > createCampaign(), validateReportIds(), assignReportsToCampaign()`, `INC/modules/reward/reward-service.client.ts`.
+  - 404 không có tổ chức / campaign; 403 `ORG_PERMISSION_DENIED` khi vai không có `CAMPAIGN_CREATE`; 403 `CAMPAIGN_CREATE_NOT_ALLOWED {reasons}`; 403 `CAMPAIGN_PERMISSION_DENIED` khi gửi duyệt mà không phải người quản lý.
+  - 400 difficulty không hợp lệ (cũng xảy ra khi reward service chết); 400 reportIds không hợp lệ; 422 `CAMPAIGN_MANAGER_NOT_MEMBER` (trưởng điểm).
+  - 400 `CAMPAIGN_INVALID`; 409 `CAMPAIGN_REPORTS_TAKEN`; 409 `CAMPAIGN_INVALID_TRANSITION` (gửi duyệt khi không ở 4 / 19, hoặc có người đổi status cùng lúc).
+- **Client:** lỗi `details` được gắn vào từng trường của form và hiện tóm tắt; `CAMPAIGN_REPORTS_TAKEN` tô các report cần bỏ (`FE/app/(pages)/(main)/campaigns/create/_components/CampaignForm.tsx`).
+- **Dữ liệu thay đổi:** `campaigns`, `campaign_managers`, `campaign_meeting_points`, `campaign_meeting_point_reports`, `campaign_status_logs`, `reports` (khi gửi duyệt), `background_jobs`.
+- **File:** `INC/modules/campaign/campaign.controller.ts > createCampaign, getCreateEligibility, submitCampaign`, `campaign.service.ts > createCampaign(), submitCampaign()`, `campaign-eligibility.service.ts`, `campaign-lifecycle.service.ts > submit(), syncReportLocks(), notifySubmitted()`, `campaign-submit-validation.ts > validateCampaignForSubmit()`, `campaign-state-machine.ts > transitionCampaign()`, `INC/modules/reward/reward-service.client.ts`.
 
 ```mermaid
 sequenceDiagram
@@ -675,35 +686,45 @@ sequenceDiagram
   participant RW as reward
   participant Q as SQS
   participant NS as notification
-  O->>INC: POST /api/v1/campaigns
-  INC->>INC: assertOrgPermission(CAMPAIGN_CREATE)
+  O->>INC: GET /campaigns/create-eligibility?organizationId
+  INC-->>O: canCreate, hidden, reasons
+  O->>INC: POST /api/v1/campaigns (lưu nháp)
+  INC->>INC: assertCanCreateDraft
   INC->>RW: GET /internal/v1/difficulties/level/:l
-  RW-->>INC: tier
-  INC->>INC: TX Serializable: campaign(12), manager, reports 21→22
+  INC->>INC: TX: campaign(4), manager, meeting points (report không khoá)
   INC->>Q: TRANSLATE_TEXT
-  INC->>NS: CAMPAIGN_CREATED → thành viên tổ chức
   INC-->>O: 201
+  O->>INC: POST /campaigns/:id/submit
+  INC->>RW: GET /internal/v1/difficulties/level/:l
+  INC->>INC: TX Serializable: eligibility, validate, khoá report 21→22 (CAS), 4|19→12, log
+  alt có lỗi
+    INC-->>O: 400 CAMPAIGN_INVALID details / 409 CAMPAIGN_REPORTS_TAKEN
+  else hợp lệ
+    INC-->>O: 200
+    INC->>NS: CAMPAIGN_PENDING_REVIEW → admin (env)
+    INC->>NS: CAMPAIGN_CREATED → owner + manager (lần đầu)
+  end
 ```
 
 ### F26 — Sửa và xoá chiến dịch
-- **Sửa:** `PUT /campaigns/:id`, người quản lý campaign (người tạo, manager, hoặc LR / OWNER của tổ chức; đều phải còn là thành viên active — BR-159). Body có thể gồm field bất kỳ, kể cả `status` là số tuỳ ý (**bỏ qua được bước duyệt của admin**, 99 ISSUE-S08), `reportIds` (thay toàn bộ; report bị gỡ trở về TODO), `managerIds` (đồng bộ, luôn giữ người tạo; mọi người phải là thành viên active, BR-155). Khi sửa **không enqueue dịch lại**.
-- **Xoá:** `DELETE /campaigns/:id`, người tạo hoặc LR / OWNER của tổ chức. Campaign bị xoá mềm; report gắn với nó trở về TODO và `campaignId=null`.
-- **Client:** `UpdateCampaignPopover` có tồn tại nhưng không được render, nên UI hiện không có chỗ sửa campaign.
-- **File:** `campaign.service.ts > updateCampaign(), deleteCampaign()`, `campaign-access.service.ts > assertCanManage(), assertCanDelete()`.
+- **Sửa:** `PUT /campaigns/:id`, người quản lý campaign (người tạo, manager, hoặc LR / OWNER của tổ chức; đều phải còn là thành viên active — BR-159). Body **không** được có `status` (400). Trước khi duyệt (4 / 12 / 19) sửa được mọi trường, kể cả `meetingPoints` (thay toàn bộ), `managerIds` (đồng bộ, luôn giữ người tạo; mọi người phải là thành viên active, BR-155). Khi đang 12 / 19, khoá report đi theo điểm tập kết ngay (`syncReportLocks()`: report bị bỏ về TODO, report mới bị khoá, bị lấy mất → 409 `CAMPAIGN_REPORTS_TAKEN`) và diff được ghi log `EDIT` (`logCampaignEdit()`). Sau khi duyệt chỉ sửa được description, banner, safetyNotes, contactName, contactPhone; trường khác → 409 `CAMPAIGN_NOT_EDITABLE {fields}` (BR-154). Khi sửa **không enqueue dịch lại**.
+- **[CHƯA HOÀN THIỆN]** Sửa trường quan trọng sau khi duyệt → quay về Chờ duyệt, và dời lịch (giai đoạn 3 của đặc tả) chưa làm.
+- **Xoá:** `DELETE /campaigns/:id`, người tạo hoặc LR / OWNER của tổ chức, chỉ khi 4 / 12 / 19 / 2 / 20 (khác → 409 `CAMPAIGN_NOT_DELETABLE`). Campaign bị xoá mềm; report gắn với nó trở về TODO và `campaignId=null`.
+- **Lịch sử:** `GET /campaigns/:id/history` (người quản lý hoặc admin) trả các dòng `campaign_status_logs`.
+- **Client:** `/campaigns/:id/edit` dùng chung `CampaignForm` với trang tạo; `/campaigns/me` có cột thao tác Sửa / Gửi duyệt / Xoá theo trạng thái.
+- **File:** `campaign.service.ts > updateCampaign(), deleteCampaign()`, `campaign-lifecycle.service.ts > replaceMeetingPoints(), syncReportLocks(), releaseAllReports(), getHistory()`, `campaign-access.service.ts > assertCanManage(), assertCanDelete()`.
 
-### F27 — Admin duyệt hoặc ban chiến dịch và mời người dân ở gần
-- `/admin/campaigns` → `PUT /api/v1/campaigns/:id/verify {status: 1|2, reject_reason}`.
-- **Duyệt (→ ACTIVE 1):**
-  - Chỉ từ 12, 4, 5, 2 (BR-160).
-  - Gửi thông báo `CAMPAIGN_VERIFY_INVITE` cho người dân **trong bán kính 5 km**, gồm:
-    - user có vị trí nhà gần đó (identity `nearby-ids`),
-    - người từng gửi report có toạ độ gần đó (PostGIS).
-  - Trừ admin, người tạo và manager. Có lọc preference. Nếu campaign không có toạ độ thì bỏ qua bước mời.
-- **Ban (→ INACTIVE 2):**
-  - Chỉ từ 12, 4, 5, 1; bắt buộc có lý do.
-  - Trong transaction: gỡ report (INPROCESS → TODO).
-  - **Không gửi thông báo.**
-- **File:** `campaign.controller.ts > adminVerifyCampaign`, `campaign.service.ts > adminVerifyCampaign(), banCampaignAndUnlinkReports(), notifyNearbyCitizensToJoinApprovedCampaign()`, `ID/internal/internal.routes.ts (nearby-ids)`.
+### F27 — Admin duyệt, yêu cầu chỉnh sửa, chặn hoặc ban chiến dịch và mời người dân ở gần
+- `/admin/campaigns` → `PUT /api/v1/campaigns/:id/review {decision: approve|request_revision|block, reason}` (lý do bắt buộc trừ approve, ≤ 5000). Chỉ JWT role admin; admin là thành viên active của tổ chức sở hữu campaign → 403 `CAMPAIGN_REVIEW_CONFLICT_OF_INTEREST` (BR-160). `PUT /:id/verify {status: 1|2, rejectReason}` còn giữ như alias deprecated (1 → approve, 2 → block).
+- Chuyển trạng thái trong transaction Serializable qua `transitionCampaign()` (04 §2).
+- **Duyệt (12 → ACTIVE 1):**
+  - Giữ khoá report, xoá rejectReason / revisionDeadline.
+  - `CAMPAIGN_APPROVED` cho owner, manager và mọi thành viên active của tổ chức.
+  - `CAMPAIGN_VERIFY_INVITE` cho người dân **trong bán kính 5 km** (BR-161): user có vị trí nhà gần đó (identity `nearby-ids`) và người từng gửi report có toạ độ gần đó (PostGIS). Trừ admin, người tạo và manager. Có lọc preference. Campaign không có toạ độ thì bỏ qua.
+- **Yêu cầu chỉnh sửa (12 → NEEDS_REVISION 19):** rejectReason = lý do, `revisionDeadline` = now + 7 ngày, giữ khoá report; `CAMPAIGN_REVISION_REQUESTED` cho người tạo + owner. Người quản lý sửa rồi "Nộp lại" (F25).
+- **Chặn (12 / 19 → BLOCKED 2), ban (1 → BLOCKED 2):** cùng `decision=block`; gỡ report (INPROCESS → TODO, BR-162); `CAMPAIGN_BLOCKED` cho người tạo + owner.
+- **Client:** `ReviewCampaignConfirm`: campaign chờ duyệt → duyệt (phải tick đủ 6 mục checklist) / yêu cầu chỉnh sửa / chặn, kèm lịch sử thay đổi (`GET /:id/history`); campaign ACTIVE → ban. Tab "Chờ duyệt" gửi `excludeMemberOrgs=true`.
+- **File:** `campaign.controller.ts > reviewCampaign, adminVerifyCampaign`, `campaign.service.ts > reviewCampaign(), notifyNearbyCitizensToJoinApprovedCampaign()`, `campaign-lifecycle.service.ts > review(), releaseAllReports(), notifyReviewed()`, `ID/internal/internal.routes.ts (nearby-ids)`.
 
 ```mermaid
 sequenceDiagram
@@ -711,14 +732,29 @@ sequenceDiagram
   participant INC as incident
   participant ID as identity
   participant NS as notification
-  A->>INC: PUT /campaigns/:id/verify status=1
-  INC->>INC: status=1
-  INC->>ID: POST /internal/v1/users/nearby-ids (5km)
-  INC->>INC: reporter gần đó (PostGIS)
-  INC->>ID: notification-prefs/filter
-  INC->>NS: CAMPAIGN_VERIFY_INVITE → người dân gần đó
+  A->>INC: PUT /campaigns/:id/review {decision, reason}
+  INC->>INC: admin là thành viên tổ chức? → 403
+  INC->>INC: TX Serializable: transitionCampaign + log
+  alt approve
+    INC->>NS: CAMPAIGN_APPROVED → owner, manager, thành viên
+    INC->>ID: POST /internal/v1/users/nearby-ids (5km)
+    INC->>INC: reporter gần đó (PostGIS)
+    INC->>ID: notification-prefs/filter
+    INC->>NS: CAMPAIGN_VERIFY_INVITE → người dân gần đó
+  else request_revision
+    INC->>NS: CAMPAIGN_REVISION_REQUESTED → người tạo + owner
+  else block / ban
+    INC->>INC: report 22→21
+    INC->>NS: CAMPAIGN_BLOCKED → người tạo + owner
+  end
   INC-->>A: 200
 ```
+
+### F27b — Hết hạn duyệt và dọn bản nháp (job)
+- `INC/worker.ts` chạy `startCampaignLifecycleJob()` (`INC/modules/campaign/campaign-lifecycle.job.ts`): `setInterval` mỗi `CAMPAIGN_LIFECYCLE_INTERVAL_MS` (mặc định 15 phút), tắt bằng `CAMPAIGN_LIFECYCLE_ENABLED=false`.
+- `expireOverdue()`: campaign 12 / 19 đã tới `startDate`, hoặc 19 quá `revisionDeadline` → `transitionCampaign(event=expire, actor=system)` → EXPIRED 20, gỡ report, `CAMPAIGN_EXPIRED` cho người tạo. Mỗi lượt tối đa 200 campaign; campaign bị người khác đổi trạng thái cùng lúc thì bỏ qua, lượt sau xét lại.
+- `deleteStaleDrafts()`: DRAFT có `updatedAt` quá 30 ngày → xoá mềm (bản nháp không khoá report).
+- **File:** `campaign-lifecycle.service.ts > expireOverdue(), deleteStaleDrafts(), notifyExpired()` (BR-186).
 
 ### F28 — Tình nguyện viên xin tham gia chiến dịch
 1. `POST /api/v1/campaigns/volunteers/join-requests {campaignId}`:
@@ -811,9 +847,9 @@ sequenceDiagram
 1. Người quản lý campaign (BR-159): `PUT /campaigns/:id/mark-done`:
    - Campaign phải ở ACTIVE hoặc INREVIEW.
    - Mọi task đã COMPLETED (campaign 0 task vẫn qua).
-   - → **WAITING_CONFIRMED (7)**.
+   - → **WAITING_CONFIRMED (7)** qua `transitionCampaign(event=submit_completion)`.
 2. Gửi thông báo:
-   - `CAMPAIGN_COMPLETION_PENDING_ADMIN` tới danh sách user id trong env `CAMPAIGN_COMPLETION_ADMIN_NOTIFY_USER_IDS` (không lọc preference).
+   - `CAMPAIGN_COMPLETION_PENDING_ADMIN` tới danh sách user id trong env `CAMPAIGN_ADMIN_NOTIFY_USER_IDS` (tên cũ `CAMPAIGN_COMPLETION_ADMIN_NOTIFY_USER_IDS` vẫn được đọc khi chưa đặt tên mới; không lọc preference).
    - `CAMPAIGN_COMPLETION_VERIFY_INVITE` tới người dân trong bán kính 5 km (trừ người gửi, người tạo, manager, volunteer).
 3. Cộng đồng: `POST /campaigns/:id/completion-verification {value: 1|-1}` (chỉ khi campaign ở 7 hoặc 17; gửi lại cùng giá trị thì huỷ). Kết quả **chỉ để admin tham khảo**, không tự động làm gì.
 - **Lỗi:** status sai → 500 (message không được map); còn task chưa xong → 400.
@@ -1034,8 +1070,12 @@ sequenceDiagram
 | ORG_MEMBERSHIP_CHANGED | website | thành viên bị đổi vai / gỡ | Đổi vai, gỡ | `organization-member-notify.client.ts` |
 | VOLUNTEER_REQUEST | website | owner / LR / ADMIN tổ chức / manager campaign | Có người xin gia nhập | `organization.service.ts`, `campaign_joining_request.service.ts` |
 | VOLUNTEER_APPROVED / REJECTED | website | người xin | Được duyệt hoặc bị từ chối | như trên |
-| CAMPAIGN_CREATED | website | thành viên tổ chức | Tạo campaign | `campaign.service.ts > createCampaign()` |
-| CAMPAIGN_VERIFY_INVITE | website | người dân trong 5 km | Admin duyệt campaign | `adminVerifyCampaign()` |
+| CAMPAIGN_PENDING_REVIEW | website | user id trong `CAMPAIGN_ADMIN_NOTIFY_USER_IDS` | Gửi duyệt / nộp lại campaign | `campaign-lifecycle.service.ts > submit() → notifySubmitted()` |
+| CAMPAIGN_CREATED | website | owner + manager của campaign (trừ người gửi) | Gửi duyệt lần đầu | như trên |
+| CAMPAIGN_APPROVED | website | owner, manager, thành viên active của tổ chức | Admin duyệt campaign | `campaign-lifecycle.service.ts > review() → notifyReviewed()` |
+| CAMPAIGN_REVISION_REQUESTED / CAMPAIGN_BLOCKED | website | người tạo + owner | Admin yêu cầu chỉnh sửa / chặn / ban | như trên |
+| CAMPAIGN_EXPIRED | website | người tạo | Job hết hạn duyệt | `campaign-lifecycle.service.ts > expireOverdue() → notifyExpired()` |
+| CAMPAIGN_VERIFY_INVITE | website | người dân trong 5 km | Admin duyệt campaign | `campaign.service.ts > reviewCampaign() → notifyNearbyCitizensToJoinApprovedCampaign()` |
 | CAMPAIGN_COMPLETION_PENDING_ADMIN | website | user id trong env | Manager gửi hoàn thành | `submitCampaignCompletionForAdminApproval()` |
 | CAMPAIGN_COMPLETION_VERIFY_INVITE | website | người dân trong 5 km | Manager gửi hoàn thành | như trên |
 | CAMPAIGN_DONE | website | volunteer đã được duyệt | Admin duyệt hoàn thành | `adminFinalizeCampaignCompletion()` |

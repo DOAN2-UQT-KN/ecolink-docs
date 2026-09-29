@@ -29,8 +29,8 @@ stateDiagram-v2
 | PENDING / INACTIVE / … → TODO 21 (isVerify=true) | Admin | Chưa được duyệt, hoặc đang bị ban | Thông báo REPORT_APPROVED cho chủ report | `adminVerifyReport()` |
 | bất kỳ (≠ 2) → INACTIVE 2 | Admin | Có lý do | Thông báo REPORT_REJECTED. Từ 2 sang 2 thì chỉ đổi lý do | `adminBanReport()` |
 | bất kỳ (≠ 17) → COMPLETED 17 | Admin | Không kiểm tra trạng thái nguồn | Outbox REPORT_COMPLETION_GREEN_POINTS; thông báo REPORT_STATUS | `adminMarkReportDone()` |
-| TODO 21 → INPROCESS 22 | Người có `CAMPAIGN_CREATE` (tạo campaign) hoặc canManage (sửa campaign) | Report chưa thuộc campaign nào | Gán campaignId | `INC/modules/campaign/campaign.service.ts > assignReportsToCampaign()` |
-| INPROCESS 22 → TODO 21 | canDelete (xoá campaign), canManage (đổi reportIds) hoặc admin (ban campaign) | — | campaignId = null | `deleteCampaign()`, `banCampaignAndUnlinkReports()`, `updateCampaign()` |
+| TODO 21 → INPROCESS 22 | canManage gửi duyệt campaign, hoặc sửa điểm tập kết khi campaign đang 12 / 19 | Report chưa thuộc campaign nào (compare-and-set; bị lấy mất → 409 `CAMPAIGN_REPORTS_TAKEN`). Bản nháp **không** khoá report | Gán campaignId | `INC/modules/campaign/campaign-lifecycle.service.ts > syncReportLocks()` |
+| INPROCESS 22 → TODO 21 | canDelete (xoá campaign), canManage (bỏ report khỏi điểm tập kết khi 12 / 19), admin (block / ban), system (hết hạn) | — | campaignId = null | `syncReportLocks()`, `releaseAllReports()` (gọi từ `deleteCampaign()`, `review()`, `expireOverdue()`) |
 | INPROCESS 22 → COMPLETED 17 | Admin duyệt hoàn thành campaign | Campaign đang ở 7 | **Không** phát outbox điểm cho report | `adminFinalizeCampaignCompletion()` |
 | bất kỳ (không bị ban) → PENDING 12, aiVerified=false | Chủ report | Report không bị ban | Enqueue ANALYZE_REPORT. Nếu `isVerify` đã true thì report bị kẹt (99) | `addReportImages()` |
 | aiVerified false → true | Worker | Có kết quả predict | aiRecommendation, ai_analysis_logs | `report-ai-analysis.service.ts > analyzeReport()` |
@@ -38,36 +38,51 @@ stateDiagram-v2
 
 ## 2. Campaign (`campaigns.status`)
 
+Tên trạng thái theo `DC/campaign-lifecycle.ts > CampaignStatus`; cột vẫn là số `GlobalStatus`. Mọi chuyển trạng thái nằm trong bảng `CAMPAIGN_TRANSITIONS` và chỉ đi qua `INC/modules/campaign/campaign-state-machine.ts > transitionCampaign()`: kiểm rule (trạng thái nguồn, actor, lý do bắt buộc), cập nhật kiểu compare-and-set (`updateMany` có điều kiện `status` cũ; có người đổi trước thì 409 `CAMPAIGN_INVALID_TRANSITION`) và ghi một dòng `campaign_status_logs`. Chuyển không có trong bảng → 409 `CAMPAIGN_INVALID_TRANSITION`; sai actor → 403 `CAMPAIGN_PERMISSION_DENIED`; thiếu lý do → 400.
+
 ```mermaid
 stateDiagram-v2
-  [*] --> PENDING_12: owner tổ chức tạo (membership vai owner)
-  PENDING_12 --> ACTIVE_1: admin duyệt
-  PENDING_12 --> INACTIVE_2: admin ban
-  ACTIVE_1 --> INACTIVE_2: admin ban
-  INACTIVE_2 --> ACTIVE_1: admin duyệt lại
-  ACTIVE_1 --> WAITING_CONFIRMED_7: manager gửi hoàn thành (mọi task xong)
-  INREVIEW_9 --> WAITING_CONFIRMED_7: manager gửi hoàn thành
-  WAITING_CONFIRMED_7 --> COMPLETED_17: admin duyệt hoàn thành
-  WAITING_CONFIRMED_7 --> ACTIVE_1: admin từ chối hoàn thành
+  [*] --> DRAFT_4: POST /campaigns (lưu nháp)
+  DRAFT_4 --> PENDING_REVIEW_12: submit (manager)
+  NEEDS_REVISION_19 --> PENDING_REVIEW_12: resubmit (manager)
+  PENDING_REVIEW_12 --> ACTIVE_1: approve (admin)
+  PENDING_REVIEW_12 --> NEEDS_REVISION_19: request_revision (admin, lý do)
+  PENDING_REVIEW_12 --> BLOCKED_2: block (admin, lý do)
+  NEEDS_REVISION_19 --> BLOCKED_2: block (admin, lý do)
+  ACTIVE_1 --> BLOCKED_2: ban (admin, lý do)
+  PENDING_REVIEW_12 --> EXPIRED_20: expire (system)
+  NEEDS_REVISION_19 --> EXPIRED_20: expire (system)
+  ACTIVE_1 --> PENDING_COMPLETION_7: submit_completion (manager, mọi task xong)
+  LEGACY_IN_REVIEW_9 --> PENDING_COMPLETION_7: submit_completion (manager)
+  PENDING_COMPLETION_7 --> COMPLETED_17: approve_completion (admin)
+  PENDING_COMPLETION_7 --> ACTIVE_1: reject_completion (admin, lý do)
   COMPLETED_17 --> [*]
-  note right of PENDING_12
-    người quản lý có thể PUT status bất kỳ
-    (bỏ qua mọi chuyển trạng thái) - lỗ hổng
+  note right of ACTIVE_1
+    Chưa tách UPCOMING (sắp diễn ra):
+    duyệt xong vào thẳng ACTIVE [CHƯA HOÀN THIỆN]
   end note
 ```
 
-| Từ → sang | Ai | Điều kiện | Side effect | File |
-|---|---|---|---|---|
-| (mới) → PENDING 12 | Thành viên có `CAMPAIGN_CREATE` (LR / OWNER / CAMPAIGN_MANAGER) | BR-150..BR-153 | Người tạo thành manager; report 21 → 22; TRANSLATE_TEXT; thông báo CAMPAIGN_CREATED cho thành viên | `createCampaign()` |
-| 12 / 4 / 5 / 2 → ACTIVE 1 | Admin | — | rejectReason = reason \|\| null; thông báo CAMPAIGN_VERIFY_INVITE cho người dân trong 5 km | `adminVerifyCampaign()` |
-| 12 / 4 / 5 / 1 → INACTIVE 2 | Admin | Có lý do | Gỡ report (22 → 21); không gửi thông báo | `banCampaignAndUnlinkReports()` |
-| 1 / 9 → WAITING_CONFIRMED 7 | canManage | Mọi task đều 17 | Thông báo CAMPAIGN_COMPLETION_PENDING_ADMIN (admin trong env) và COMPLETION_VERIFY_INVITE (người dân gần) | `submitCampaignCompletionForAdminApproval()` |
-| 7 → COMPLETED 17 | Admin | Mọi task 17; có tier | Report và SOS → 17; outbox CAMPAIGN_COMPLETION_GREEN_POINTS; thông báo CAMPAIGN_DONE và APPROVED_BY_ADMIN | `adminFinalizeCampaignCompletion()` |
-| 7 → ACTIVE 1 | Admin | Có lý do | rejectReason; thông báo REJECTED_BY_ADMIN | `adminRejectCampaign()` |
-| bất kỳ → bất kỳ | canManage | `PUT /campaigns/:id` với `status` | **Không có kiểm soát** (99) | `updateCampaign()` |
-| → xoá mềm | canDelete | — | Gỡ report | `deleteCampaign()` |
+| Sự kiện | Từ → sang | Ai | Điều kiện | Side effect | File |
+|---|---|---|---|---|---|
+| (tạo) | (mới) → DRAFT 4 | Thành viên có `CAMPAIGN_CREATE`, tổ chức status 1 | BR-150..BR-153 | Người tạo thành manager; lưu điểm tập kết và lựa chọn report (**không khoá** report); TRANSLATE_TEXT. Không gửi thông báo, không ghi log | `INC/modules/campaign/campaign.service.ts > createCampaign()` |
+| `submit` | DRAFT 4 → PENDING_REVIEW 12 | canManage | Giới hạn tổ chức (BR-163) và mọi rule nội dung (BR-164) kiểm lại trong transaction Serializable | Khoá report (21 → 22, BR-169); người tạo + trưởng điểm thành manager; lưu `submittedAt`, `lastSubmittedSnapshot`; thông báo CAMPAIGN_PENDING_REVIEW (admin trong env) và CAMPAIGN_CREATED (owner + manager) | `INC/modules/campaign/campaign-lifecycle.service.ts > submit()` |
+| `resubmit` | NEEDS_REVISION 19 → PENDING_REVIEW 12 | canManage | Như submit | Như submit, xoá `revisionDeadline`; diff với lần gửi trước ghi vào `changes`; chỉ báo admin (không gửi CAMPAIGN_CREATED) | `submit()` |
+| `approve` | PENDING_REVIEW 12 → ACTIVE 1 | Admin không phải thành viên của tổ chức | — | Giữ khoá report; xoá rejectReason; thông báo CAMPAIGN_APPROVED (owner, manager, thành viên) và CAMPAIGN_VERIFY_INVITE (người dân trong 5 km) | `campaign-lifecycle.service.ts > review()`, `campaign.service.ts > reviewCampaign()` |
+| `request_revision` | PENDING_REVIEW 12 → NEEDS_REVISION 19 | Admin (như trên) | Có lý do ≤ 5000 | rejectReason; `revisionDeadline` = now + 7 ngày; giữ khoá report; thông báo CAMPAIGN_REVISION_REQUESTED (người tạo + owner) | `review()` |
+| `block` | PENDING_REVIEW 12 / NEEDS_REVISION 19 → BLOCKED 2 | Admin (như trên) | Có lý do | Gỡ report (22 → 21); thông báo CAMPAIGN_BLOCKED (người tạo + owner) | `review()`, `releaseAllReports()` |
+| `ban` | ACTIVE 1 → BLOCKED 2 | Admin (như trên) | Có lý do; là `decision=block` trên campaign đang ACTIVE | Như block | `review()` |
+| `expire` | PENDING_REVIEW 12 / NEEDS_REVISION 19 → EXPIRED 20 | system (job) | Quá `startDate`, hoặc NEEDS_REVISION quá `revisionDeadline` (BR-186) | Gỡ report; thông báo CAMPAIGN_EXPIRED cho người tạo; `reason` = `start_passed` / `revision_overdue` | `campaign-lifecycle.service.ts > expireOverdue()`, `INC/modules/campaign/campaign-lifecycle.job.ts` |
+| `submit_completion` | ACTIVE 1 / LEGACY_IN_REVIEW 9 → PENDING_COMPLETION 7 | canManage | Mọi task đều 17 | Thông báo CAMPAIGN_COMPLETION_PENDING_ADMIN (admin trong env) và COMPLETION_VERIFY_INVITE (người dân gần) | `submitCampaignCompletionForAdminApproval()` |
+| `approve_completion` | PENDING_COMPLETION 7 → COMPLETED 17 | Admin | Mọi task 17; có tier | Report và SOS → 17; outbox CAMPAIGN_COMPLETION_GREEN_POINTS; thông báo CAMPAIGN_DONE và APPROVED_BY_ADMIN | `adminFinalizeCampaignCompletion()` |
+| `reject_completion` | PENDING_COMPLETION 7 → ACTIVE 1 | Admin | Có lý do | rejectReason; thông báo REJECTED_BY_ADMIN | `adminRejectCampaign()` |
+| (xoá) | DRAFT 4 / PENDING_REVIEW 12 / NEEDS_REVISION 19 / BLOCKED 2 / EXPIRED 20 → xoá mềm | canDelete | Trạng thái khác → 409 `CAMPAIGN_NOT_DELETABLE` | Gỡ report | `deleteCampaign()` |
+| (dọn nháp) | DRAFT 4 → xoá mềm | system (job) | `updatedAt` quá 30 ngày | Không có report nào bị khoá nên không cần gỡ | `deleteStaleDrafts()` |
 
-Không có code nào chuyển campaign sang INREVIEW (9). Trạng thái này chỉ xuất hiện trong điều kiện của mark-done.
+- `PUT /campaigns/:id` **không** đổi được status: body có `status` → 400 (validator). Sửa khi đang PENDING_REVIEW / NEEDS_REVISION ghi log `type=EDIT` (`logCampaignEdit()`).
+- Không còn đường BLOCKED 2 → ACTIVE 1 ("duyệt lại"). `PUT /:id/verify` (deprecated) chỉ là alias của `review`: status 1 → approve, status 2 → block/ban.
+- Không có code nào chuyển campaign sang LEGACY_IN_REVIEW (9). Trạng thái này chỉ còn trong điều kiện của mark-done.
+- **[CHƯA HOÀN THIỆN]** (các đợt sau của đặc tả): tách UPCOMING khỏi ACTIVE, sửa trường quan trọng sau khi duyệt → quay về Chờ duyệt, dời lịch, campaign nhiều ngày.
 
 ## 3. Yêu cầu tham gia campaign (`campaign_joining_requests.status`)
 
