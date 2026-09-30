@@ -422,6 +422,7 @@ sequenceDiagram
 - **Không đổi** `trustTier` (Blue Tick không bị gỡ khi ban).
 - **Hệ quả của ban:** `GET /by-slug` trả 404; `GET /:id` và danh sách vẫn trả về; tạo campaign **không** kiểm tra status của tổ chức (99).
 - **File:** `organization.controller.ts > adminVerifyOrganization`, `organization.service.ts > adminVerifyOrganization()`, `notifyOwnerOfOrganizationVerified()`.
+- **Khi ban:** cùng transaction huỷ các campaign nháp / chờ duyệt / chờ chỉnh sửa của tổ chức và gỡ report (`campaign-lifecycle.service.ts > cancelForLockedOrganization()`, BR-189); campaign đang chạy giữ nguyên.
 
 ### F18 — Xin gia nhập, duyệt, huỷ, rời tổ chức
 1. Người dùng: `POST /api/v1/organizations/:id/join-requests`.
@@ -1075,6 +1076,7 @@ sequenceDiagram
 | CAMPAIGN_APPROVED | website | owner, manager, thành viên active của tổ chức | Admin duyệt campaign | `campaign-lifecycle.service.ts > review() → notifyReviewed()` |
 | CAMPAIGN_REVISION_REQUESTED / CAMPAIGN_BLOCKED | website | người tạo + owner | Admin yêu cầu chỉnh sửa / chặn / ban | như trên |
 | CAMPAIGN_EXPIRED | website | người tạo | Job hết hạn duyệt | `campaign-lifecycle.service.ts > expireOverdue() → notifyExpired()` |
+| CAMPAIGN_CANCELLED | website | người tạo + owner | Admin khoá tổ chức, campaign 4 / 12 / 19 bị huỷ (BR-189) | `organization.service.ts > adminVerifyOrganization()` → `campaign-lifecycle.service.ts > notifyCancelledForLockedOrganization()` |
 | CAMPAIGN_VERIFY_INVITE | website | người dân trong 5 km | Admin duyệt campaign | `campaign.service.ts > reviewCampaign() → notifyNearbyCitizensToJoinApprovedCampaign()` |
 | CAMPAIGN_COMPLETION_PENDING_ADMIN | website | user id trong env | Manager gửi hoàn thành | `submitCampaignCompletionForAdminApproval()` |
 | CAMPAIGN_COMPLETION_VERIFY_INVITE | website | người dân trong 5 km | Manager gửi hoàn thành | như trên |

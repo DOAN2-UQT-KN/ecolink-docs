@@ -357,7 +357,7 @@ erDiagram
 | orgType | varchar(32)? | | `OrgType` |
 | kycStatus | varchar(20) | default `NOT_SUBMITTED` | `KycStatus` |
 | trustTier | varchar(10) | default `NONE` | `TrustTier`; `VERIFIED` là **Blue Tick** |
-| tickSuspended | bool | default false | Không có code ghi |
+| tickSuspended | bool | default false | Không có code ghi. Blue Tick hiệu lực = `DC/organization-trust.ts > isOrganizationVerified()` (tier VERIFIED, không suspended, kycStatus APPROVED, chưa quá `verificationExpiresAt`); response trả kết quả ở `isVerified` |
 | domainVerified | bool | default false | Đặt bằng `lane A && documentsWaived` |
 | verifiedAt, verifiedBy | | | |
 | verificationExpiresAt | datetime? | | Lane B: +365 ngày; không có job xử lý hết hạn |

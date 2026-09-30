@@ -121,7 +121,7 @@ Cột:
 
 `CAMPAIGN_CREATE` được kiểm ở `createCampaign()` và `GET /campaigns/create-eligibility` (`INC/modules/campaign/campaign-eligibility.service.ts > assertCanCreateDraft(), get()`; không có quyền thì `hidden=true`, client ẩn nút tạo); `CAMPAIGN_MANAGE_ANY` cho LR / OWNER quản lý mọi campaign của tổ chức (`INC/modules/campaign/campaign-access.service.ts`, xem §2.5).
 
-Mọi response tổ chức có người xem (`GET /:id`, `/by-slug/:slug`, `/`, `/my`) kèm `my_role`, `is_owner`, `is_member` và `permissions { can_edit_org, can_approve_members, can_invite, can_manage_members, can_propose_owners, can_create_campaign, can_manage_all_campaigns, assignable_roles }` (`permissionsFor(role)`); client ẩn / hiện nút theo object này.
+Mọi response tổ chức có người xem (`GET /:id`, `/by-slug/:slug`, `/`, `/my`) kèm `my_role`, `is_owner`, `is_member` và `permissions { can_edit_org, can_approve_members, can_invite, can_manage_members, can_propose_owners, can_create_campaign, can_manage_all_campaigns, assignable_roles }` (`permissionsFor(role)`, qua `organization.service.ts > permissionsForOrganization()`: tổ chức status ≠ 1 thì `can_create_campaign = false`, BR-189); client ẩn / hiện nút theo object này. Response còn có `is_verified` (Blue Tick đang hiệu lực, `isOrganizationVerified()`).
 
 | Hành động | Khách | User | Owner | Admin tổ chức | CM / Member | Admin nền tảng | Nơi kiểm tra |
 |---|---|---|---|---|---|---|---|

@@ -308,7 +308,7 @@ Dữ liệu tổ chức / hồ sơ cũ là dữ liệu dev nên bị xoá, khôn
 
 - Admin nền tảng can thiệp trực tiếp vai owner (tranh chấp, owner mất liên lạc) **[CHƯA HOÀN THIỆN]**.
 - ~~**Phase 4:** quyền quản lý chiến dịch theo vai tổ chức~~ — đã làm 2026-09-27 (xem [05-permissions.md §2.5](05-permissions.md)).
-- Blue Tick chưa mang đặc quyền nào (chưa nối campaign, chưa có sweep).
+- Blue Tick đã nối với campaign: tổ chức không có tick hiệu lực bị giới hạn 2 campaign đang mở và độ khó thấp nhất (BR-163). Tick hiệu lực tính lúc đọc bằng `isOrganizationVerified()` (có xét `kycStatus` và hạn lane B 365 ngày); chưa có job/sweep ghi lại trạng thái hết hạn, chưa có code đặt `tickSuspended`.
 
 ---
 
