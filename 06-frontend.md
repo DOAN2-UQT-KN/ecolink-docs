@@ -65,6 +65,14 @@ Cây provider: `main.tsx` → `App` (`RouterProvider`) → `RootLayout` (`ReactQ
 
 Các biến `VITE_*` được inline lúc build (build-arg trong `ecolink-client/Dockerfile`).
 
+### 1.5 Quy ước UI dùng chung
+
+- **Ghi chú của field → `InfoTooltip`** (`ecolink-client/components/ui/InfoTooltip.tsx`): ghi chú tĩnh của field hoặc section (quy tắc, ai được thấy giá trị, giá trị mặc định) hiện bằng icon (i) cạnh nhãn, rê chuột / focus thì hiện tooltip; không viết dòng chữ xám dưới field. Trigger là `span` focus được (`role="img"`, `tabIndex=0`), chặn click để không focus input / không kích hoạt nút cha, nên đặt được trong `<label>` và trong `<button>`.
+- Vẫn hiện inline: lỗi (`FieldError`), cảnh báo (ví dụ "Tổ chức chưa xác thực", điểm rác bị chiến dịch khác lấy, khoảng cách / số suất điểm tập trung) và hướng dẫn phụ thuộc trạng thái ("Chọn vị trí điểm tập trung trước…").
+- Tooltip làm nhãn cho nút chỉ có icon (Remove, Add image, rời tổ chức…) là pattern khác, vẫn dùng `components/ui/tooltip` trực tiếp.
+- Đang dùng `InfoTooltip`: form tạo / sửa chiến dịch (SĐT liên hệ, độ tuổi tối thiểu, lịch, điểm tập trung, điểm rác — `campaigns/create/_components/*`), giải thích lane khi duyệt hồ sơ tổ chức (`admin/organization-applications/_components/ApplicationReviewDialog.tsx`), dialog thay người đại diện pháp lý (`organizations/[id]/_components/OwnerActions.tsx`).
+- Quy ước này cũng ghi trong skill `ecolink-ui-and-forms` của client (`.claude/skills/` và `.cursor/skills/`, cùng `.cursor/rules/ecolink-ui-and-forms.mdc`).
+
 ---
 
 ## 2. Danh sách route (React Router)
