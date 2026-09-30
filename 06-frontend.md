@@ -283,6 +283,7 @@ Ghi chú: `(hook)` = hàm trong `apis/`, path là path gửi tới `VITE_API_URL
 | | `useGetMyOrganizations` (filter tổ chức qua `SelectListOrganization`) | GET `/api/v1/organizations/my?is_owner=true` |
 | | `useReviewCampaign` (`apis/campaign/reviewCampaign.ts`, trong `ReviewCampaignConfirm.tsx`) | PUT `/api/v1/campaigns/:id/review` body `{ decision: "approve" \| "request_revision" \| "block", reason }` |
 | | `useGetCampaignHistory` (`apis/campaign/getCampaignHistory.ts`, lịch sử thay đổi trong `ReviewCampaignConfirm.tsx`) | GET `/api/v1/campaigns/:id/history` |
+| | Nút Preview (icon mắt, cột Action) mở `CampaignPreviewDialog.tsx` thay vì mở `/campaigns/:id` tab mới: tab Information (lý do admin nếu có; thông tin chung; thời gian và liên hệ gồm SĐT; điểm tập trung với người phụ trách qua `useGetMembersByOrg` và danh sách điểm rác) + tab Activity (toàn bộ `history`); chỉ xem, link "Open campaign page" chỉ khi status công khai (`constants/campaignLifecycle.ts > CAMPAIGN_PUBLIC_STATUSES`). Khung section dùng chung với `ApplicationReviewDialog` qua `components/admin/shared/ReviewSection.tsx` | GET `/api/v1/campaigns/:id`, GET `/api/v1/campaigns/:id/history`, GET `/api/v1/organizations/:id/members` |
 | | `useReviewCampaignCompletion` | PUT `/api/v1/campaigns/:id/completion-review` body `{ decision: "approve"|"reject", rejectReason }` |
 | `/admin/incidents` | `useGetIncidents` (`apis/incident/getIncidents.ts` → `getReports`) | GET `/api/v1/reports/search` (không phải `/all`) |
 | | `useVerifyReport` / `useBanReport` | PUT `/api/v1/reports/:id/verify`; PUT `/api/v1/reports/:id/ban` body `{ reject_reason }` |
@@ -340,7 +341,7 @@ Tổng số file hàm (không tính `models/`): 70; trong đó `apis/auth/update
 | `deleteCampaign` / `useDeleteCampaign` | DELETE | `/api/v1/campaigns/:id` | `campaigns/me/_components/DataTable.tsx` |
 | `getCreateEligibility` / `useGetCreateEligibility` | GET | `/api/v1/campaigns/create-eligibility` | `components/client/shared/CreateCampaignButton.tsx`, `CampaignContext.tsx` |
 | `reviewCampaign` / `useReviewCampaign` | PUT | `/api/v1/campaigns/:id/review` | `admin/campaigns/_components/ReviewCampaignConfirm.tsx` |
-| `getCampaignHistory` / `useGetCampaignHistory` | GET | `/api/v1/campaigns/:id/history` | `ReviewCampaignConfirm.tsx` |
+| `getCampaignHistory` / `useGetCampaignHistory` | GET | `/api/v1/campaigns/:id/history` | `ReviewCampaignConfirm.tsx`, `CampaignPreviewDialog.tsx` |
 | `getCampaigns` / `useGetCampaigns` | GET | `/api/v1/campaigns` | campaigns search, organizations `[id]/CampaignList`, admin campaigns |
 | `getMyCampaigns` / `useGetMyCampaigns` | GET | `/api/v1/campaigns/my` | campaigns search (tab mine), `campaigns/me` |
 | `getAllCampaigns` | GET | `/api/v1/campaigns/all` | `maps/_components/MapPage.tsx` |
