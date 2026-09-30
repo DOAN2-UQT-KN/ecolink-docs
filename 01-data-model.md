@@ -147,8 +147,6 @@ erDiagram
     uuid organizationId FK
     int status
     int difficulty "level ở reward"
-    datetime startDate
-    datetime endDate
     float latitude
     float longitude
     datetime revisionDeadline
@@ -159,7 +157,18 @@ erDiagram
     float latitude
     float longitude
     float radiusKm
-    int slots
+  }
+  CampaignDay {
+    uuid id PK
+    uuid campaignId FK
+    datetime startAt
+    datetime endAt
+  }
+  CampaignShift {
+    uuid id PK
+    uuid dayId FK
+    uuid meetingPointId FK
+    int slots "0 = tắt"
     uuid leaderUserId
   }
   Sos {
@@ -286,8 +295,7 @@ erDiagram
 | description (+Vi/En) | text? | | |
 | status | int | default 12 ở DB, index | `GlobalStatus`; code tạo mới luôn ghi DRAFT (4). Tên theo vòng đời ở `DC/campaign-lifecycle.ts > CampaignStatus` (xem 04 §2) |
 | rejectReason | text? | | Lý do lần duyệt gần nhất (yêu cầu chỉnh sửa, chặn, ban) hoặc lý do từ chối hoàn thành; duyệt thì xoá |
-| startDate, endDate | datetime? | | Thứ tự ngày, ≥ 48h, ≤ 12h, cùng ngày được kiểm khi gửi duyệt (BR-164); bản nháp để trống được |
-| detailAddress | varchar(255)? | | Bản sao của điểm tập kết đầu tiên, ghi mỗi lần lưu điểm tập kết (`replaceMeetingPoints()`) |
+| detailAddress | varchar(255)? | | Bản sao của điểm tập kết đầu tiên, ghi mỗi lần lưu lịch (`replaceSchedule()`). Không còn cột `startDate` / `endDate`: thời gian lấy từ `campaign_days` (bỏ ở migration `20260930130000_campaign_days_shifts`) |
 | latitude, longitude, radiusKm | float? | | Như trên (dùng cho bản đồ, mời người dân ở gần, SOS) |
 | contactName | varchar(120)? | | Người liên hệ (bắt buộc khi gửi duyệt) |
 | contactPhone | varchar(20)? | | SĐT liên hệ; chỉ trả cho người quản lý, admin, volunteer đã được duyệt |
@@ -303,7 +311,9 @@ erDiagram
 | Bảng | Field chính | Ràng buộc |
 |---|---|---|
 | CampaignManager (`campaign_managers`) | campaignId, userId, assignedBy, assignedAt, deletedAt | PK kép (campaignId, userId) |
-| CampaignMeetingPoint (`campaign_meeting_points`) | campaignId, name? (≤120), latitude, longitude, detailAddress? (≤255), radiusKm, gatherAt?, slots? (null = không giới hạn riêng), leaderUserId? (manager phụ trách), sortOrder, deletedAt | index campaignId; 1–5 điểm mỗi campaign (kiểm khi gửi duyệt) |
+| CampaignMeetingPoint (`campaign_meeting_points`) | campaignId, name? (≤120), latitude, longitude, detailAddress? (≤255), radiusKm, sortOrder, deletedAt | index campaignId; 1–5 điểm mỗi campaign (kiểm khi gửi duyệt). Giờ tập trung, số suất, người phụ trách nằm ở `campaign_shifts` |
+| CampaignDay (`campaign_days`) | campaignId (cascade), startAt, endAt, sortOrder | index campaignId, startAt; 1–7 ngày trong 14 ngày kể từ ngày đầu, mỗi ngày ≤ 12h và trong một ngày địa phương (kiểm khi gửi duyệt, BR-164). Lưu lại thì xoá hết và tạo lại |
+| CampaignShift (`campaign_shifts`) | campaignId, dayId (cascade), meetingPointId (cascade), gatherAt?, slots (default 0, **0 = ca tắt**), leaderUserId? | **unique (dayId, meetingPointId)**; server luôn lưu đủ lưới ngày × điểm tập trung (ô không gửi = 0). Người phụ trách các ca đang bật thành `campaign_managers` khi gửi duyệt |
 | CampaignMeetingPointReport (`campaign_meeting_point_reports`) | meetingPointId (cascade), reportId, campaignId | PK kép (meetingPointId, reportId); **unique (campaignId, reportId)**. Lưu lựa chọn điểm rác của cả bản nháp, **không khoá** report; khoá thật vẫn là `reports.campaignId` + status 22 (một cột nên mỗi report chỉ thuộc một campaign) |
 | CampaignStatusLog (`campaign_status_logs`) | campaignId, type (`STATUS_CHANGE` \| `EDIT`), event (submit, approve, block, … hoặc `edit`), fromStatus?, toStatus?, actorId?, actorRole (`manager` \| `admin` \| `system`), reason?, changes (jsonb: diff `{field: {from, to}}`) | index (campaignId, createdAt); ghi ở `INC/modules/campaign/campaign-state-machine.ts > transitionCampaign(), logCampaignEdit()` |
 | CampaignJoiningRequest (`campaign_joining_requests`) | campaignId?, volunteerId?, status (default 12) | **Không có unique** (campaignId, volunteerId) |

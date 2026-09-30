@@ -654,13 +654,12 @@ sequenceDiagram
   - Difficulty có tier tương ứng ở reward (BR-152).
   - Report được chọn ở TODO và chưa thuộc campaign nào (BR-110).
 - **Luồng chính — tạo nháp:**
-  1. `/campaigns/create` (hoặc `?organizationId=<id>` từ tab campaign của trang tổ chức / `/campaigns/me`): nút "Tạo chiến dịch" (`CreateCampaignButton`) gọi `GET /api/v1/campaigns/create-eligibility?organizationId=` → `{canCreate, hidden, reasons[], isVerified, maxDifficulty, openCount/openLimit, reviewQueueCount/reviewQueueLimit}`; `hidden` thì ẩn nút, `!canCreate` thì khoá nút và hiện lý do. Form tải tổ chức, report TODO, thành viên tổ chức (chọn trưởng điểm); upload banner lên Cloudinary.
-  2. "Lưu nháp": `POST /api/v1/campaigns {organizationId, title, description?, banner?, startDate?, endDate?, difficulty, contactName?, contactPhone?, safetyNotes?, requirements?, meetingPoints[]}` (mỗi điểm: `name?, latitude, longitude, detailAddress?, radiusKm, gatherAt?, slots?, leaderUserId?, reportIds[]`; kiểu cũ `latitude/longitude/radiusKm/reportIds` vẫn nhận, thành 1 điểm).
+  1. `/campaigns/create` (hoặc `?organizationId=<id>` từ tab campaign của trang tổ chức / `/campaigns/me`): nút "Tạo chiến dịch" (`CreateCampaignButton`) gọi `GET /api/v1/campaigns/create-eligibility?organizationId=` → `{canCreate, hidden, reasons[], isVerified, maxDifficulty, openCount/openLimit, reviewQueueCount/reviewQueueLimit}`; `hidden` thì ẩn nút, `!canCreate` thì khoá nút và hiện lý do. Form tải tổ chức, report TODO, thành viên tổ chức (chọn người phụ trách ca); upload banner lên Cloudinary.
+  2. "Lưu nháp": `POST /api/v1/campaigns {organizationId, title, description?, banner?, difficulty, contactName?, contactPhone?, safetyNotes?, requirements?, days[], meetingPoints[], shifts[]}`. Lịch là lưới ngày × điểm tập trung (spec 1.4): `days[]` = `{startAt, endAt}` (1–7 ngày); mỗi điểm `{name?, latitude, longitude, detailAddress?, radiusKm, reportIds[]}`; mỗi ca `{dayIndex, meetingPointIndex, gatherAt?, slots, leaderUserId?}` (0 suất = tắt; ô không gửi = tắt). `scheduleFromRequest()` sắp ngày theo giờ bắt đầu và điền đủ lưới.
   3. `campaign.service.ts > createCampaign()`:
      - `campaignEligibilityService.assertCanCreateDraft()` (quyền + tổ chức không bị khoá).
-     - Gọi reward `GET /internal/v1/difficulties/level/:l`.
-     - `campaignLifecycleService.assertReportsSelectable()` (report TODO, chưa thuộc campaign nào); trưởng điểm phải là thành viên active (`campaignManagerService.assertAllMembers()`).
-     - Transaction Serializable: tạo campaign **DRAFT 4**, upsert người tạo vào `campaign_managers`, `replaceMeetingPoints()` ghi `campaign_meeting_points` và `campaign_meeting_point_reports`, chép toạ độ / bán kính / địa chỉ của điểm đầu tiên sang `campaigns` (bản đồ, mời người ở gần, SOS). **Không khoá report**, không gửi thông báo.
+     - `campaignLifecycleService.assertReportsSelectable()` (report TODO, chưa thuộc campaign nào); người phụ trách các ca phải là thành viên active (`assertScheduleUsable()` → `campaignManagerService.assertAllMembers()`).
+     - Transaction Serializable: tạo campaign **DRAFT 4**, upsert người tạo vào `campaign_managers`, `replaceSchedule()` ghi `campaign_days`, `campaign_meeting_points`, `campaign_meeting_point_reports`, `campaign_shifts`, chép toạ độ / bán kính / địa chỉ của điểm đầu tiên sang `campaigns` (bản đồ, mời người ở gần, SOS). **Không khoá report**, không gửi thông báo.
   4. Enqueue `TRANSLATE_TEXT` (CAMPAIGN).
   5. Sửa nháp: `/campaigns/:id/edit` → `PUT /campaigns/:id` (F26).
 - **Luồng chính — gửi duyệt:** "Gửi duyệt" (hoặc "Nộp lại" khi NEEDS_REVISION) → `POST /api/v1/campaigns/:id/submit` → `campaign-lifecycle.service.ts > submit()`:
@@ -669,15 +668,15 @@ sequenceDiagram
      - `campaignEligibilityService.assertCanSubmit()` kiểm lại giới hạn (BR-163).
      - `validateCampaignForSubmit()` kiểm toàn bộ nội dung (BR-164); có lỗi → 400 `CAMPAIGN_INVALID` với `details[{field, code, message}]` liệt kê mọi lỗi.
      - `syncReportLocks()` khoá report 21 → 22 bằng compare-and-set (BR-169); bị campaign khác lấy trước → 409 `CAMPAIGN_REPORTS_TAKEN {reportIds}`.
-     - Người tạo và các trưởng điểm được upsert thành manager.
+     - Người tạo và người phụ trách các ca đang bật được upsert thành manager.
      - `transitionCampaign()` event `submit` (4 → 12) hoặc `resubmit` (19 → 12); lưu `submittedAt`, `requirements` (đã thêm mặc định), `lastSubmittedSnapshot`; nộp lại thì diff với snapshot trước vào `campaign_status_logs.changes`.
   3. Sau commit: `CAMPAIGN_PENDING_REVIEW` cho admin trong `CAMPAIGN_ADMIN_NOTIFY_USER_IDS`; `CAMPAIGN_CREATED` cho owner + manager (trừ người gửi; **không** gửi khi nộp lại). Thành viên thường chỉ nhận thông báo khi campaign được duyệt (F27).
 - **Luồng lỗi:**
   - 404 không có tổ chức / campaign; 403 `ORG_PERMISSION_DENIED` khi vai không có `CAMPAIGN_CREATE`; 403 `CAMPAIGN_CREATE_NOT_ALLOWED {reasons}`; 403 `CAMPAIGN_PERMISSION_DENIED` khi gửi duyệt mà không phải người quản lý.
-  - 400 difficulty không hợp lệ (cũng xảy ra khi reward service chết); 400 reportIds không hợp lệ; 422 `CAMPAIGN_MANAGER_NOT_MEMBER` (trưởng điểm).
+  - 400 difficulty không hợp lệ; 400 lịch không hợp lệ (ca trỏ tới ngày / điểm không có, trùng ô, gửi `startDate`); 422 `CAMPAIGN_MANAGER_NOT_MEMBER` (người phụ trách ca).
   - 400 `CAMPAIGN_INVALID`; 409 `CAMPAIGN_REPORTS_TAKEN`; 409 `CAMPAIGN_INVALID_TRANSITION` (gửi duyệt khi không ở 4 / 19, hoặc có người đổi status cùng lúc).
 - **Client:** lỗi `details` được gắn vào từng trường của form và hiện tóm tắt; `CAMPAIGN_REPORTS_TAKEN` tô các report cần bỏ (`FE/app/(pages)/(main)/campaigns/create/_components/CampaignForm.tsx`).
-- **Dữ liệu thay đổi:** `campaigns`, `campaign_managers`, `campaign_meeting_points`, `campaign_meeting_point_reports`, `campaign_status_logs`, `reports` (khi gửi duyệt), `background_jobs`.
+- **Dữ liệu thay đổi:** `campaigns`, `campaign_managers`, `campaign_days`, `campaign_meeting_points`, `campaign_meeting_point_reports`, `campaign_shifts`, `campaign_status_logs`, `reports` (khi gửi duyệt), `background_jobs`.
 - **File:** `INC/modules/campaign/campaign.controller.ts > createCampaign, getCreateEligibility, submitCampaign`, `campaign.service.ts > createCampaign(), submitCampaign()`, `campaign-eligibility.service.ts`, `campaign-lifecycle.service.ts > submit(), syncReportLocks(), notifySubmitted()`, `campaign-submit-validation.ts > validateCampaignForSubmit()`, `campaign-state-machine.ts > transitionCampaign()`, `INC/modules/reward/reward-service.client.ts`.
 
 ```mermaid
@@ -753,7 +752,7 @@ sequenceDiagram
 
 ### F27b — Hết hạn duyệt và dọn bản nháp (job)
 - `INC/worker.ts` chạy `startCampaignLifecycleJob()` (`INC/modules/campaign/campaign-lifecycle.job.ts`): `setInterval` mỗi `CAMPAIGN_LIFECYCLE_INTERVAL_MS` (mặc định 15 phút), tắt bằng `CAMPAIGN_LIFECYCLE_ENABLED=false`.
-- `expireOverdue()`: campaign 12 / 19 đã tới `startDate`, hoặc 19 quá `revisionDeadline` → `transitionCampaign(event=expire, actor=system)` → EXPIRED 20, gỡ report, `CAMPAIGN_EXPIRED` cho người tạo. Mỗi lượt tối đa 200 campaign; campaign bị người khác đổi trạng thái cùng lúc thì bỏ qua, lượt sau xét lại.
+- `expireOverdue()`: campaign 12 / 19 có ngày đầu (`campaign_days.startAt`) đã tới, hoặc 19 quá `revisionDeadline` → `transitionCampaign(event=expire, actor=system)` → EXPIRED 20, gỡ report, `CAMPAIGN_EXPIRED` cho người tạo. Mỗi lượt tối đa 200 campaign; campaign bị người khác đổi trạng thái cùng lúc thì bỏ qua, lượt sau xét lại.
 - `deleteStaleDrafts()`: DRAFT có `updatedAt` quá 30 ngày → xoá mềm (bản nháp không khoá report).
 - **File:** `campaign-lifecycle.service.ts > expireOverdue(), deleteStaleDrafts(), notifyExpired()` (BR-186).
 
