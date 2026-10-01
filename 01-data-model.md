@@ -168,7 +168,8 @@ erDiagram
     uuid id PK
     uuid dayId FK
     uuid meetingPointId FK
-    int slots "0 = tắt"
+    int minVolunteers "0 = tắt"
+    int maxVolunteers "tuỳ chọn"
     uuid leaderUserId
   }
   Sos {
@@ -301,6 +302,7 @@ erDiagram
 | contactPhone | varchar(20)? | | SĐT liên hệ; chỉ trả cho người quản lý, admin, volunteer đã được duyệt |
 | safetyNotes | text? | | Dụng cụ, trang phục, rủi ro |
 | requirements | jsonb? | | `{minAge, skills[], bringOwnTools}`; difficulty ≥ 3 thì mặc định minAge 18 |
+| minVolunteersReason | text? | | Lý do khi tổng TNV tối thiểu của một ngày thấp hơn mức gợi ý của độ khó; bắt buộc khi đó lúc gửi duyệt (BR-164) |
 | revisionDeadline | datetime? | | Hạn nộp lại khi NEEDS_REVISION (19) = lúc yêu cầu chỉnh sửa + 7 ngày |
 | submittedAt | datetime? | | Lần gửi duyệt gần nhất |
 | lastSubmittedSnapshot | jsonb? | | Nội dung đã gửi duyệt lần trước; nộp lại thì diff với bản này được ghi vào `campaign_status_logs.changes` |
@@ -313,7 +315,7 @@ erDiagram
 | CampaignManager (`campaign_managers`) | campaignId, userId, assignedBy, assignedAt, deletedAt | PK kép (campaignId, userId) |
 | CampaignMeetingPoint (`campaign_meeting_points`) | campaignId, name? (≤120), latitude, longitude, detailAddress? (≤255), radiusKm, sortOrder, deletedAt | index campaignId; 1–5 điểm mỗi campaign (kiểm khi gửi duyệt). Giờ tập trung, số suất, người phụ trách nằm ở `campaign_shifts` |
 | CampaignDay (`campaign_days`) | campaignId (cascade), startAt, endAt, sortOrder | index campaignId, startAt; 1–7 ngày trong 14 ngày kể từ ngày đầu, mỗi ngày ≤ 12h và trong một ngày địa phương (kiểm khi gửi duyệt, BR-164). Lưu lại thì xoá hết và tạo lại |
-| CampaignShift (`campaign_shifts`) | campaignId, dayId (cascade), meetingPointId (cascade), gatherAt?, slots (default 0, **0 = ca tắt**), leaderUserId? | **unique (dayId, meetingPointId)**; server luôn lưu đủ lưới ngày × điểm tập trung (ô không gửi = 0). Người phụ trách các ca đang bật thành `campaign_managers` khi gửi duyệt |
+| CampaignShift (`campaign_shifts`) | campaignId, dayId (cascade), meetingPointId (cascade), gatherAt?, minVolunteers (`min_volunteers`, default 0, **0 = ca tắt**), maxVolunteers? (`max_volunteers`, tối đa dự kiến), leaderUserId? — hai số chỉ để cảnh báo, không chặn (migration `20261001100000_shift_min_max_volunteers` đổi tên từ `slots`) | **unique (dayId, meetingPointId)**; server luôn lưu đủ lưới ngày × điểm tập trung (ô không gửi = 0). Người phụ trách các ca đang bật thành `campaign_managers` khi gửi duyệt |
 | CampaignMeetingPointReport (`campaign_meeting_point_reports`) | meetingPointId (cascade), reportId, campaignId | PK kép (meetingPointId, reportId); **unique (campaignId, reportId)**. Lưu lựa chọn điểm rác của cả bản nháp, **không khoá** report; khoá thật vẫn là `reports.campaignId` + status 22 (một cột nên mỗi report chỉ thuộc một campaign) |
 | CampaignStatusLog (`campaign_status_logs`) | campaignId, type (`STATUS_CHANGE` \| `EDIT`), event (submit, approve, block, … hoặc `edit`), fromStatus?, toStatus?, actorId?, actorRole (`manager` \| `admin` \| `system`), reason?, changes (jsonb: diff `{field: {from, to}}`) | index (campaignId, createdAt); ghi ở `INC/modules/campaign/campaign-state-machine.ts > transitionCampaign(), logCampaignEdit()` |
 | CampaignJoiningRequest (`campaign_joining_requests`) | campaignId?, volunteerId?, status (default 12) | **Không có unique** (campaignId, volunteerId) |
@@ -443,6 +445,7 @@ erDiagram
     uuid id PK
     int level UK
     int maxVolunteers
+    int suggestedMinVolunteers
     int greenPoints
   }
   GreenPointTransaction {
@@ -484,7 +487,7 @@ Hệ thống có 3 sổ song song:
 
 | Bảng | Field | Ràng buộc / ghi chú |
 |---|---|---|
-| Difficulty (`difficulties`) | level (**unique**), name/nameVi/nameEn varchar(64), maxVolunteers? (null nghĩa là không giới hạn), greenPoints, deletedAt | Mức khó của campaign: quyết định sức chứa tình nguyện viên và số điểm thưởng |
+| Difficulty (`difficulties`) | level (**unique**), name/nameVi/nameEn varchar(64), maxVolunteers? (null nghĩa là không giới hạn; còn dùng khi duyệt TNV), suggestedMinVolunteers? (`suggested_min_volunteers`, TNV tối thiểu gợi ý mỗi ngày của campaign: 5 / 10 / 20 / 30 theo level), greenPoints, deletedAt | Mức khó của campaign: quyết định sức chứa tình nguyện viên và số điểm thưởng |
 | UserGreenPointBalance (`user_green_point_balances`) | userId (PK), balance (default 0) | Không bị trừ khi đổi quà |
 | GreenPointTransaction (`green_point_transactions`) | userId, type (`CAMPAIGN_COMPLETION`, `REPORT_COMPLETION`, `UPVOTE`, `REPORT_VOTE_MILESTONE`, `REFERRAL`, `GIFT_REDEEM`, `GIFT_REDEEM_REFUND`), resourceId, resourceType, points (âm là chi), metadata | **partial unique (user_id, type, resource_id, resource_type) WHERE deleted_at IS NULL**, dùng để chống cộng trùng |
 | UserSpWalletEntry (`user_sp_wallet`) | userId, amount, remaining, sourceType, sourceId?, expiresAt | Trừ theo FIFO dựa trên `expiresAt` |

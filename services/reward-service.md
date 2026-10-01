@@ -9,7 +9,7 @@ reward-service là nơi lưu trữ và tính toán mọi thứ liên quan đến
 
 | Mảng | Nội dung | Bằng chứng |
 |---|---|---|
-| Difficulty | Bậc độ khó chiến dịch: giới hạn số tình nguyện viên (`maxVolunteers`) và điểm xanh thưởng (`greenPoints`). incident-service đọc qua API nội bộ | `ecolink-server/services/reward-service/prisma/schema.prisma > model Difficulty`, `.../src/internal/internal.routes.ts` |
+| Difficulty | Bậc độ khó chiến dịch: giới hạn số tình nguyện viên (`maxVolunteers`), số TNV tối thiểu gợi ý mỗi ngày (`suggestedMinVolunteers`) và điểm xanh thưởng (`greenPoints`). incident-service đọc qua API nội bộ | `ecolink-server/services/reward-service/prisma/schema.prisma > model Difficulty`, `.../src/internal/internal.routes.ts` |
 | Green point (legacy) | Sổ cái `green_point_transactions` + số dư `user_green_point_balances`. Mỗi lần cộng điểm xanh sẽ đồng thời cộng SP và RP | `.../src/modules/green-point/green-point-ledger.util.ts > applyGreenPointLedgerCredit()` |
 | Gamification v2 | Mùa giải (Season), điểm xếp hạng theo mùa CRP (công dân) / VRP (tình nguyện viên), ví điểm tiêu dùng SP chia theo lô FIFO có hạn dùng, bảng xếp hạng, snapshot cuối mùa, trả SP cho top theo payout tier, định nghĩa huy hiệu (badge) với rules AST | `.../src/modules/gamification/*` |
 | Gift / đổi quà | Danh mục quà, đổi quà bằng SP (có giảm giá theo badge), đơn đổi quà với trạng thái vận chuyển, hoàn SP khi huỷ | `.../src/modules/gift/gift.service.ts` |
@@ -72,7 +72,7 @@ Tất cả route `/api/v1/*` được mount trong `.../src/index.ts`. Path dư�
 | Method | Path | Auth | Role | Request | Response | Mã lỗi | Handler |
 |---|---|---|---|---|---|---|---|
 | GET | `/api/v1/difficulties` | Không | Public | query `page` int ≥1 (mặc định 1), `limit` int 1..100 (mặc định 20) | `{ difficulties: DifficultyResponse[], page, limit, total, totalPages }`. Chỉ bản ghi `deletedAt = null`, sắp theo `level asc`. Trường `name` luôn `null`; `nameVi = nameVi ?? name` | 400 VALIDATION_ERROR, 500 | `.../modules/difficulty/difficulty.api.routes.ts > GET /difficulties` → `difficulty.service.ts > listActive()` |
-| PUT | `/api/v1/difficulties/:id` | Bearer | admin | param `id` UUID; body tuỳ chọn: `name`, `nameVi`, `nameEn` (trim, 1..64), `maxVolunteers` (null hoặc int ≥1), `greenPoints` (int ≥0) | `{ difficulty }` | 400, 401, 403, 404 (không tìm thấy hoặc đã soft delete), 500 | `difficulty.api.routes.ts > PUT /difficulties/:id` → `difficulty.service.ts > updateById()` |
+| PUT | `/api/v1/difficulties/:id` | Bearer | admin | param `id` UUID; body tuỳ chọn: `name`, `nameVi`, `nameEn` (trim, 1..64), `maxVolunteers` (null hoặc int ≥1), `suggestedMinVolunteers` (null hoặc int ≥1), `greenPoints` (int ≥0) | `{ difficulty }` | 400, 401, 403, 404 (không tìm thấy hoặc đã soft delete), 500 | `difficulty.api.routes.ts > PUT /difficulties/:id` → `difficulty.service.ts > updateById()` |
 
 `updateById()` điền sẵn ngôn ngữ còn thiếu bằng text nguồn và enqueue job dịch (xem translation-worker.md). Không có endpoint tạo/xoá difficulty; dữ liệu đến từ seed.
 
