@@ -321,7 +321,7 @@ sequenceDiagram
   O->>INC: GET /owner-confirmations/:token
   alt Xác nhận
     O->>INC: POST /:token/confirm
-    INC->>INC: TX FOR UPDATE: CONFIRMED (+ PENDING_REVIEW nếu là người cuối của đơn NEW_ORG; owner change → tryFinalize sau commit)
+    INC->>INC: TX FOR UPDATE: CONFIRMED (+ PENDING_REVIEW nếu là người cuối của đơn NEW_ORG, owner change → tryFinalize sau commit)
   else Tôi không liên quan
     O->>INC: POST /:token/decline
     INC->>INC: DECLINED, đơn NEEDS_REVISION

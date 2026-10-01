@@ -59,7 +59,7 @@ sequenceDiagram
     U->>I: POST /:id/submit?token=
     I->>ID: POST /internal/v1/users/lookup-by-emails (đình chỉ?)
     I->>I: trần 3 tổ chức, chống spam, email bị chặn
-    I->>I: người nộp CONFIRMED; token 14 ngày cho owner khác
+    I->>I: người nộp CONFIRMED, token 14 ngày cho owner khác
     I--)N: ORG_OWNER_CONFIRMATION_REQUEST (mỗi owner) + ORG_APPLICATION_RECEIVED
 
     Note over O,I: Owner xác nhận (không cần đăng nhập)
