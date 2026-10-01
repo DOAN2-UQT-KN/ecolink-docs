@@ -210,7 +210,7 @@ Ghi chú: `(hook)` = hàm trong `apis/`, path là path gửi tới `VITE_API_URL
 | | `issueCampaignAttendanceQr` (`apis/campaign/campaignAttendance.ts`) | POST `/api/v1/campaigns/:id/attendance-qr` → sinh QR tới `/campaigns/:id?attendance=<token>` |
 | | `checkInCampaignAttendance` (khi URL có `?attendance=`) | POST `/api/v1/campaigns/:id/attendance-check-in` body `{ token }` |
 | | `useSubmitCompletionVerification` (`apis/campaign/submitCompletionVerification.ts`) | POST `/api/v1/campaigns/:id/completion-verification` body `{ value: 1 | -1 }` |
-| | `useGetCampaignVolunteer` (`apis/campaign/campaignVolunteer.ts`) — chỉ gọi khi `can_manage_campaign`, `request_status === APPROVED` hoặc là platform admin; người khác thấy câu "Only managers and approved volunteers can see the volunteer list." (`CurrentMember.tsx`) | GET `/api/v1/campaigns/volunteers/approved?campaignId=&limit=100&sortBy=createdAt&sortOrder=asc` |
+| | Tab Member list, thẻ "Volunteers" (`CurrentMember.tsx`): `useGetCampaignRegistrations` — chỉ gọi khi `can_manage_campaign`, đã đăng ký ca (`my_shift_ids`) hoặc là platform admin; người khác thấy câu "Only managers and registered volunteers can see the volunteer list.". Theo ngày → lưới card ca 2 cột: điểm tập trung, giờ ca, `ShiftFillBar`, danh sách người đăng ký (badge check-in chỉ khi ca đã bắt đầu), "Nobody has registered yet" khi trống; ca của mình viền nhấn | GET `/api/v1/campaigns/:id/registrations` |
 | | `useGetCampaignManager` (`apis/campaign/campaignManager.ts`) | GET `/api/v1/campaigns/:campaignId/managers?limit=100&sortBy=assignedAt&sortOrder=asc` |
 | | `useAddCampaignManagers` / `useRemoveCampaignManager` (`apis/campaign/campaignManager.ts`; thẻ Managers trong `CurrentMember.tsx`, chỉ khi `can_manage_campaign`): dialog "Add manager" dùng `AutoCompleteUser` với `organizationId` của campaign và `isUserDisabled={(u) => !u.is_member \|\| đã là manager}`; icon `TbUserMinus` + tooltip trên từng manager trừ người tạo (có badge "Creator"), mở dialog xác nhận. Cả hai invalidate `['campaign-managers']` và `['campaign']` | POST `/api/v1/campaigns/:id/add-managers` body `{ user_ids }`; POST `/api/v1/campaigns/:id/remove-manager` body `{ user_id }`; GET `/api/v1/organizations/:id/user-search?q=` |
 | | `useGetCampaignTasks` / `useCreateCampaignTask` / `useUpdateCampaignTask` / `useDeleteCampaignTask` (`apis/campaign/campaignTask.ts`) | GET `/api/v1/campaigns/:id/tasks`; POST `/api/v1/campaigns/:id/tasks`; PUT `/api/v1/campaigns/tasks/:taskId`; DELETE `/api/v1/campaigns/tasks/:taskId` |
@@ -334,7 +334,6 @@ Tổng số file hàm (không tính `models/`): 70; trong đó `apis/auth/update
 | `createCampaignTask` / `useCreateCampaignTask` | POST | `/api/v1/campaigns/:campaignId/tasks` | `components/client/shared/PopoverCreateUpdateTask.tsx` |
 | `updateCampaignTask` / `useUpdateCampaignTask` | PUT | `/api/v1/campaigns/tasks/:id` | `PopoverCreateUpdateTask.tsx` |
 | `deleteCampaignTask` / `useDeleteCampaignTask` | DELETE | `/api/v1/campaigns/tasks/:id` (kèm body) | `CampaignTask.tsx` |
-| `getCampaignVolunteer` / `useGetCampaignVolunteer` | GET | `/api/v1/campaigns/volunteers/approved` | `CurrentMember.tsx` |
 | `createCampaign` / `useCreateCampaign` | POST | `/api/v1/campaigns` | `campaigns/create/_context/CampaignContext.tsx` (lưu nháp lần đầu) |
 | `updateCampaign` / `useUpdateCampaign` (`apis/campaign/updateCampaign.ts`) | PUT | `/api/v1/campaigns/:id` | `campaigns/create/_context/CampaignContext.tsx` (lưu nháp / sửa) |
 | `submitCampaign` / `useSubmitCampaign` | POST | `/api/v1/campaigns/:id/submit` | `CampaignContext.tsx`, `campaigns/me/_components/DataTable.tsx` |
@@ -348,7 +347,7 @@ Tổng số file hàm (không tính `models/`): 70; trong đó `apis/auth/update
 | `useGetAllCampaigns` | GET | `/api/v1/campaigns/all` | `components/form/SelectListCampaign.tsx` |
 | `getRegistrationOptions` / `useGetRegistrationOptions` (`apis/campaign/registration.ts`) | GET | `/api/v1/campaigns/:id/registration-options` | `JoinShiftsDialog.tsx` |
 | `updateMyRegistrations` / `useUpdateMyRegistrations` | PUT | `/api/v1/campaigns/:id/registrations/me` | `JoinShiftsDialog.tsx` |
-| `getCampaignRegistrations` / `useGetCampaignRegistrations` | GET | `/api/v1/campaigns/:id/registrations` | `CampaignRegistrations.tsx` |
+| `getCampaignRegistrations` / `useGetCampaignRegistrations` | GET | `/api/v1/campaigns/:id/registrations` | `CampaignRegistrations.tsx`, `CurrentMember.tsx` |
 | `reviewCampaignCompletion` / `useReviewCampaignCompletion` | PUT | `/api/v1/campaigns/:id/completion-review` | `admin/campaigns/_components/CompletionReviewCampaignConfirm.tsx` |
 | `submitCompletionVerification` / `useSubmitCompletionVerification` | POST | `/api/v1/campaigns/:campaignId/completion-verification` | `CampaignCompletionVerifyButton.tsx` |
 | `registerChatMedia` | POST | `/api/v1/chat/media` | `components/client/ai-chat/AiChatWidget.tsx` |
@@ -562,7 +561,7 @@ Client chỉ có **1 role cứng**: `ADMIN_ROLE_ID = "40ed59d7-5d7c-4ab2-88a2-a2
 | — nút "Attendance QR" | `canManageCampaign` và status = ACTIVE | `page.tsx`, `CampaignAttendanceQrButton.tsx` |
 | — tab "Registrations" | `canManageCampaign` | `campaigns/[id]/_components/CampaignTabs.tsx` |
 | — nút "Add task", sửa/xoá task | `canManageCampaign`; sửa/xoá ẩn khi task `status === COMPLETED` | `CampaignTask.tsx`, `components/client/shared/CampaignTaskCard.tsx` |
-| — danh sách volunteer (thẻ Members) | `canManageCampaign`, `request_status === APPROVED` hoặc `user.roleId === ADMIN_ROLE_ID`; không thì hiện câu giải thích, không gọi API | `CurrentMember.tsx` |
+| — danh sách volunteer theo ca (thẻ Volunteers) | `canManageCampaign`, `isRegistered` (`my_shift_ids`) hoặc `user.roleId === ADMIN_ROLE_ID`; không thì hiện câu giải thích, không gọi API | `CurrentMember.tsx` |
 | — nút "Add manager", icon gỡ manager | `canManageCampaign` (và campaign có `organization_id`); icon gỡ ẩn trên dòng người tạo | `CurrentMember.tsx` |
 | `/campaigns/me` — nút "Add Campaign" | Đã bỏ: tạo campaign chỉ từ tab campaign của trang tổ chức | `campaigns/me/page.tsx` |
 | `/campaigns/me` — Sửa / Gửi duyệt / Xoá | Sửa: `can_manage_campaign` và status ∈ {4, 12, 19}; Gửi duyệt ("Nộp lại" khi 19): `can_manage_campaign` và status ∈ {4, 19}; Xoá: `can_delete_campaign` và status ∈ {4, 12, 19, 2, 20} (`constants/campaignLifecycle.ts`) | `campaigns/me/_components/DataTable.tsx` |

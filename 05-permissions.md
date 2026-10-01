@@ -185,7 +185,7 @@ Cột **Owner tổ chức** là thành viên vai `LEGAL_REPRESENTATIVE` / `OWNER
 | Cập nhật kết quả task | ❌ | ✅ | ✅ | ✅ | ⚠️ (task được giao) | ❌ | `updateTaskResult()` |
 | Đổi status task qua `/status` | ❌ | | | | ⚠️ (task được giao) | ❌ | `updateTaskStatusByVolunteer()` |
 | Đăng ký / sửa / rời ca (`registration-options`, `PUT /:id/registrations/me`) | ✅ | ✅ | ✅ (tự đăng ký được) | ✅ | ✅ | ✅ | `authenticate`; điều kiện ở BR-170, không cần duyệt |
-| Xem đăng ký theo ca (`GET /:id/registrations`) | ❌ | ✅ | ✅ | ✅ | ❌ | ❌ | `campaign_registration.service.ts > listForManager()` → `assertCanManage()` |
+| Xem đăng ký theo ca (`GET /:id/registrations`) | ❌ | ✅ | ✅ | ✅ | ✅ (không có số vắng / rời sát giờ) | ❌ | `campaign_registration.service.ts > listByShift()` → `assertCanViewVolunteers()`; số vắng chỉ khi `canManage` hoặc platform admin |
 | Xem danh sách volunteer (`/volunteers/approved`) | ❌ | ✅ | ✅ | ✅ | ✅ (đang đăng ký ca) | ✅ | `assertCanViewVolunteers()` |
 | Tạo QR điểm danh | ❌ | ✅ | ✅ | ✅ | ❌ | ❌ | `canManageCampaign()` |
 | Check-in | ❌ | | | | ✅ (đang đăng ký ca, campaign ACTIVE) | | `checkInWithQrToken()` |
