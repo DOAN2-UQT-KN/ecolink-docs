@@ -587,7 +587,7 @@ Client chỉ có **1 role cứng**: `ADMIN_ROLE_ID = "40ed59d7-5d7c-4ab2-88a2-a2
 | — "Continue your application" / "Edit application" | status ∈ {DRAFT, NEEDS_REVISION} | như trên; `apply/edit/page.tsx` chặn nếu khác |
 | Owner confirm — nút Xác nhận / "I'm not involved" | `active && status === PENDING && !expired`; cảnh báo khi `session_email_mismatch` | `organizations/owner-confirm/page.tsx` |
 | Admin campaigns — "Ban" | status = ACTIVE (1) → `ReviewCampaignConfirm` chế độ ban (`decision=block`, lý do bắt buộc) | `admin/campaigns/_components/DataTable.tsx` |
-| — "Review" (duyệt / yêu cầu chỉnh sửa / chặn) | status = PENDING_REVIEW (12). Duyệt chỉ bật khi tick đủ 6 mục checklist; yêu cầu chỉnh sửa và chặn cần lý do; hiện lịch sử thay đổi từ lần yêu cầu chỉnh sửa gần nhất | `ReviewCampaignConfirm.tsx` |
+| — "Review" (Approve / Request changes / Reject) | status = PENDING_REVIEW (12). Duyệt bấm được ngay (không còn checklist); "Reject" gửi `decision=block` (→ BLOCKED, cảnh báo "vĩnh viễn, chỉ cho vi phạm" nằm trong tooltip (i)); yêu cầu chỉnh sửa và Reject cần lý do; hiện lịch sử thay đổi từ lần yêu cầu chỉnh sửa gần nhất | `ReviewCampaignConfirm.tsx` |
 | — "Completion review" | status = PENDING_COMPLETION (7) | `CompletionReviewCampaignConfirm.tsx` |
 | — "Completion review" | status = WAITING_CONFIRMED | như trên |
 | Admin incidents — preview + verify/ban | ẩn khi status = INACTIVE; mode `verify` nếu status = PENDING, còn lại `ban` | `admin/incidents/_components/DataTable.tsx` |

@@ -723,7 +723,7 @@ sequenceDiagram
   - `CAMPAIGN_VERIFY_INVITE` cho người dân **trong bán kính 5 km** (BR-161): user có vị trí nhà gần đó (identity `nearby-ids`) và người từng gửi report có toạ độ gần đó (PostGIS). Trừ admin, người tạo và manager. Có lọc preference. Campaign không có toạ độ thì bỏ qua.
 - **Yêu cầu chỉnh sửa (12 → NEEDS_REVISION 19):** rejectReason = lý do, `revisionDeadline` = now + 7 ngày, giữ khoá report; `CAMPAIGN_REVISION_REQUESTED` cho người tạo + owner. Người quản lý sửa rồi "Nộp lại" (F25).
 - **Chặn (12 / 19 → BLOCKED 2), ban (1 → BLOCKED 2):** cùng `decision=block`; gỡ report (INPROCESS → TODO, BR-162); `CAMPAIGN_BLOCKED` cho người tạo + owner.
-- **Client:** `ReviewCampaignConfirm`: campaign chờ duyệt → duyệt (phải tick đủ 6 mục checklist) / yêu cầu chỉnh sửa / chặn, kèm lịch sử thay đổi (`GET /:id/history`); campaign ACTIVE → ban. Tab "Chờ duyệt" gửi `excludeMemberOrgs=true`.
+- **Client:** `ReviewCampaignConfirm`: campaign chờ duyệt → duyệt / yêu cầu chỉnh sửa / từ chối (nút "Reject", gửi `block`), kèm lịch sử thay đổi (`GET /:id/history`); campaign ACTIVE → ban. Tab "Chờ duyệt" gửi `excludeMemberOrgs=true`.
 - **File:** `campaign.controller.ts > reviewCampaign, adminVerifyCampaign`, `campaign.service.ts > reviewCampaign(), notifyNearbyCitizensToJoinApprovedCampaign()`, `campaign-lifecycle.service.ts > review(), releaseAllReports(), notifyReviewed()`, `ID/internal/internal.routes.ts (nearby-ids)`.
 
 ```mermaid
