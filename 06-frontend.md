@@ -284,7 +284,6 @@ Ghi chú: `(hook)` = hàm trong `apis/`, path là path gửi tới `VITE_API_URL
 | `/admin/campaigns` | `useGetCampaigns` (`.../admin/campaigns/_context/CampaignContext.tsx`); filter status (Pending review, Needs revision, Active, Waiting confirmed, Completed, Blocked, Expired — không có Draft) và tổ chức (gửi `organizationId`; trước đây gửi nhầm `organization_id`) | GET `/api/v1/campaigns` (server trả mọi status trừ DRAFT cho admin); tab Pending review thêm `excludeMemberOrgs=true` |
 | | `useGetMyOrganizations` (filter tổ chức qua `SelectListOrganization`) | GET `/api/v1/organizations/my?is_owner=true` |
 | | `useReviewCampaign` (`apis/campaign/reviewCampaign.ts`, trong `ReviewCampaignConfirm.tsx`) | PUT `/api/v1/campaigns/:id/review` body `{ decision: "approve" \| "request_revision" \| "block", reason }` |
-| | `useGetCampaignHistory` (`apis/campaign/getCampaignHistory.ts`, lịch sử thay đổi trong `ReviewCampaignConfirm.tsx`) | GET `/api/v1/campaigns/:id/history` |
 | | Nút Preview (icon mắt, cột Action) mở `CampaignPreviewDialog.tsx` thay vì mở `/campaigns/:id` tab mới: hiển thị (lý do admin nếu có; thông tin chung; thời gian và liên hệ gồm SĐT; "Lịch và ca": bảng ca (`components/client/shared/ShiftSlotsTable.tsx`, dùng chung với `StepReview`): mỗi hàng một ca (ngày × điểm) với số suất, giờ tập trung, người phụ trách (tên qua `useGetMembersByOrg`); ô ngày (kèm giờ bắt đầu – kết thúc) và cột "Total volunteers" (so với `max_members`) gộp theo ngày; ca tắt hiện "0 (Off)"; điểm tập trung với danh sách điểm rác); chỉ xem, link "Open campaign page" chỉ khi status công khai (`constants/campaignLifecycle.ts > CAMPAIGN_PUBLIC_STATUSES`). Khung section dùng chung với `ApplicationReviewDialog` qua `components/admin/shared/ReviewSection.tsx` | GET `/api/v1/campaigns/:id`, GET `/api/v1/organizations/:id/members` |
 | | `useReviewCampaignCompletion` | PUT `/api/v1/campaigns/:id/completion-review` body `{ decision: "approve"|"reject", rejectReason }` |
 | `/admin/incidents` | `useGetIncidents` (`apis/incident/getIncidents.ts` → `getReports`) | GET `/api/v1/reports/search` (không phải `/all`) |
@@ -343,7 +342,7 @@ Tổng số file hàm (không tính `models/`): 70; trong đó `apis/auth/update
 | `deleteCampaign` / `useDeleteCampaign` | DELETE | `/api/v1/campaigns/:id` | `campaigns/me/_components/DataTable.tsx` |
 | `getCreateEligibility` / `useGetCreateEligibility` | GET | `/api/v1/campaigns/create-eligibility` | `components/client/shared/CreateCampaignButton.tsx`, `CampaignContext.tsx` |
 | `reviewCampaign` / `useReviewCampaign` | PUT | `/api/v1/campaigns/:id/review` | `admin/campaigns/_components/ReviewCampaignConfirm.tsx` |
-| `getCampaignHistory` / `useGetCampaignHistory` | GET | `/api/v1/campaigns/:id/history` | `ReviewCampaignConfirm.tsx` |
+| `getCampaignHistory` / `useGetCampaignHistory` | GET | `/api/v1/campaigns/:id/history` | Chưa dùng ở màn hình nào |
 | `getCampaigns` / `useGetCampaigns` | GET | `/api/v1/campaigns` | campaigns search, organizations `[id]/CampaignList`, admin campaigns |
 | `getMyCampaigns` / `useGetMyCampaigns` | GET | `/api/v1/campaigns/my` | campaigns search (tab mine), `campaigns/me` |
 | `getAllCampaigns` | GET | `/api/v1/campaigns/all` | `maps/_components/MapPage.tsx` |
@@ -587,7 +586,7 @@ Client chỉ có **1 role cứng**: `ADMIN_ROLE_ID = "40ed59d7-5d7c-4ab2-88a2-a2
 | — "Continue your application" / "Edit application" | status ∈ {DRAFT, NEEDS_REVISION} | như trên; `apply/edit/page.tsx` chặn nếu khác |
 | Owner confirm — nút Xác nhận / "I'm not involved" | `active && status === PENDING && !expired`; cảnh báo khi `session_email_mismatch` | `organizations/owner-confirm/page.tsx` |
 | Admin campaigns — "Ban" | status = ACTIVE (1) → `ReviewCampaignConfirm` chế độ ban (`decision=block`, lý do bắt buộc) | `admin/campaigns/_components/DataTable.tsx` |
-| — "Review" (Approve / Request changes / Reject) | status = PENDING_REVIEW (12). Duyệt bấm được ngay (không còn checklist); "Reject" gửi `decision=block` (→ BLOCKED, cảnh báo "vĩnh viễn, chỉ cho vi phạm" nằm trong tooltip (i)); yêu cầu chỉnh sửa và Reject cần lý do; hiện lịch sử thay đổi từ lần yêu cầu chỉnh sửa gần nhất | `ReviewCampaignConfirm.tsx` |
+| — "Review" (Approve / Request changes / Reject) | status = PENDING_REVIEW (12). Duyệt bấm được ngay (không còn checklist); "Reject" gửi `decision=block` (→ BLOCKED, cảnh báo "vĩnh viễn, chỉ cho vi phạm" nằm trong tooltip (i)); yêu cầu chỉnh sửa và Reject cần lý do; không hiện lịch sử thay đổi (API `GET /:id/history` vẫn có nhưng client không gọi) | `ReviewCampaignConfirm.tsx` |
 | — "Completion review" | status = PENDING_COMPLETION (7) | `CompletionReviewCampaignConfirm.tsx` |
 | — "Completion review" | status = WAITING_CONFIRMED | như trên |
 | Admin incidents — preview + verify/ban | ẩn khi status = INACTIVE; mode `verify` nếu status = PENDING, còn lại `ban` | `admin/incidents/_components/DataTable.tsx` |
