@@ -45,7 +45,9 @@ stateDiagram-v2
   [*] --> DRAFT_4: POST /campaigns (lưu nháp)
   DRAFT_4 --> PENDING_REVIEW_12: submit (manager)
   NEEDS_REVISION_19 --> PENDING_REVIEW_12: resubmit (manager)
-  PENDING_REVIEW_12 --> ACTIVE_1: approve (admin)
+  PENDING_REVIEW_12 --> UPCOMING_27: approve (admin)
+  UPCOMING_27 --> ACTIVE_1: start (system, ngày đầu đã tới)
+  UPCOMING_27 --> BLOCKED_2: ban (admin, lý do)
   PENDING_REVIEW_12 --> NEEDS_REVISION_19: request_revision (admin, lý do)
   PENDING_REVIEW_12 --> BLOCKED_2: block (admin, lý do)
   NEEDS_REVISION_19 --> BLOCKED_2: block (admin, lý do)
@@ -60,10 +62,6 @@ stateDiagram-v2
   PENDING_COMPLETION_7 --> COMPLETED_17: approve_completion (admin)
   PENDING_COMPLETION_7 --> ACTIVE_1: reject_completion (admin, lý do)
   COMPLETED_17 --> [*]
-  note right of ACTIVE_1
-    Chưa tách UPCOMING (sắp diễn ra):
-    duyệt xong vào thẳng ACTIVE [CHƯA HOÀN THIỆN]
-  end note
 ```
 
 | Sự kiện | Từ → sang | Ai | Điều kiện | Side effect | File |
@@ -71,11 +69,12 @@ stateDiagram-v2
 | (tạo) | (mới) → DRAFT 4 | Thành viên có `CAMPAIGN_CREATE`, tổ chức status 1 | BR-150..BR-153 | Người tạo thành manager; lưu điểm tập kết và lựa chọn report (**không khoá** report); TRANSLATE_TEXT. Không gửi thông báo, không ghi log | `INC/modules/campaign/campaign.service.ts > createCampaign()` |
 | `submit` | DRAFT 4 → PENDING_REVIEW 12 | canManage | Giới hạn tổ chức (BR-163) và mọi rule nội dung (BR-164) kiểm lại trong transaction Serializable | Khoá report (21 → 22, BR-169); người tạo + trưởng điểm thành manager; lưu `submittedAt`, `lastSubmittedSnapshot`; thông báo CAMPAIGN_PENDING_REVIEW (admin trong env) và CAMPAIGN_CREATED (owner + manager) | `INC/modules/campaign/campaign-lifecycle.service.ts > submit()` |
 | `resubmit` | NEEDS_REVISION 19 → PENDING_REVIEW 12 | canManage | Như submit | Như submit, xoá `revisionDeadline`; diff với lần gửi trước ghi vào `changes`; chỉ báo admin (không gửi CAMPAIGN_CREATED) | `submit()` |
-| `approve` | PENDING_REVIEW 12 → ACTIVE 1 | Admin không phải thành viên của tổ chức | — | Giữ khoá report; xoá rejectReason; thông báo CAMPAIGN_APPROVED (owner, manager, thành viên) và CAMPAIGN_VERIFY_INVITE (người dân trong 5 km) | `campaign-lifecycle.service.ts > review()`, `campaign.service.ts > reviewCampaign()` |
+| `approve` | PENDING_REVIEW 12 → UPCOMING 27 (Sắp diễn ra) | Admin không phải thành viên của tổ chức | — | Mở đăng ký ca (BR-170); giữ khoá report; xoá rejectReason; thông báo CAMPAIGN_APPROVED (owner, manager, thành viên) và CAMPAIGN_VERIFY_INVITE (người dân trong 5 km) | `campaign-lifecycle.service.ts > review()`, `campaign.service.ts > reviewCampaign()` |
+| `start` | UPCOMING 27 → ACTIVE 1 | system (job) | Có `campaign_days.startAt` ≤ now | Không gửi thông báo, không gỡ report; điểm danh và SOS chỉ mở từ ACTIVE | `campaign-lifecycle.service.ts > startDueCampaigns()`, `campaign-lifecycle.job.ts` |
 | `request_revision` | PENDING_REVIEW 12 → NEEDS_REVISION 19 | Admin (như trên) | Có lý do ≤ 5000 | rejectReason; `revisionDeadline` = now + 7 ngày; giữ khoá report; thông báo CAMPAIGN_REVISION_REQUESTED (người tạo + owner) | `review()` |
 | `block` | PENDING_REVIEW 12 / NEEDS_REVISION 19 → BLOCKED 2 | Admin (như trên) | Có lý do | Gỡ report (22 → 21); thông báo CAMPAIGN_BLOCKED (người tạo + owner) | `review()`, `releaseAllReports()` |
-| `ban` | ACTIVE 1 → BLOCKED 2 | Admin (như trên) | Có lý do; là `decision=block` trên campaign đang ACTIVE | Như block | `review()` |
-| `cancel_org_locked` | DRAFT 4 / PENDING_REVIEW 12 / NEEDS_REVISION 19 → CANCELLED 11 | admin (qua ban tổ chức) | Lý do = lý do ban tổ chức (BR-189) | Gỡ report; `rejectReason` = lý do; thông báo CAMPAIGN_CANCELLED cho người tạo + owner. Campaign ACTIVE / 7 không bị đụng (chạy nốt; admin vẫn ban từng campaign). Mở khoá tổ chức không khôi phục | `campaign-lifecycle.service.ts > cancelForLockedOrganization()`, gọi trong `organization.service.ts > adminVerifyOrganization()` |
+| `ban` | UPCOMING 27 / ACTIVE 1 → BLOCKED 2 | Admin (như trên) | Có lý do; là `decision=block` trên campaign đang UPCOMING hoặc ACTIVE | Như block | `review()` |
+| `cancel_org_locked` | DRAFT 4 / PENDING_REVIEW 12 / NEEDS_REVISION 19 → CANCELLED 11 | admin (qua ban tổ chức) | Lý do = lý do ban tổ chức (BR-189) | Gỡ report; `rejectReason` = lý do; thông báo CAMPAIGN_CANCELLED cho người tạo + owner. Campaign UPCOMING / ACTIVE / 7 không bị đụng (chạy nốt; admin vẫn ban từng campaign). Mở khoá tổ chức không khôi phục | `campaign-lifecycle.service.ts > cancelForLockedOrganization()`, gọi trong `organization.service.ts > adminVerifyOrganization()` |
 | `expire` | PENDING_REVIEW 12 / NEEDS_REVISION 19 → EXPIRED 20 | system (job) | Ngày đầu (`campaign_days.startAt`) đã tới, hoặc NEEDS_REVISION quá `revisionDeadline` (BR-186) | Gỡ report; thông báo CAMPAIGN_EXPIRED cho người tạo; `reason` = `start_passed` / `revision_overdue` | `campaign-lifecycle.service.ts > expireOverdue()`, `INC/modules/campaign/campaign-lifecycle.job.ts` |
 | `submit_completion` | ACTIVE 1 / LEGACY_IN_REVIEW 9 → PENDING_COMPLETION 7 | canManage | Mọi task đều 17 | Thông báo CAMPAIGN_COMPLETION_PENDING_ADMIN (admin trong env) và COMPLETION_VERIFY_INVITE (người dân gần) | `submitCampaignCompletionForAdminApproval()` |
 | `approve_completion` | PENDING_COMPLETION 7 → COMPLETED 17 | Admin | Mọi task 17; có tier | Report và SOS → 17; outbox CAMPAIGN_COMPLETION_GREEN_POINTS; thông báo CAMPAIGN_DONE và APPROVED_BY_ADMIN | `adminFinalizeCampaignCompletion()` |
@@ -86,27 +85,26 @@ stateDiagram-v2
 - `PUT /campaigns/:id` **không** đổi được status: body có `status` → 400 (validator). Sửa khi đang PENDING_REVIEW / NEEDS_REVISION ghi log `type=EDIT` (`logCampaignEdit()`).
 - Không còn đường BLOCKED 2 → ACTIVE 1 ("duyệt lại"). `PUT /:id/verify` (deprecated) chỉ là alias của `review`: status 1 → approve, status 2 → block/ban.
 - Không có code nào chuyển campaign sang LEGACY_IN_REVIEW (9). Trạng thái này chỉ còn trong điều kiện của mark-done.
-- **[CHƯA HOÀN THIỆN]** (các đợt sau của đặc tả): tách UPCOMING khỏi ACTIVE, sửa trường quan trọng sau khi duyệt → quay về Chờ duyệt, dời lịch, campaign nhiều ngày.
+- **[CHƯA HOÀN THIỆN]** (các đợt sau của đặc tả): sửa trường quan trọng sau khi duyệt → quay về Chờ duyệt, dời lịch, huỷ chiến dịch đã duyệt; lựa chọn "huỷ hay chạy tiếp" khi khoá tổ chức cho campaign UPCOMING.
 
-## 3. Yêu cầu tham gia campaign (`campaign_joining_requests.status`)
+## 3. Đăng ký ca của campaign (`campaign_shift_registrations`)
+
+Thay cho yêu cầu tham gia có duyệt (`campaign_joining_requests` không còn được server/web dùng). Không có cột status: một dòng **đang hiệu lực** khi `leftAt` null.
 
 ```mermaid
 stateDiagram-v2
-  [*] --> PENDING_12: user xin tham gia
-  PENDING_12 --> APPROVED_14: manager duyệt (còn chỗ)
-  PENDING_12 --> Deleted: manager từ chối (xoá mềm)
-  PENDING_12 --> Deleted: user huỷ
-  APPROVED_14 --> [*]
-  Deleted --> [*]
+  [*] --> Live: tick ca (hiệu lực ngay, không duyệt)
+  Live --> Left: bỏ tick ≥ 24h trước giờ bắt đầu ca
+  Live --> LeftLate: bỏ tick < 24h trước giờ bắt đầu (lateLeave = true)
+  Left --> [*]
+  LeftLate --> [*]
 ```
 
 | Từ → sang | Ai | Điều kiện | Side effect | File |
 |---|---|---|---|---|
-| (mới) → 12 | User đăng nhập | Chưa có yêu cầu nào chưa bị xoá | Thông báo VOLUNTEER_REQUEST cho các manager | `campaign_joining_request.service.ts > createJoinRequest()` |
-| 12 → 14 | canManage | Còn chỗ theo `maxVolunteers` | VOLUNTEER_APPROVED | `processJoinRequest()` |
-| 12 → xoá mềm | canManage, khi từ chối | — | VOLUNTEER_REJECTED | `processJoinRequest()` |
-| 12 → xoá mềm | Chính người xin | — | — | `cancelJoinRequest()` |
-| 14 → ? | — | Không có API rời hoặc huỷ sau khi được duyệt | — | — |
+| (mới) → đang hiệu lực | User đăng nhập (kể cả manager) | BR-170: campaign UPCOMING / ACTIVE, ca bật và chưa bắt đầu, `acceptConditions = true`; không chặn theo số người, trùng giờ hay vắng nhiều | Trả `warnings[]`; được tính vào bản tin hằng ngày cho manager (`managerNotifiedAt`) | `INC/modules/campaign/campaign_registration/campaign_registration.service.ts > setMyShifts()` |
+| đang hiệu lực → đã rời | Chính người đăng ký (bỏ tick) | Ca chưa bắt đầu (ca đã bắt đầu được giữ nguyên) | `leftAt = now`; `lateLeave = true` nếu còn < `CAMPAIGN_FREE_LEAVE_HOURS` (24h) | `setMyShifts()` |
+| đã rời → (mới) | Chính người đó | Như đăng ký mới | Tạo dòng mới; unique một phần `(shift_id, user_id) WHERE left_at IS NULL` | `setMyShifts()` |
 
 ## 4. Task của campaign (`campaign_tasks.status`)
 

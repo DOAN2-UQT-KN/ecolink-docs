@@ -114,7 +114,9 @@ erDiagram
   Report ||--o{ AiAnalysisLog : ""
   Report ||--o{ ReportIssue : "(không dùng)"
   Campaign ||--o{ CampaignManager : ""
-  Campaign ||--o{ CampaignJoiningRequest : ""
+  Campaign ||--o{ CampaignJoiningRequest : "(không còn dùng)"
+  Campaign ||--o{ CampaignShiftRegistration : ""
+  CampaignShift ||--o{ CampaignShiftRegistration : "Restrict"
   Campaign ||--o{ CampaignAttendanceCheckIn : ""
   Campaign ||--o{ CampaignTask : ""
   CampaignTask ||--o{ CampaignTaskAssignment : ""
@@ -168,9 +170,20 @@ erDiagram
     uuid id PK
     uuid dayId FK
     uuid meetingPointId FK
+    datetime startAt
+    datetime endAt
     int minVolunteers "0 = tắt"
     int maxVolunteers "tuỳ chọn"
     uuid leaderUserId
+  }
+  CampaignShiftRegistration {
+    uuid id PK
+    uuid campaignId FK
+    uuid shiftId FK
+    uuid userId
+    datetime leftAt "null = đang hiệu lực"
+    bool lateLeave
+    datetime managerNotifiedAt
   }
   Sos {
     int id PK "autoincrement"
@@ -315,10 +328,11 @@ erDiagram
 | CampaignManager (`campaign_managers`) | campaignId, userId, assignedBy, assignedAt, deletedAt | PK kép (campaignId, userId) |
 | CampaignMeetingPoint (`campaign_meeting_points`) | campaignId, name? (≤120), latitude, longitude, detailAddress? (≤255), radiusKm, sortOrder, deletedAt | index campaignId; 1–5 điểm mỗi campaign (kiểm khi gửi duyệt). Giờ tập trung, số suất, người phụ trách nằm ở `campaign_shifts` |
 | CampaignDay (`campaign_days`) | campaignId (cascade), startAt, endAt, sortOrder | index campaignId, startAt; 1–7 ngày trong 14 ngày kể từ ngày đầu, mỗi ngày ≤ 12h và trong một ngày địa phương (kiểm khi gửi duyệt, BR-164). Lưu lại thì xoá hết và tạo lại |
-| CampaignShift (`campaign_shifts`) | campaignId, dayId (cascade), meetingPointId (cascade), gatherAt?, minVolunteers (`min_volunteers`, default 0, **0 = ca tắt**), maxVolunteers? (`max_volunteers`, tối đa dự kiến), leaderUserId? — hai số chỉ để cảnh báo, không chặn (migration `20261001100000_shift_min_max_volunteers` đổi tên từ `slots`) | **unique (dayId, meetingPointId)**; server luôn lưu đủ lưới ngày × điểm tập trung (ô không gửi = 0). Người phụ trách các ca đang bật thành `campaign_managers` khi gửi duyệt |
+| CampaignShift (`campaign_shifts`) | campaignId, dayId (cascade), meetingPointId (cascade), startAt / endAt (`start_at` / `end_at`, NOT NULL, index startAt; khung giờ ca, mặc định = giờ của ngày, migration `20261002100000_shift_registrations` backfill từ `campaign_days`), gatherAt?, minVolunteers (`min_volunteers`, default 0, **0 = ca tắt**), maxVolunteers? (`max_volunteers`, tối đa dự kiến), leaderUserId? — hai số chỉ để cảnh báo, không chặn (migration `20261001100000_shift_min_max_volunteers` đổi tên từ `slots`) | **unique (dayId, meetingPointId)**; server luôn lưu đủ lưới ngày × điểm tập trung (ô không gửi = 0). Người phụ trách các ca đang bật thành `campaign_managers` khi gửi duyệt |
 | CampaignMeetingPointReport (`campaign_meeting_point_reports`) | meetingPointId (cascade), reportId, campaignId | PK kép (meetingPointId, reportId); **unique (campaignId, reportId)**. Lưu lựa chọn điểm rác của cả bản nháp, **không khoá** report; khoá thật vẫn là `reports.campaignId` + status 22 (một cột nên mỗi report chỉ thuộc một campaign) |
 | CampaignStatusLog (`campaign_status_logs`) | campaignId, type (`STATUS_CHANGE` \| `EDIT`), event (submit, approve, block, … hoặc `edit`), fromStatus?, toStatus?, actorId?, actorRole (`manager` \| `admin` \| `system`), reason?, changes (jsonb: diff `{field: {from, to}}`) | index (campaignId, createdAt); ghi ở `INC/modules/campaign/campaign-state-machine.ts > transitionCampaign(), logCampaignEdit()` |
-| CampaignJoiningRequest (`campaign_joining_requests`) | campaignId?, volunteerId?, status (default 12) | **Không có unique** (campaignId, volunteerId) |
+| CampaignShiftRegistration (`campaign_shift_registrations`) | campaignId (cascade), shiftId (FK **Restrict**), userId, createdAt, leftAt? (null = đang hiệu lực), lateLeave (default false; rời < 24h trước giờ bắt đầu ca), managerNotifiedAt? (đã tính vào bản tin hằng ngày cho manager) | **unique một phần (shift_id, user_id) WHERE left_at IS NULL** (viết bằng SQL trong migration, Prisma không biết); index (campaignId, leftAt), (userId, leftAt), shiftId. Đăng ký ca không duyệt, không giới hạn (BR-170..BR-174) |
+| CampaignJoiningRequest (`campaign_joining_requests`) | campaignId?, volunteerId?, status (default 12) | **Không có unique** (campaignId, volunteerId). Bảng còn giữ nhưng server và web **không còn dùng** (đã thay bằng `campaign_shift_registrations`) |
 | CampaignAttendanceCheckIn (`campaign_attendance_check_ins`) | campaignId (cascade), userId, checkedInAt | **unique (campaignId, userId)** |
 | CampaignTask (`campaign_tasks`) | campaignId?, title/titleVi/titleEn, description*, priority (default 2; DTO 1..3), status (default 12), scheduledDate, scheduledTime varchar(50) | |
 | CampaignTaskAssignment (`campaign_task_assignments`) | campaignTaskId?, volunteerId?, deletedAt | Không có unique |
@@ -487,7 +501,7 @@ Hệ thống có 3 sổ song song:
 
 | Bảng | Field | Ràng buộc / ghi chú |
 |---|---|---|
-| Difficulty (`difficulties`) | level (**unique**), name/nameVi/nameEn varchar(64), maxVolunteers? (null nghĩa là không giới hạn; còn dùng khi duyệt TNV), suggestedMinVolunteers? (`suggested_min_volunteers`, TNV tối thiểu gợi ý mỗi ngày của campaign: 5 / 10 / 20 / 30 theo level), greenPoints, deletedAt | Mức khó của campaign: quyết định sức chứa tình nguyện viên và số điểm thưởng |
+| Difficulty (`difficulties`) | level (**unique**), name/nameVi/nameEn varchar(64), maxVolunteers? (null nghĩa là không giới hạn; **không còn dùng** để giới hạn việc tham gia — đăng ký ca không giới hạn), suggestedMinVolunteers? (`suggested_min_volunteers`, TNV tối thiểu gợi ý mỗi ngày của campaign: 5 / 10 / 20 / 30 theo level), greenPoints, deletedAt | Mức khó của campaign: quyết định sức chứa tình nguyện viên và số điểm thưởng |
 | UserGreenPointBalance (`user_green_point_balances`) | userId (PK), balance (default 0) | Không bị trừ khi đổi quà |
 | GreenPointTransaction (`green_point_transactions`) | userId, type (`CAMPAIGN_COMPLETION`, `REPORT_COMPLETION`, `UPVOTE`, `REPORT_VOTE_MILESTONE`, `REFERRAL`, `GIFT_REDEEM`, `GIFT_REDEEM_REFUND`), resourceId, resourceType, points (âm là chi), metadata | **partial unique (user_id, type, resource_id, resource_type) WHERE deleted_at IS NULL**, dùng để chống cộng trùng |
 | UserSpWalletEntry (`user_sp_wallet`) | userId, amount, remaining, sourceType, sourceId?, expiresAt | Trừ theo FIFO dựa trên `expiresAt` |
@@ -574,7 +588,7 @@ Mọi cột `status` kiểu Int ở incident, notification và reward (job) đ�
 
 | Giá trị | Tên | Dùng ở |
 |---|---|---|
-| 1 | `_STATUS_ACTIVE` | Campaign đã duyệt (ACTIVE); Organization hoạt động; SOS đang mở; Season ACTIVE; User ACTIVE (identity có enum riêng, cùng số) |
+| 1 | `_STATUS_ACTIVE` | Campaign đang diễn ra (ACTIVE, từ ngày đầu); Organization hoạt động; SOS đang mở; Season ACTIVE; User ACTIVE (identity có enum riêng, cùng số) |
 | 2 | `_STATUS_INACTIVE` | Report, Organization bị ban; Campaign bị chặn / ban (BLOCKED); Season INACTIVE; User bị ban |
 | 3 | `_STATUS_DELETED` | Không dùng. identity dùng số 3 cho `PENDING_ACTIVATION` với nghĩa khác |
 | 4 | `_STATUS_DRAFT` | Campaign nháp (DRAFT); điều kiện chuyển trạng thái của organization |
@@ -583,8 +597,8 @@ Mọi cột `status` kiểu Int ở incident, notification và reward (job) đ�
 | 7 | `_STATUS_WAITING_CONFIRMED` | Campaign chờ admin duyệt hoàn thành |
 | 9 | `_STATUS_INREVIEW` | Campaign cũ (LEGACY_IN_REVIEW, vẫn được mark-done), Submission mới, Organization |
 | 11 | `_STATUS_CANCELED` | BackgroundJob bị huỷ |
-| 12 | `_STATUS_PENDING` | Mặc định: Report mới, Join request, Job, Outbox; Campaign chờ duyệt (PENDING_REVIEW) |
-| 14 | `_STATUS_APPROVED` | Join request được duyệt, Submission được duyệt |
+| 12 | `_STATUS_PENDING` | Mặc định: Report mới, Organization join request, Job, Outbox; Campaign chờ duyệt (PENDING_REVIEW) |
+| 14 | `_STATUS_APPROVED` | Organization join request được duyệt, Submission được duyệt; `requestStatus` của campaign khi viewer đang đăng ký ca |
 | 17 | `_STATUS_COMPLETED` | Report, Campaign, Task, SOS, Job hoàn tất |
 | 18 | `_STATUS_REJECTED` | Organization join request bị từ chối, Submission bị từ chối |
 | 21 | `_STATUS_TODO` | Report đã được duyệt, chờ gán vào campaign; Task mới |
@@ -592,9 +606,10 @@ Mọi cột `status` kiểu Int ở incident, notification và reward (job) đ�
 | 23 | `_STATUS_FAILED` | Job hoặc outbox thất bại |
 | 19 | `_STATUS_RETURNED` | Campaign cần chỉnh sửa (NEEDS_REVISION) |
 | 20 | `_STATUS_OBSOLETE` | Campaign hết hạn duyệt (EXPIRED) |
+| 27 | `_STATUS_UPCOMING` | Campaign đã duyệt, chưa tới ngày đầu (UPCOMING, "Sắp diễn ra"); 26 bỏ trống vì client đã dùng cho `UPLOAD_FAILED` |
 | 8, 10, 13, 15, 16, 24, 25 | REVIEWED, ASSIGNED, VERIFIED, RECEIVED, CONFIRMED, CLOSED, REPROCESS | Không được dùng trong logic |
 
-Vòng đời campaign dùng tên riêng trong `DC/campaign-lifecycle.ts > CampaignStatus` (DRAFT 4, PENDING_REVIEW 12, NEEDS_REVISION 19, ACTIVE 1, PENDING_COMPLETION 7, LEGACY_IN_REVIEW 9, COMPLETED 17, BLOCKED 2, EXPIRED 20) cùng các tập trạng thái và hằng số tinh chỉnh (xem 03 §8, 04 §2).
+Vòng đời campaign dùng tên riêng trong `DC/campaign-lifecycle.ts > CampaignStatus` (DRAFT 4, PENDING_REVIEW 12, NEEDS_REVISION 19, UPCOMING 27, ACTIVE 1, PENDING_COMPLETION 7, LEGACY_IN_REVIEW 9, COMPLETED 17, BLOCKED 2, EXPIRED 20) cùng các tập trạng thái và hằng số tinh chỉnh (xem 03 §8, 04 §2).
 
 ### 6.2 Từ vựng đơn đăng ký tổ chức và trust (`ecolink-server/shared/da2-constants/src/organization-trust.ts`)
 

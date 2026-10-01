@@ -166,7 +166,7 @@ Mọi response tổ chức có người xem (`GET /:id`, `/by-slug/:slug`, `/`, 
 
 Một nguồn quyền: `INC/modules/campaign/campaign-access.service.ts > CampaignAccessService` (BR-159). Mọi quyền quản lý đòi người đó **đang là thành viên active** của tổ chức sở hữu campaign; rời hoặc bị gỡ khỏi tổ chức là mất quyền, kể cả người tạo, và dòng `campaign_managers` của họ bị xoá mềm (BR-157).
 
-Cột **Owner tổ chức** là thành viên vai `LEGAL_REPRESENTATIVE` / `OWNER` của tổ chức sở hữu campaign (`CAMPAIGN_MANAGE_ANY`). Cột **createdBy** là người đã tạo campaign. Cột **Manager** là người có dòng active trong `campaign_managers` (người tạo tự động được thêm; manager phải là thành viên active, BR-155). Cột **Volunteer** là người có join request APPROVED. Cột **Admin** là platform admin (không phải thành viên tổ chức). "Quản lý" = `canManage` (Owner tổ chức, createdBy hoặc Manager); lỗi chung là 403 `CAMPAIGN_PERMISSION_DENIED`.
+Cột **Owner tổ chức** là thành viên vai `LEGAL_REPRESENTATIVE` / `OWNER` của tổ chức sở hữu campaign (`CAMPAIGN_MANAGE_ANY`). Cột **createdBy** là người đã tạo campaign. Cột **Manager** là người có dòng active trong `campaign_managers` (người tạo tự động được thêm; manager phải là thành viên active, BR-155). Cột **Volunteer** là người có ít nhất một đăng ký ca đang hiệu lực (`campaign_shift_registrations.left_at` null). Cột **Admin** là platform admin (không phải thành viên tổ chức). "Quản lý" = `canManage` (Owner tổ chức, createdBy hoặc Manager); lỗi chung là 403 `CAMPAIGN_PERMISSION_DENIED`.
 
 | Hành động | User | Owner tổ chức | createdBy | Manager | Volunteer | Admin | Nơi kiểm tra |
 |---|---|---|---|---|---|---|---|
@@ -184,11 +184,11 @@ Cột **Owner tổ chức** là thành viên vai `LEGAL_REPRESENTATIVE` / `OWNER
 | Tạo, sửa, xoá, giao task | ❌ | ✅ | ✅ | ✅ | ❌ | ❌ | `canManageCampaign()` → `campaignAccessService.canManage()` |
 | Cập nhật kết quả task | ❌ | ✅ | ✅ | ✅ | ⚠️ (task được giao) | ❌ | `updateTaskResult()` |
 | Đổi status task qua `/status` | ❌ | | | | ⚠️ (task được giao) | ❌ | `updateTaskStatusByVolunteer()` |
-| Xin tham gia | ✅ | ✅ | ✅ (tự xin được) | ✅ | | ✅ | `createJoinRequest()` |
-| Xem và xử lý yêu cầu tham gia | ❌ | ✅ | ✅ | ✅ | ❌ | ❌ | `assertCanManage()` |
-| Xem danh sách volunteer đã duyệt | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | `assertCanViewVolunteers()` |
+| Đăng ký / sửa / rời ca (`registration-options`, `PUT /:id/registrations/me`) | ✅ | ✅ | ✅ (tự đăng ký được) | ✅ | ✅ | ✅ | `authenticate`; điều kiện ở BR-170, không cần duyệt |
+| Xem đăng ký theo ca (`GET /:id/registrations`) | ❌ | ✅ | ✅ | ✅ | ❌ | ❌ | `campaign_registration.service.ts > listForManager()` → `assertCanManage()` |
+| Xem danh sách volunteer (`/volunteers/approved`) | ❌ | ✅ | ✅ | ✅ | ✅ (đang đăng ký ca) | ✅ | `assertCanViewVolunteers()` |
 | Tạo QR điểm danh | ❌ | ✅ | ✅ | ✅ | ❌ | ❌ | `canManageCampaign()` |
-| Check-in | ❌ | | | | ✅ | | `checkInWithQrToken()` |
+| Check-in | ❌ | | | | ✅ (đang đăng ký ca, campaign ACTIVE) | | `checkInWithQrToken()` |
 | Gửi hoàn thành (mark-done) | ❌ | ✅ | ✅ | ✅ | ❌ | ❌ | `assertCanManage()` |
 | Xác nhận sạch (completion-verification) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | `authenticate` |
 | Duyệt hoặc từ chối hoàn thành | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | `adminReviewCampaignCompletion` |

@@ -41,8 +41,8 @@
 | F25 | Tạo chiến dịch (nháp) và gửi duyệt | Chiến dịch |
 | F26 | Sửa và xoá chiến dịch | Chiến dịch |
 | F27 | Admin duyệt, yêu cầu chỉnh sửa, chặn hoặc ban chiến dịch và mời người dân ở gần | Chiến dịch |
-| F27b | Hết hạn duyệt và dọn bản nháp (job) | Chiến dịch |
-| F28 | Tình nguyện viên xin tham gia chiến dịch | Chiến dịch |
+| F27b | Job vòng đời: bắt đầu chiến dịch sắp diễn ra, hết hạn duyệt, dọn bản nháp, bản tin đăng ký | Chiến dịch |
+| F28 | Tình nguyện viên đăng ký ca của chiến dịch | Chiến dịch |
 | F29 | Quản lý manager của chiến dịch | Chiến dịch |
 | F30 | Quản lý task | Chiến dịch |
 | F31 | Điểm danh bằng QR | Chiến dịch |
@@ -717,8 +717,8 @@ sequenceDiagram
 ### F27 — Admin duyệt, yêu cầu chỉnh sửa, chặn hoặc ban chiến dịch và mời người dân ở gần
 - `/admin/campaigns` → `PUT /api/v1/campaigns/:id/review {decision: approve|request_revision|block, reason}` (lý do bắt buộc trừ approve, ≤ 5000). Chỉ JWT role admin; admin là thành viên active của tổ chức sở hữu campaign → 403 `CAMPAIGN_REVIEW_CONFLICT_OF_INTEREST` (BR-160). `PUT /:id/verify {status: 1|2, rejectReason}` còn giữ như alias deprecated (1 → approve, 2 → block).
 - Chuyển trạng thái trong transaction Serializable qua `transitionCampaign()` (04 §2).
-- **Duyệt (12 → ACTIVE 1):**
-  - Giữ khoá report, xoá rejectReason / revisionDeadline.
+- **Duyệt (12 → UPCOMING 27, "Sắp diễn ra"):** job vòng đời chuyển sang ACTIVE 1 khi ngày đầu tới (F27).
+  - Mở đăng ký ca (F28). Giữ khoá report, xoá rejectReason / revisionDeadline.
   - `CAMPAIGN_APPROVED` cho owner, manager và mọi thành viên active của tổ chức.
   - `CAMPAIGN_VERIFY_INVITE` cho người dân **trong bán kính 5 km** (BR-161): user có vị trí nhà gần đó (identity `nearby-ids`) và người từng gửi report có toạ độ gần đó (PostGIS). Trừ admin, người tạo và manager. Có lọc preference. Campaign không có toạ độ thì bỏ qua.
 - **Yêu cầu chỉnh sửa (12 → NEEDS_REVISION 19):** rejectReason = lý do, `revisionDeadline` = now + 7 ngày, giữ khoá report; `CAMPAIGN_REVISION_REQUESTED` cho người tạo + owner. Người quản lý sửa rồi "Nộp lại" (F25).
@@ -750,46 +750,42 @@ sequenceDiagram
   INC-->>A: 200
 ```
 
-### F27b — Hết hạn duyệt và dọn bản nháp (job)
+### F27b — Job vòng đời chiến dịch (bắt đầu, hết hạn duyệt, dọn nháp, bản tin đăng ký)
 - `INC/worker.ts` chạy `startCampaignLifecycleJob()` (`INC/modules/campaign/campaign-lifecycle.job.ts`): `setInterval` mỗi `CAMPAIGN_LIFECYCLE_INTERVAL_MS` (mặc định 15 phút), tắt bằng `CAMPAIGN_LIFECYCLE_ENABLED=false`.
+- `startDueCampaigns()`: campaign UPCOMING 27 có ngày đầu đã tới → `transitionCampaign(event=start, actor=system)` → ACTIVE 1 (không thông báo, không gỡ report). Chạy trước `expireOverdue()`.
 - `expireOverdue()`: campaign 12 / 19 có ngày đầu (`campaign_days.startAt`) đã tới, hoặc 19 quá `revisionDeadline` → `transitionCampaign(event=expire, actor=system)` → EXPIRED 20, gỡ report, `CAMPAIGN_EXPIRED` cho người tạo. Mỗi lượt tối đa 200 campaign; campaign bị người khác đổi trạng thái cùng lúc thì bỏ qua, lượt sau xét lại.
 - `deleteStaleDrafts()`: DRAFT có `updatedAt` quá 30 ngày → xoá mềm (bản nháp không khoá report).
-- **File:** `campaign-lifecycle.service.ts > expireOverdue(), deleteStaleDrafts(), notifyExpired()` (BR-186).
+- `sendRegistrationDigests()`: sau `CAMPAIGN_REGISTRATION_DIGEST_HOUR` (mặc định 20h giờ VN), bản tin đăng ký hằng ngày cho manager (F28, BR-174).
+- **File:** `campaign-lifecycle.service.ts > startDueCampaigns(), expireOverdue(), deleteStaleDrafts(), notifyExpired()`, `INC/modules/campaign/campaign_registration/registration-digest.ts` (BR-186).
 
-### F28 — Tình nguyện viên xin tham gia chiến dịch
-1. `POST /api/v1/campaigns/volunteers/join-requests {campaignId}`:
-   - Campaign phải tồn tại (không kiểm tra status).
-   - Chưa có yêu cầu nào chưa bị xoá của cùng người (BR-170).
-   - Tạo PENDING và gửi thông báo `VOLUNTEER_REQUEST` cho các manager.
-2. Người quản lý campaign (BR-159): `GET /volunteers/join-requests?campaignId`, rồi `PUT /volunteers/join-requests/process {requestId, approved}`:
-   - Duyệt: kiểm tra **sức chứa** — số APPROVED phải < `maxVolunteers` của tier difficulty, gọi reward (BR-172). Đạt thì → APPROVED (14) và gửi `VOLUNTEER_APPROVED`.
-   - Từ chối: **xoá mềm** (không lưu REJECTED), gửi `VOLUNTEER_REJECTED`.
-3. Người xin có thể huỷ khi còn PENDING: `DELETE /volunteers/join-requests/cancel`.
-- **Không có API rời campaign** sau khi đã được duyệt.
-- **File:** `INC/modules/campaign/campaign_joining_request/campaign_joining_request.service.ts`, `INC/modules/reward/reward-service.client.ts > assertCampaignHasCapacityForJoinApproval()`.
+### F28 — Tình nguyện viên đăng ký ca của chiến dịch
+Thay luồng xin tham gia có duyệt (spec 3.1). Đăng ký có hiệu lực ngay, không cần duyệt, không giới hạn số người; ai thực sự tham gia được xác nhận khi điểm danh.
+1. Người dùng bấm "Tham gia" (hoặc "Sửa ca đã đăng ký"): `GET /api/v1/campaigns/:id/registration-options` trả:
+   - các ca còn đăng ký được (bật, chưa bắt đầu) cộng các ca người đó đang giữ;
+   - mỗi ca: điểm tập trung, giờ ca, giờ tập trung, số đã đăng ký / tối thiểu – tối đa, `shortBy`, `overMax`, `registeredByMe`, `conflicts[]` (ca khác campaign của người đó bị chồng giờ);
+   - điều kiện tham gia, lưu ý an toàn, `absenceCount` / `manyAbsences` (BR-172), `registrable` + `reason` (`STATUS` / `NO_SHIFT`).
+2. Người dùng tick một hoặc nhiều ca (kể cả nhiều ca cùng ngày), tích xác nhận điều kiện, rồi `PUT /api/v1/campaigns/:id/registrations/me {shiftIds, acceptConditions}`:
+   - thay toàn bộ tập ca của người đó trong một transaction; ca mới được kiểm theo BR-170, ca bị bỏ là rời ca (BR-173, `lateLeave` nếu < 24h);
+   - trả `{shiftIds, added, left, lateLeft, warnings[]}`; `warnings` (`OVERLAP` / `MANY_ABSENCES` / `OVER_MAX`) không chặn (BR-171).
+3. Người quản lý (BR-159): tab "Đăng ký" gọi `GET /api/v1/campaigns/:id/registrations` → từng ca kèm người đăng ký, số lần vắng và rời sát giờ trong 90 ngày.
+4. Không gửi thông báo theo từng lượt. Job vòng đời (F27b) gửi `CAMPAIGN_REGISTRATION_DIGEST` mỗi ngày một lần cho người tạo + manager của mỗi campaign có đăng ký mới, tách số theo ngày của campaign, rồi đánh dấu `managerNotifiedAt` (BR-174).
+- `GET /campaigns/volunteers/approved` giữ đường dẫn, trả mỗi người có ≥ 1 đăng ký ca (BR-158). Check-in QR và giao task yêu cầu đang đăng ký ca (BR-181, BR-177).
+- **File:** `INC/modules/campaign/campaign_registration/campaign_registration.service.ts`, `campaign_registration.repository.ts`, `registration-digest.ts`.
 
 ```mermaid
 sequenceDiagram
   actor V as Tình nguyện viên
   participant INC as incident
-  participant RW as reward
   participant NS as notification
   actor M as Manager
-  V->>INC: POST /campaigns/volunteers/join-requests
-  INC->>NS: VOLUNTEER_REQUEST → managers
-  M->>INC: PUT /campaigns/volunteers/join-requests/process
-  alt approved
-    INC->>RW: GET difficulty (maxVolunteers)
-    alt đã đủ người
-      INC-->>M: 400 capacity exceeded
-    else
-      INC->>INC: request=14
-      INC->>NS: VOLUNTEER_APPROVED → V
-    end
-  else rejected
-    INC->>INC: xoá mềm request
-    INC->>NS: VOLUNTEER_REJECTED → V
-  end
+  V->>INC: GET /campaigns/:id/registration-options
+  INC-->>V: ca mở, số đăng ký, trùng giờ, số lần vắng
+  V->>INC: PUT /campaigns/:id/registrations/me {shiftIds, acceptConditions}
+  INC->>INC: thêm ca mới, rời ca bị bỏ (lateLeave nếu < 24h)
+  INC-->>V: shiftIds + warnings (không chặn)
+  M->>INC: GET /campaigns/:id/registrations
+  Note over INC: job, sau 20h mỗi ngày
+  INC->>NS: CAMPAIGN_REGISTRATION_DIGEST → người tạo + manager
 ```
 
 ### F29 — Quản lý manager của chiến dịch
@@ -1068,8 +1064,9 @@ sequenceDiagram
 | ORG_INVITATION_PENDING | website | owner / LR / ADMIN | Lời mời cần duyệt | `organization-member-notify.client.ts` |
 | ORG_INVITATION_REJECTED | website | người mời | Lời mời bị từ chối | `organization-member-notify.client.ts` |
 | ORG_MEMBERSHIP_CHANGED | website | thành viên bị đổi vai / gỡ | Đổi vai, gỡ | `organization-member-notify.client.ts` |
-| VOLUNTEER_REQUEST | website | owner / LR / ADMIN tổ chức / manager campaign | Có người xin gia nhập | `organization.service.ts`, `campaign_joining_request.service.ts` |
-| VOLUNTEER_APPROVED / REJECTED | website | người xin | Được duyệt hoặc bị từ chối | như trên |
+| VOLUNTEER_REQUEST | website | owner / LR / ADMIN tổ chức | Có người xin gia nhập tổ chức | `organization.service.ts` |
+| VOLUNTEER_APPROVED / REJECTED | website | người xin | Được duyệt hoặc bị từ chối gia nhập tổ chức | như trên |
+| CAMPAIGN_REGISTRATION_DIGEST | website | người tạo + manager của campaign | Mỗi ngày một lần sau `CAMPAIGN_REGISTRATION_DIGEST_HOUR`, khi campaign có đăng ký ca mới; payload `campaignId`, `total`, `breakdown` ("dd/MM: +n · …"), tiêu đề | `INC/modules/campaign/campaign_registration/registration-digest.ts > sendRegistrationDigests()` |
 | CAMPAIGN_PENDING_REVIEW | website | user id trong `CAMPAIGN_ADMIN_NOTIFY_USER_IDS` | Gửi duyệt / nộp lại campaign | `campaign-lifecycle.service.ts > submit() → notifySubmitted()` |
 | CAMPAIGN_CREATED | website | owner + manager của campaign (trừ người gửi) | Gửi duyệt lần đầu | như trên |
 | CAMPAIGN_APPROVED | website | owner, manager, thành viên active của tổ chức | Admin duyệt campaign | `campaign-lifecycle.service.ts > review() → notifyReviewed()` |

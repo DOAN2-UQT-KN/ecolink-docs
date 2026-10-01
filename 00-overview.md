@@ -1,6 +1,6 @@
 # 00 — Tổng quan hệ thống Ecolink
 
-> Tài liệu này được viết dựa trên source code tại thời điểm 2026-09-30. Phạm vi gồm `ecolink-server/` (gateway, 5 service, 3 thư viện dùng chung) và `ecolink-client/` (web). Hai phần **không** thuộc phạm vi: `ecolink-mobile`, `ecolink-research-lab`, `ecolink-image-dedup-benchmark`.
+> Tài liệu này được viết dựa trên source code tại thời điểm 2026-10-01. Phạm vi gồm `ecolink-server/` (gateway, 5 service, 3 thư viện dùng chung) và `ecolink-client/` (web). Hai phần **không** thuộc phạm vi: `ecolink-mobile`, `ecolink-research-lab`, `ecolink-image-dedup-benchmark`.
 > Mọi đường dẫn tính từ thư mục gốc `/Users/ngoc/ecolink`.
 
 ## Mục lục tài liệu
@@ -30,7 +30,7 @@ Ecolink là nền tảng cộng đồng về môi trường. Code thể hiện c
 
 - **Báo cáo điểm rác/ô nhiễm (report/incident):** người dùng gửi ảnh, toạ độ và mức độ nghiêm trọng. Hệ thống dùng AI phân tích ảnh và sinh gợi ý xử lý. Admin duyệt hoặc ban report (`incident-service/src/modules/report`).
 - **Tổ chức (organization):** người nộp lập **đơn đăng ký** (xác thực email bằng OTP, lưu nháp, kèm giấy tờ pháp lý và danh sách owner). Mỗi owner tự xác nhận qua email, rồi admin thẩm định; duyệt thì hệ thống tạo tổ chức và gắn vai owner cho từng người (tổ chức **không** có tài khoản đăng nhập riêng). Tổ chức có thể được gắn **Blue Tick** (`trustTier = VERIFIED`) (`incident-service/src/modules/organization_application`).
-- **Chiến dịch (campaign):** owner hoặc quản lý chiến dịch của tổ chức tạo bản nháp chiến dịch dọn dẹp với 1–5 điểm tập kết, mỗi điểm gom các report cần xử lý, rồi gửi duyệt (report bị khoá từ lúc này). Admin duyệt, yêu cầu chỉnh sửa hoặc chặn; chờ duyệt quá hạn thì hết hạn. Tình nguyện viên xin tham gia, được giao task và điểm danh bằng QR. Khi xong, manager gửi hoàn thành, admin duyệt, và người tham gia nhận **điểm xanh** (`incident-service/src/modules/campaign`).
+- **Chiến dịch (campaign):** owner hoặc quản lý chiến dịch của tổ chức tạo bản nháp chiến dịch dọn dẹp với 1–5 điểm tập kết, mỗi điểm gom các report cần xử lý, rồi gửi duyệt (report bị khoá từ lúc này). Admin duyệt (chiến dịch thành "Sắp diễn ra", tự chuyển "Đang diễn ra" khi tới ngày đầu), yêu cầu chỉnh sửa hoặc chặn; chờ duyệt quá hạn thì hết hạn. Tình nguyện viên đăng ký theo ca (có hiệu lực ngay, không cần duyệt), được giao task và điểm danh bằng QR. Khi xong, manager gửi hoàn thành, admin duyệt, và người tham gia nhận **điểm xanh** (`incident-service/src/modules/campaign`).
 - **SOS:** yêu cầu khẩn cấp gắn với một chiến dịch đang hoạt động (`incident-service/src/modules/sos`).
 - **Vote và lưu (bookmark)** cho report và campaign.
 - **Điểm thưởng và gamification:** điểm xanh, ví SP có hạn dùng, điểm xếp hạng CRP/VRP theo season, bảng xếp hạng, badge, đổi quà (`reward-service`).
@@ -48,7 +48,7 @@ Ecolink là nền tảng cộng đồng về môi trường. Code thể hiện c
 | Owner tổ chức | **Không phải role identity.** User thường có membership vai `LEGAL_REPRESENTATIVE` / `OWNER` ở `organization_members` (incident), được gắn khi admin duyệt đơn sau khi owner tự xác nhận. Tổ chức không có tài khoản đăng nhập | `incident-service/src/modules/organization/organization-membership.service.ts`, `organization_member.repository.ts > isOwner()`; thiết kế ở [ORG_OWNERSHIP_FLOW.md](ORG_OWNERSHIP_FLOW.md) |
 | Vai trong tổ chức (quyền theo tổ chức) | Membership `organization_members.role` (LEGAL_REPRESENTATIVE / OWNER / ADMIN / CAMPAIGN_MANAGER / MEMBER); quyền quản lý tổ chức suy ra theo ma trận `shared/da2-constants/src/org-permissions.ts`, trả client trong `permissions`. Quyền chiến dịch theo vai: `CAMPAIGN_CREATE` (LR / OWNER / CAMPAIGN_MANAGER), `CAMPAIGN_MANAGE_ANY` (LR / OWNER) | `incident-service/src/modules/organization/org-access.service.ts > assertOrgPermission()` |
 | Campaign creator / manager | `campaign.createdBy`, bảng `campaign_managers`, cộng LR / OWNER của tổ chức; chỉ tính khi còn là thành viên active | `incident-service/src/modules/campaign/campaign-access.service.ts > CampaignAccessService` |
-| Tình nguyện viên (volunteer) | `campaign_joining_requests.status = 14 (APPROVED)` | `campaign_joining_request.service.ts` |
+| Tình nguyện viên (volunteer) | Có ≥ 1 đăng ký ca đang hiệu lực (`campaign_shift_registrations.left_at` null); đăng ký không cần duyệt | `incident-service/src/modules/campaign/campaign_registration/campaign_registration.service.ts` |
 | Thành viên tổ chức | Bảng `organization_members` | `organization.service.ts > processJoinRequest()` |
 | Người nộp đơn tổ chức (ẩn danh) | Không có tài khoản, chứng minh quyền sở hữu hòm mail bằng OTP → tracking token (180 ngày); owner được mời dùng token xác nhận trong email | `incident-service/src/modules/organization_application/organization-application-otp.service.ts > resolveTrackingToken()`, `owner-confirmation.service.ts` |
 | Service nội bộ | Header `x-internal-api-key` | `*/middleware/internal-*.middleware.ts` |

@@ -1,6 +1,6 @@
 # Ecolink — Tổng quan nghiệp vụ
 
-> Tài liệu dành cho PM, BA, khách hàng, nhà tài trợ và tình nguyện viên nòng cốt. Nội dung tổng hợp từ bộ tài liệu kỹ thuật trong thư mục `docs/`, và được viết dựa trên **đúng những gì sản phẩm đang làm** tại thời điểm 30/09/2026. Nó không mô tả những gì sản phẩm "dự định" làm.
+> Tài liệu dành cho PM, BA, khách hàng, nhà tài trợ và tình nguyện viên nòng cốt. Nội dung tổng hợp từ bộ tài liệu kỹ thuật trong thư mục `docs/`, và được viết dựa trên **đúng những gì sản phẩm đang làm** tại thời điểm 01/10/2026. Nó không mô tả những gì sản phẩm "dự định" làm.
 > Những chỗ sản phẩm chưa làm xong, hoặc đang làm khác với mong đợi, được nêu rõ ở mục 3 (cột Trạng thái) và mục 10.
 
 ---
@@ -33,7 +33,7 @@ Ecolink là nền tảng kết nối cộng đồng để **phát hiện và d�
 | Vai trò | Là ai | Muốn làm gì | Được làm | Không được làm |
 |---|---|---|---|---|
 | **Khách** | Người chưa đăng nhập | Tìm hiểu, đăng ký tài khoản, nộp hồ sơ tổ chức | Đăng ký, đăng nhập, xem danh sách quà và bảng xếp hạng, **nộp hồ sơ đăng ký tổ chức** (không cần tài khoản) | Xem báo cáo, chiến dịch, bản đồ (sẽ được yêu cầu đăng nhập) |
-| **Người dùng** (người dân) | Người có tài khoản cá nhân | Báo cáo rác, theo dõi, bình chọn, tham gia | Gửi và sửa báo cáo của mình; bình chọn và lưu báo cáo hoặc chiến dịch; xin tham gia chiến dịch hoặc tổ chức; gửi yêu cầu khẩn cấp (SOS); chat với trợ lý AI; đổi quà; cài đặt thông báo | Duyệt nội dung; tạo chiến dịch (chỉ owner hoặc quản lý chiến dịch của tổ chức được tạo) |
+| **Người dùng** (người dân) | Người có tài khoản cá nhân | Báo cáo rác, theo dõi, bình chọn, tham gia | Gửi và sửa báo cáo của mình; bình chọn và lưu báo cáo hoặc chiến dịch; đăng ký ca của chiến dịch, xin gia nhập tổ chức; gửi yêu cầu khẩn cấp (SOS); chat với trợ lý AI; đổi quà; cài đặt thông báo | Duyệt nội dung; tạo chiến dịch (chỉ owner hoặc quản lý chiến dịch của tổ chức được tạo) |
 | **Tình nguyện viên** | Người dùng đã được chấp nhận vào một chiến dịch | Làm việc trong chiến dịch và nhận điểm | Nhận việc được giao, cập nhật kết quả, điểm danh bằng mã QR, nhận điểm khi chiến dịch hoàn thành | Quản lý chiến dịch |
 | **Owner tổ chức** (gồm người đại diện pháp lý) | Người dùng cá nhân được gắn vai owner sau khi hồ sơ được duyệt, hoặc qua **đề xuất thêm owner** được các owner khác đồng ý. Một tổ chức có thể có nhiều owner (tối đa 5 lúc đăng ký); một người làm owner tối đa 3 tổ chức. Tổ chức **không** có tài khoản đăng nhập riêng | Quản lý tổ chức và chiến dịch | Mọi quyền của Admin tổ chức, cộng: nâng / hạ vai Admin, **đề xuất thêm owner**, **đề xuất thu hồi owner khác**, đồng ý / từ chối đề xuất của owner khác, **tự hạ vai hoặc rời tổ chức** (khi còn owner khác; người đại diện pháp lý phải chọn người thay, người thay xác nhận và các owner khác đồng ý); **tạo chiến dịch**; quản lý, sửa và xoá **mọi** chiến dịch của tổ chức (kể cả chiến dịch người khác tạo) | Tự tạo tổ chức mà không qua thẩm định; rời tổ chức khi là owner duy nhất |
 | **Admin tổ chức** | Thành viên được owner nâng vai | Vận hành tổ chức thay owner | Sửa thông tin tổ chức; duyệt người xin gia nhập và lời mời; đổi vai / gỡ Quản lý chiến dịch và Thành viên | Đụng tới owner hoặc admin khác; đề xuất owner; tạo hoặc quản lý chiến dịch (trừ khi được thêm làm người quản lý của một chiến dịch) |
@@ -97,7 +97,7 @@ Trạng thái: ✅ đã có · 🟡 đang làm dở / có hạn chế · ❌ ch�
 | Tạo chiến dịch | Owner hoặc quản lý chiến dịch của tổ chức tạo **bản nháp** (từ "Chiến dịch của tôi" hoặc tab chiến dịch trên trang tổ chức): tiêu đề, mô tả, ảnh bìa, một ngày diễn ra với giờ bắt đầu / kết thúc, người liên hệ, lưu ý an toàn, **mức độ khó** (quyết định số người tối đa và số điểm thưởng), và 1–5 **điểm tập kết** (mỗi điểm có trưởng điểm, giờ tập trung, số chỗ và các điểm rác cần xử lý quanh đó). Lưu nháp bao nhiêu lần cũng được; bấm "Gửi duyệt" thì hệ thống kiểm đủ thông tin và giữ các điểm rác cho chiến dịch. Nút tạo bị ẩn với người không có quyền, bị khoá kèm lý do khi tổ chức đang bị khoá hoặc vượt giới hạn | Owner, quản lý chiến dịch của tổ chức | ✅ Chiến dịch nhiều ngày chưa hỗ trợ |
 | Sửa và xoá chiến dịch | Sửa: người quản lý chiến dịch — trước khi được duyệt sửa được mọi thứ, sau khi duyệt chỉ sửa mô tả, ảnh bìa, lưu ý an toàn, liên hệ. Xoá: người tạo hoặc owner, chỉ khi chưa được duyệt, bị chặn hoặc hết hạn | Người quản lý / owner | 🟡 Chưa sửa được thời gian, địa điểm sau khi đã duyệt (dời lịch) |
 | Duyệt chiến dịch | Quản trị viên xem danh sách chờ duyệt (không thấy chiến dịch của tổ chức mình là thành viên), đánh dấu đủ 6 mục kiểm tra rồi duyệt — khi đó thành viên tổ chức được báo và người dân quanh khu vực 5 km được mời tham gia; hoặc **yêu cầu chỉnh sửa** (tổ chức có 7 ngày để nộp lại, xem được lịch sử thay đổi), hoặc **chặn** kèm lý do. Chiến dịch chờ duyệt tới giờ bắt đầu mà chưa được duyệt thì tự **hết hạn** | Quản trị viên | ✅ |
-| Đăng ký tham gia | Tình nguyện viên xin tham gia; người quản lý duyệt, có giới hạn số người theo mức độ khó | Người dùng, quản lý | ✅ |
+| Đăng ký tham gia | Tình nguyện viên chọn một hoặc nhiều ca (kể cả nhiều ca cùng ngày); có hiệu lực ngay, không cần duyệt, không giới hạn số người. Hệ thống chỉ cảnh báo khi trùng giờ, vắng nhiều gần đây hoặc ca đã vượt dự kiến. Người quản lý nhận một bản tin số đăng ký mỗi tối và xem danh sách theo ca | Người dùng, quản lý | ✅ |
 | Quản lý người quản lý | Thêm người quản lý (chỉ chọn được thành viên của tổ chức) hoặc bớt người quản lý (trừ người tạo) ngay trên trang chiến dịch | Quản lý | ✅ |
 | Công việc | Tạo việc, giao cho tình nguyện viên, cập nhật kết quả kèm ảnh hoặc video | Quản lý, tình nguyện viên | ✅ |
 | Điểm danh QR | Quản lý hiển thị mã QR, tình nguyện viên quét để điểm danh | Quản lý, tình nguyện viên | ✅ |
@@ -252,8 +252,8 @@ Các trường hợp thường gặp:
 - Quá hạn nộp lại 7 ngày, hoặc tới giờ bắt đầu mà chưa được duyệt: chiến dịch **hết hạn**, điểm rác được trả lại, người tạo được báo. Bản nháp không đụng tới trong 30 ngày tự bị xoá.
 
 ### 4.5 Tình nguyện viên tham gia chiến dịch
-1. Tình nguyện viên mở chiến dịch và bấm "Tham gia". Người quản lý nhận thông báo.
-2. Người quản lý duyệt, tình nguyện viên nhận thông báo "được chấp nhận". Nếu chiến dịch đã đủ người theo mức độ khó thì không duyệt được.
+1. Chiến dịch đã được duyệt ("Sắp diễn ra" hoặc "Đang diễn ra"). Tình nguyện viên bấm "Tham gia", chọn các ca muốn đi (mỗi ca: điểm tập trung, giờ, số người đã đăng ký; nhãn "Còn thiếu N người", "Đã vượt dự kiến", "Trùng giờ"), xác nhận đáp ứng điều kiện tham gia. Đăng ký **có hiệu lực ngay**, không cần duyệt và không bị chặn vì đủ người; chỉ có cảnh báo.
+2. Tình nguyện viên sửa ca bằng "Sửa ca đã đăng ký"; bỏ một ca là rời ca đó, rời trong vòng 24 giờ trước giờ bắt đầu được ghi nhận là "rời sát giờ". Người quản lý không nhận thông báo từng lượt mà nhận **một bản tin mỗi tối** (khoảng 20h) về số đăng ký mới theo ngày, và xem danh sách đăng ký theo ca kèm số lần vắng, rời sát giờ của từng người.
 3. Tình nguyện viên được giao việc và cập nhật kết quả (ảnh hoặc video).
 4. Ngày diễn ra, người quản lý mở **mã QR**, tình nguyện viên quét để điểm danh. Chỉ người **đã điểm danh** mới được nhận điểm.
 5. Xong mọi việc, người quản lý báo hoàn thành. Quản trị viên được báo; người dân gần đó được mời xác nhận khu vực đã sạch.
@@ -436,11 +436,11 @@ Mã BR-xxx dùng để đối chiếu với `docs/03-business-rules.md`.
 - **BR-166:** Quản trị viên chỉ duyệt hoặc từ chối khi chiến dịch đang chờ duyệt hoàn thành; từ chối phải có lý do.
 - **BR-167:** Điểm thưởng theo mức độ khó, chỉ dành cho tình nguyện viên **đã được chấp nhận và đã điểm danh**.
 - **BR-168:** Chiến dịch hoàn thành thì các điểm rác và SOS liên quan cũng hoàn thành; bị từ chối thì chiến dịch tiếp tục hoạt động.
-- **BR-170:** Mỗi người chỉ có một yêu cầu tham gia cho mỗi chiến dịch.
-- **BR-171:** Chỉ người quản lý xử lý yêu cầu tham gia.
-- **BR-172:** Số tình nguyện viên được chấp nhận không vượt quá giới hạn của mức độ khó.
-- **BR-173:** Người bị từ chối có thể xin lại.
-- **BR-174:** Người xin chỉ huỷ được khi yêu cầu còn đang chờ.
+- **BR-170:** Đăng ký ca có hiệu lực ngay, không cần duyệt, không giới hạn số người; chỉ đăng ký được ca đang bật, chưa bắt đầu, của chiến dịch "Sắp diễn ra" hoặc "Đang diễn ra", và phải xác nhận điều kiện tham gia.
+- **BR-171:** Trùng giờ, vắng nhiều gần đây hay ca đã vượt dự kiến chỉ hiện cảnh báo, không chặn.
+- **BR-172:** Số lần vắng tính trong 90 ngày (tạm suy từ điểm danh cả chiến dịch, sẽ đổi khi điểm danh theo ca); từ 3 lần thì cảnh báo.
+- **BR-173:** Bỏ tick là rời ca; rời trong vòng 24 giờ trước giờ bắt đầu ca ghi nhận "rời sát giờ"; ca đã bắt đầu không rời được.
+- **BR-174:** Người quản lý xem danh sách đăng ký theo ca và nhận một bản tin đăng ký mỗi tối, không nhận thông báo từng lượt.
 - **BR-175:** Người quản lý chiến dịch quản lý được công việc, người quản lý khác và mã điểm danh.
 - **BR-176:** Công việc có 3 mức ưu tiên; mặc định là trung bình.
 - **BR-177:** Chỉ giao việc cho tình nguyện viên đã được chấp nhận.
@@ -536,7 +536,9 @@ flowchart LR
 ```mermaid
 flowchart LR
   N[Nháp] -->|Gửi duyệt| A[Chờ duyệt]
-  A -->|Quản trị viên duyệt| B[Đang hoạt động]
+  A -->|Quản trị viên duyệt| U[Sắp diễn ra]
+  U -->|Tới ngày đầu| B[Đang diễn ra]
+  U -->|Quản trị viên chặn| X
   A -->|Yêu cầu chỉnh sửa| R[Cần chỉnh sửa]
   R -->|Nộp lại| A
   A -->|Quản trị viên chặn| X[Bị chặn]
@@ -552,7 +554,8 @@ flowchart LR
 |---|---|---|
 | Tạo → Nháp | Owner / quản lý chiến dịch của tổ chức | (không có thông báo) |
 | Nháp → Chờ duyệt | Người quản lý | Quản trị viên: "có chiến dịch chờ duyệt"; owner và người quản lý: "có chiến dịch mới" |
-| → Đang hoạt động | Quản trị viên | Owner, người quản lý, thành viên tổ chức: "đã được duyệt"; người dân trong 5 km: lời mời tham gia |
+| → Sắp diễn ra | Quản trị viên | Owner, người quản lý, thành viên tổ chức: "đã được duyệt"; người dân trong 5 km: lời mời tham gia. Mở đăng ký ca |
+| → Đang diễn ra | Hệ thống (tới ngày đầu) | — (mở điểm danh và SOS) |
 | → Cần chỉnh sửa | Quản trị viên | Người tạo và owner: lý do và hạn nộp lại |
 | Cần chỉnh sửa → Chờ duyệt | Người quản lý | Quản trị viên: "có chiến dịch nộp lại" |
 | → Bị chặn | Quản trị viên | Người tạo và owner: lý do |
@@ -561,14 +564,18 @@ flowchart LR
 | → Hoàn thành | Quản trị viên | Tình nguyện viên: "hoàn thành" và điểm (nếu đã điểm danh); các owner: "được duyệt" |
 | → Quay lại hoạt động | Quản trị viên | Các owner: lý do từ chối |
 
-Chưa có bước "Sắp diễn ra" tách khỏi "Đang hoạt động", chưa hỗ trợ dời lịch hay chiến dịch nhiều ngày.
+Chưa hỗ trợ dời lịch, huỷ chiến dịch đã duyệt hay sửa nội dung quan trọng sau khi duyệt.
 
-### 6.3 Yêu cầu tham gia chiến dịch hoặc tổ chức
+### 6.3 Đăng ký ca chiến dịch và yêu cầu gia nhập tổ chức
+Đăng ký ca chiến dịch không có bước duyệt: tick ca là có hiệu lực, bỏ tick là rời (rời trong vòng 24 giờ trước giờ bắt đầu ghi nhận "rời sát giờ"). Người quản lý nhận bản tin hằng ngày.
+
+Yêu cầu gia nhập tổ chức:
+
 | Trạng thái | Ai chuyển | Người xin nhận được |
 |---|---|---|
-| Đang chờ | Người xin | (Người quản lý hoặc các owner nhận thông báo) |
-| Được chấp nhận | Người quản lý / owner | Thông báo "được chấp nhận" |
-| Bị từ chối | Người quản lý / owner | Thông báo "bị từ chối" |
+| Đang chờ | Người xin | (Các owner nhận thông báo) |
+| Được chấp nhận | Owner | Thông báo "được chấp nhận" |
+| Bị từ chối | Owner | Thông báo "bị từ chối" |
 | Đã huỷ | Người xin | — |
 
 ### 6.4 Hồ sơ đăng ký tổ chức
@@ -688,7 +695,8 @@ Kênh gồm **trong ứng dụng** (chuông thông báo) và **email**. Hiện c
 | Hồ sơ được duyệt | Từng owner | Email | Chưa có tài khoản: link kích hoạt (72 giờ); đã có: "đã được gắn làm owner" | Không |
 | Cần xác minh email liên hệ tổ chức | Email liên hệ | Email | Link xác minh (72 giờ) | Không |
 | Tổ chức được duyệt hoặc bị chặn | Các owner | Ứng dụng | Kết quả và lý do | Không |
-| Có người xin gia nhập tổ chức hoặc tham gia chiến dịch | Các owner / quản lý | Ứng dụng | Tên người xin và tên tổ chức/chiến dịch | Có (nhóm "Yêu cầu tình nguyện") |
+| Có người xin gia nhập tổ chức | Các owner | Ứng dụng | Tên người xin và tên tổ chức | Có (nhóm "Yêu cầu tình nguyện") |
+| Bản tin đăng ký ca mỗi tối (khi chiến dịch có người đăng ký mới) | Người tạo và người quản lý chiến dịch | Ứng dụng | Tên chiến dịch, số đăng ký mới theo từng ngày | Có (nhóm "Yêu cầu tình nguyện") |
 | Yêu cầu được chấp nhận hoặc bị từ chối | Người xin | Ứng dụng | Kết quả | Có (nhóm "Yêu cầu tình nguyện") |
 | Tổ chức gửi duyệt chiến dịch mới | Owner và người quản lý chiến dịch | Ứng dụng | Tên chiến dịch | Có (nhóm "Chiến dịch mới") |
 | Có chiến dịch chờ duyệt (gửi lần đầu hoặc nộp lại) | Quản trị viên được chỉ định | Ứng dụng | Tên chiến dịch, tên tổ chức | Không |
