@@ -562,7 +562,7 @@ Client chỉ có **1 role cứng**: `ADMIN_ROLE_ID = "40ed59d7-5d7c-4ab2-88a2-a2
 | — nút "Attendance QR" | `canManageCampaign` và status = ACTIVE | `page.tsx`, `CampaignAttendanceQrButton.tsx` |
 | — tab "Registrations" | `canManageCampaign` | `campaigns/[id]/_components/CampaignTabs.tsx` |
 | — nút "Add task", sửa/xoá task | `canManageCampaign`; sửa/xoá ẩn khi task `status === COMPLETED` | `CampaignTask.tsx`, `components/client/shared/CampaignTaskCard.tsx` |
-| — danh sách volunteer của ca (tab Members ở trang ca) | `canManageCampaign`, `isRegistered` (`my_shift_ids`) hoặc `user.roleId === ADMIN_ROLE_ID`; không thì hiện câu giải thích, không gọi API | `CampaignManagers.tsx` |
+| — danh sách volunteer của ca (tab Members ở trang ca) | `canManageCampaign`, `isRegistered` (`my_shift_ids`) hoặc `user.roleId === ADMIN_ROLE_ID`; không thì hiện câu giải thích, không gọi API | `campaigns/[id]/shifts/[shiftId]/page.tsx` |
 | — nút "Add manager", icon gỡ manager | `canManageCampaign` (và campaign có `organization_id`); icon gỡ ẩn trên dòng người tạo | `CampaignManagers.tsx` |
 | `/campaigns/me` — nút "Add Campaign" | Đã bỏ: tạo campaign chỉ từ tab campaign của trang tổ chức | `campaigns/me/page.tsx` |
 | `/campaigns/me` — Sửa / Gửi duyệt / Xoá | Sửa: `can_manage_campaign` và status ∈ {4, 12, 19}; Gửi duyệt ("Nộp lại" khi 19): `can_manage_campaign` và status ∈ {4, 19}; Xoá: `can_delete_campaign` và status ∈ {4, 12, 19, 2, 20} (`constants/campaignLifecycle.ts`) | `campaigns/me/_components/DataTable.tsx` |
