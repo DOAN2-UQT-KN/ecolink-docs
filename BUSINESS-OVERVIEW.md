@@ -1,6 +1,6 @@
 # Ecolink — Tổng quan nghiệp vụ
 
-> Tài liệu dành cho PM, BA, khách hàng, nhà tài trợ và tình nguyện viên nòng cốt. Nội dung tổng hợp từ bộ tài liệu kỹ thuật trong thư mục `docs/`, và được viết dựa trên **đúng những gì sản phẩm đang làm** tại thời điểm 01/10/2026. Nó không mô tả những gì sản phẩm "dự định" làm.
+> Tài liệu dành cho PM, BA, khách hàng, nhà tài trợ và tình nguyện viên nòng cốt. Nội dung tổng hợp từ bộ tài liệu kỹ thuật trong thư mục `docs/`, và được viết dựa trên **đúng những gì sản phẩm đang làm** tại thời điểm 02/10/2026. Nó không mô tả những gì sản phẩm "dự định" làm.
 > Những chỗ sản phẩm chưa làm xong, hoặc đang làm khác với mong đợi, được nêu rõ ở mục 3 (cột Trạng thái) và mục 10.
 
 ---
@@ -97,7 +97,7 @@ Trạng thái: ✅ đã có · 🟡 đang làm dở / có hạn chế · ❌ ch�
 | Tạo chiến dịch | Owner hoặc quản lý chiến dịch của tổ chức tạo **bản nháp** (từ "Chiến dịch của tôi" hoặc tab chiến dịch trên trang tổ chức): tiêu đề, mô tả, ảnh bìa, một ngày diễn ra với giờ bắt đầu / kết thúc, người liên hệ, lưu ý an toàn, **mức độ khó** (quyết định số người tối đa và số điểm thưởng), và 1–5 **điểm tập kết** (mỗi điểm có trưởng điểm, giờ tập trung, số chỗ và các điểm rác cần xử lý quanh đó). Lưu nháp bao nhiêu lần cũng được; bấm "Gửi duyệt" thì hệ thống kiểm đủ thông tin và giữ các điểm rác cho chiến dịch. Nút tạo bị ẩn với người không có quyền, bị khoá kèm lý do khi tổ chức đang bị khoá hoặc vượt giới hạn | Owner, quản lý chiến dịch của tổ chức | ✅ Chiến dịch nhiều ngày chưa hỗ trợ |
 | Sửa và xoá chiến dịch | Sửa: người quản lý chiến dịch — trước khi được duyệt sửa được mọi thứ, sau khi duyệt chỉ sửa mô tả, ảnh bìa, lưu ý an toàn, liên hệ. Xoá: người tạo hoặc owner, chỉ khi chưa được duyệt, bị chặn hoặc hết hạn | Người quản lý / owner | 🟡 Chưa sửa được thời gian, địa điểm sau khi đã duyệt (dời lịch) |
 | Duyệt chiến dịch | Quản trị viên xem danh sách chờ duyệt (không thấy chiến dịch của tổ chức mình là thành viên), đánh dấu đủ 6 mục kiểm tra rồi duyệt — khi đó thành viên tổ chức được báo và người dân quanh khu vực 5 km được mời tham gia; hoặc **yêu cầu chỉnh sửa** (tổ chức có 7 ngày để nộp lại, xem được lịch sử thay đổi), hoặc **chặn** kèm lý do. Chiến dịch chờ duyệt tới giờ bắt đầu mà chưa được duyệt thì tự **hết hạn** | Quản trị viên | ✅ |
-| Đăng ký tham gia | Tình nguyện viên chọn một hoặc nhiều ca (kể cả nhiều ca cùng ngày); có hiệu lực ngay, không cần duyệt, không giới hạn số người. Hệ thống chỉ cảnh báo khi trùng giờ, vắng nhiều gần đây hoặc ca đã vượt dự kiến. Người quản lý nhận một bản tin số đăng ký mỗi tối và xem danh sách theo ca | Người dùng, quản lý | ✅ |
+| Đăng ký tham gia | Tình nguyện viên chọn một hoặc nhiều ca (kể cả nhiều ca cùng ngày); có hiệu lực ngay, không cần duyệt, không giới hạn số người. Hệ thống chỉ cảnh báo khi trùng giờ hoặc ca đã vượt dự kiến. Tình nguyện viên rời ca tự do trước giờ bắt đầu (bỏ tick hoặc nút "Rời chiến dịch"), không bị ghi nhận gì. Người quản lý nhận một bản tin số đăng ký mỗi tối, xem danh sách theo ca (chỉ xem, không gỡ hay chuyển ca của ai), được báo khi ca thiếu người (72 giờ trước mỗi ngày) hoặc vượt dự kiến, có thể mời lại người dân trong 5 km (mỗi ngày một lần) và tắt bớt ca | Người dùng, quản lý | ✅ (chưa có gộp ca) |
 | Quản lý người quản lý | Thêm người quản lý (chỉ chọn được thành viên của tổ chức) hoặc bớt người quản lý (trừ người tạo) ngay trên trang chiến dịch | Quản lý | ✅ |
 | Công việc | Tạo việc, giao cho tình nguyện viên, cập nhật kết quả kèm ảnh hoặc video | Quản lý, tình nguyện viên | ✅ |
 | Điểm danh QR | Quản lý hiển thị mã QR, tình nguyện viên quét để điểm danh | Quản lý, tình nguyện viên | ✅ |
@@ -253,7 +253,8 @@ Các trường hợp thường gặp:
 
 ### 4.5 Tình nguyện viên tham gia chiến dịch
 1. Chiến dịch đã được duyệt ("Sắp diễn ra" hoặc "Đang diễn ra"). Tình nguyện viên bấm "Tham gia", chọn các ca muốn đi (mỗi ca: điểm tập trung, giờ, số người đã đăng ký; nhãn "Còn thiếu N người", "Đã vượt dự kiến", "Trùng giờ"), xác nhận đáp ứng điều kiện tham gia. Đăng ký **có hiệu lực ngay**, không cần duyệt và không bị chặn vì đủ người; chỉ có cảnh báo.
-2. Tình nguyện viên sửa ca bằng "Sửa ca đã đăng ký"; bỏ một ca là rời ca đó, rời trong vòng 24 giờ trước giờ bắt đầu được ghi nhận là "rời sát giờ". Người quản lý không nhận thông báo từng lượt mà nhận **một bản tin mỗi tối** (khoảng 20h) về số đăng ký mới theo ngày, và xem danh sách đăng ký theo ca kèm số lần vắng, rời sát giờ của từng người.
+2. Tình nguyện viên sửa ca bằng "Sửa ca đã đăng ký" hoặc bấm "Rời chiến dịch"; rời ca được bất cứ lúc nào trước khi ca bắt đầu và **không bị ghi nhận gì** — đăng ký chỉ để nhận thông báo và để tổ chức ước lượng số người. Người quản lý không nhận thông báo từng lượt mà nhận **một bản tin mỗi tối** (khoảng 20h) về số đăng ký mới theo ngày, và xem danh sách đăng ký theo ca (chỉ xem).
+2a. 72 giờ trước mỗi ngày, ca nào còn dưới số tối thiểu thì người quản lý được báo; ca vượt số tối đa dự kiến cũng được báo để chuẩn bị thêm dụng cụ. Người quản lý có thể **mời lại người dân trong 5 km** quanh các điểm tập trung (mỗi 24 giờ một lần) hoặc **tắt một ca** chưa bắt đầu (ngày đó phải còn ca khác): tình nguyện viên của ca bị tắt được báo để chọn ca khác. Ca vẫn thiếu người vào ngày diễn ra thì vẫn chạy.
 3. Tình nguyện viên được giao việc và cập nhật kết quả (ảnh hoặc video).
 4. Ngày diễn ra, người quản lý mở **mã QR**, tình nguyện viên quét để điểm danh. Chỉ người **đã điểm danh** mới được nhận điểm.
 5. Xong mọi việc, người quản lý báo hoàn thành. Quản trị viên được báo; người dân gần đó được mời xác nhận khu vực đã sạch.
@@ -437,10 +438,10 @@ Mã BR-xxx dùng để đối chiếu với `docs/03-business-rules.md`.
 - **BR-167:** Điểm thưởng theo mức độ khó, chỉ dành cho tình nguyện viên **đã được chấp nhận và đã điểm danh**.
 - **BR-168:** Chiến dịch hoàn thành thì các điểm rác và SOS liên quan cũng hoàn thành; bị từ chối thì chiến dịch tiếp tục hoạt động.
 - **BR-170:** Đăng ký ca có hiệu lực ngay, không cần duyệt, không giới hạn số người; chỉ đăng ký được ca đang bật, chưa bắt đầu, của chiến dịch "Sắp diễn ra" hoặc "Đang diễn ra", và phải xác nhận điều kiện tham gia.
-- **BR-171:** Trùng giờ, vắng nhiều gần đây hay ca đã vượt dự kiến chỉ hiện cảnh báo, không chặn.
-- **BR-172:** Số lần vắng tính trong 90 ngày (tạm suy từ điểm danh cả chiến dịch, sẽ đổi khi điểm danh theo ca); từ 3 lần thì cảnh báo.
-- **BR-173:** Bỏ tick là rời ca; rời trong vòng 24 giờ trước giờ bắt đầu ca ghi nhận "rời sát giờ"; ca đã bắt đầu không rời được.
-- **BR-174:** Người quản lý xem danh sách đăng ký theo ca và nhận một bản tin đăng ký mỗi tối, không nhận thông báo từng lượt.
+- **BR-171:** Trùng giờ hay ca đã vượt dự kiến chỉ hiện cảnh báo, không chặn; không ghi nhận vắng mặt hay rời ca.
+- **BR-172:** Người quản lý được báo khi ca còn thiếu người 72 giờ trước ngày diễn ra (mỗi ngày một lần) và khi ca vượt số tối đa dự kiến.
+- **BR-173:** Bỏ tick hoặc "Rời chiến dịch" là rời ca, tự do trước giờ bắt đầu; ca đã bắt đầu không rời được. Người quản lý không gỡ hay chuyển ca của tình nguyện viên.
+- **BR-174:** Danh sách đăng ký theo ca chỉ để xem; người quản lý nhận một bản tin đăng ký mỗi tối, mời lại người dân gần đó tối đa mỗi 24 giờ một lần, và tắt được ca chưa bắt đầu nếu ngày đó còn ca khác.
 - **BR-175:** Người quản lý chiến dịch quản lý được công việc, người quản lý khác và mã điểm danh.
 - **BR-176:** Công việc có 3 mức ưu tiên; mặc định là trung bình.
 - **BR-177:** Chỉ giao việc cho tình nguyện viên đã được chấp nhận.
@@ -567,7 +568,7 @@ flowchart LR
 Chưa hỗ trợ dời lịch, huỷ chiến dịch đã duyệt hay sửa nội dung quan trọng sau khi duyệt.
 
 ### 6.3 Đăng ký ca chiến dịch và yêu cầu gia nhập tổ chức
-Đăng ký ca chiến dịch không có bước duyệt: tick ca là có hiệu lực, bỏ tick là rời (rời trong vòng 24 giờ trước giờ bắt đầu ghi nhận "rời sát giờ"). Người quản lý nhận bản tin hằng ngày.
+Đăng ký ca chiến dịch không có bước duyệt: tick ca là có hiệu lực, bỏ tick là rời, tự do trước giờ bắt đầu và không ghi nhận vi phạm. Ca bị người quản lý tắt thì đăng ký của ca đó kết thúc và tình nguyện viên được báo. Người quản lý nhận bản tin hằng ngày.
 
 Yêu cầu gia nhập tổ chức:
 
@@ -697,6 +698,9 @@ Kênh gồm **trong ứng dụng** (chuông thông báo) và **email**. Hiện c
 | Tổ chức được duyệt hoặc bị chặn | Các owner | Ứng dụng | Kết quả và lý do | Không |
 | Có người xin gia nhập tổ chức | Các owner | Ứng dụng | Tên người xin và tên tổ chức | Có (nhóm "Yêu cầu tình nguyện") |
 | Bản tin đăng ký ca mỗi tối (khi chiến dịch có người đăng ký mới) | Người tạo và người quản lý chiến dịch | Ứng dụng | Tên chiến dịch, số đăng ký mới theo từng ngày | Có (nhóm "Yêu cầu tình nguyện") |
+| Ca còn thiếu người (72 giờ trước ngày diễn ra) / ca vượt số tối đa dự kiến | Người tạo và người quản lý chiến dịch | Ứng dụng | Ngày, các ca thiếu và số đã đăng ký / số tối thiểu; hoặc ca vượt và số người | Có (nhóm "Yêu cầu tình nguyện") |
+| Chiến dịch gần bạn đang cần người (người quản lý mời lại) | Người dân trong 5 km quanh các điểm tập trung, chưa đăng ký | Ứng dụng | Tên chiến dịch, số người còn thiếu | Có (nhóm "Chiến dịch gần bạn") |
+| Ca của bạn đã bị tắt | Tình nguyện viên đã đăng ký ca đó | Ứng dụng | Ca, ngày; mời chọn ca khác | Không (luôn gửi) |
 | Yêu cầu được chấp nhận hoặc bị từ chối | Người xin | Ứng dụng | Kết quả | Có (nhóm "Yêu cầu tình nguyện") |
 | Tổ chức gửi duyệt chiến dịch mới | Owner và người quản lý chiến dịch | Ứng dụng | Tên chiến dịch | Có (nhóm "Chiến dịch mới") |
 | Có chiến dịch chờ duyệt (gửi lần đầu hoặc nộp lại) | Quản trị viên được chỉ định | Ứng dụng | Tên chiến dịch, tên tổ chức | Không |

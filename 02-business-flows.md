@@ -755,22 +755,26 @@ sequenceDiagram
 - `startDueCampaigns()`: campaign UPCOMING 27 có ngày đầu đã tới → `transitionCampaign(event=start, actor=system)` → ACTIVE 1 (không thông báo, không gỡ report). Chạy trước `expireOverdue()`.
 - `expireOverdue()`: campaign 12 / 19 có ngày đầu (`campaign_days.startAt`) đã tới, hoặc 19 quá `revisionDeadline` → `transitionCampaign(event=expire, actor=system)` → EXPIRED 20, gỡ report, `CAMPAIGN_EXPIRED` cho người tạo. Mỗi lượt tối đa 200 campaign; campaign bị người khác đổi trạng thái cùng lúc thì bỏ qua, lượt sau xét lại.
 - `deleteStaleDrafts()`: DRAFT có `updatedAt` quá 30 ngày → xoá mềm (bản nháp không khoá report).
+- `sendUnderstaffedAlerts()`: ngày bắt đầu trong vòng 72h (`CAMPAIGN_UNDERSTAFFED_NOTICE_HOURS`) có ca dưới số tối thiểu → `CAMPAIGN_SHIFT_UNDERSTAFFED` cho người tạo + manager; mỗi ngày xét một lần (`campaign_days.understaffed_notified_at`) (BR-172).
+- `sendOverMaxAlerts()`: ca chưa bắt đầu vượt `maxVolunteers` → `CAMPAIGN_SHIFT_OVER_MAX` một lần; về ≤ max thì xoá dấu để lần vượt sau báo tiếp (BR-172).
 - `sendRegistrationDigests()`: sau `CAMPAIGN_REGISTRATION_DIGEST_HOUR` (mặc định 20h giờ VN), bản tin đăng ký hằng ngày cho manager (F28, BR-174).
-- **File:** `campaign-lifecycle.service.ts > startDueCampaigns(), expireOverdue(), deleteStaleDrafts(), notifyExpired()`, `INC/modules/campaign/campaign_registration/registration-digest.ts` (BR-186).
+- **File:** `campaign-lifecycle.service.ts > startDueCampaigns(), expireOverdue(), deleteStaleDrafts(), notifyExpired()`, `INC/modules/campaign/campaign_registration/registration-digest.ts`, `staffing-alerts.ts` (BR-186).
 
 ### F28 — Tình nguyện viên đăng ký ca của chiến dịch
-Thay luồng xin tham gia có duyệt (spec 3.1). Đăng ký có hiệu lực ngay, không cần duyệt, không giới hạn số người; ai thực sự tham gia được xác nhận khi điểm danh.
+Thay luồng xin tham gia có duyệt (spec 3.1). Đăng ký có hiệu lực ngay, không cần duyệt, không giới hạn số người; chỉ để nhận thông báo và ước lượng số người, không ghi nhận vi phạm (spec -6). Ai thực sự tham gia được xác nhận khi điểm danh.
 1. Người dùng bấm "Tham gia" (hoặc "Sửa ca đã đăng ký"): `GET /api/v1/campaigns/:id/registration-options` trả:
    - các ca còn đăng ký được (bật, chưa bắt đầu) cộng các ca người đó đang giữ;
    - mỗi ca: điểm tập trung, giờ ca, giờ tập trung, số đã đăng ký / tối thiểu – tối đa, `shortBy`, `overMax`, `registeredByMe`, `conflicts[]` (ca khác campaign của người đó bị chồng giờ);
-   - điều kiện tham gia, lưu ý an toàn, `absenceCount` / `manyAbsences` (BR-172), `registrable` + `reason` (`STATUS` / `NO_SHIFT`).
+   - điều kiện tham gia, lưu ý an toàn, `registrable` + `reason` (`STATUS` / `NO_SHIFT`).
 2. Người dùng tick một hoặc nhiều ca (kể cả nhiều ca cùng ngày), tích xác nhận điều kiện, rồi `PUT /api/v1/campaigns/:id/registrations/me {shiftIds, acceptConditions}`:
-   - thay toàn bộ tập ca của người đó trong một transaction; ca mới được kiểm theo BR-170, ca bị bỏ là rời ca (BR-173, `lateLeave` nếu < 24h);
-   - trả `{shiftIds, added, left, lateLeft, warnings[]}`; `warnings` (`OVERLAP` / `MANY_ABSENCES` / `OVER_MAX`) không chặn (BR-171).
-3. Người quản lý (BR-159): tab "Đăng ký" gọi `GET /api/v1/campaigns/:id/registrations` → từng ca kèm người đăng ký, số lần vắng và rời sát giờ trong 90 ngày.
+   - thay toàn bộ tập ca của người đó trong một transaction; ca mới được kiểm theo BR-170, ca bị bỏ là rời ca, tự do trước giờ bắt đầu và không ghi nhận gì (BR-173). Nút "Rời chiến dịch" gửi đúng các ca đã bắt đầu đang giữ, tức bỏ mọi ca chưa bắt đầu;
+   - trả `{shiftIds, added, left, warnings[]}`; `warnings` (`OVERLAP` / `OVER_MAX`) không chặn (BR-171).
+3. Người quản lý (BR-159), TNV đã đăng ký, admin: `GET /api/v1/campaigns/:id/registrations` → `{shifts, nextInviteAt}`, từng ca kèm người đăng ký, **chỉ để xem** (manager không gỡ, không chuyển ca TNV).
+3a. Ca thiếu người (spec 3.2): manager bấm "Mời người dân gần đây" → `POST /api/v1/campaigns/:id/invite-nearby`: tìm người dân trong 5 km quanh mọi điểm tập trung có ca mở (`nearby-users.ts > findNearbyUserIds()`: vị trí đã lưu + người từng báo cáo gần đó), trừ người tạo / manager / người đã đăng ký, gửi `CAMPAIGN_JOIN_INVITE` (payload `shortBy`); tối đa một lần mỗi 24h, giữ chỗ bằng compare-and-set trên `campaigns.last_nearby_invite_at` → `{invited}` (BR-174).
+3b. Manager tắt một ca chưa bắt đầu (ngày đó còn ca bật khác): `POST /api/v1/campaigns/:id/shifts/:shiftId/close` → transaction: ca `minVolunteers = 0`, `maxVolunteers = null`; đăng ký đang hiệu lực của ca → `leftAt`, `closedByShift = true`; log `EDIT / close_shift` → gửi `CAMPAIGN_SHIFT_CLOSED` cho các TNV đó, mời mở popup chọn ca khác → `{notified}` (BR-174). Gộp ca **[CHƯA HOÀN THIỆN]**.
 4. Không gửi thông báo theo từng lượt. Job vòng đời (F27b) gửi `CAMPAIGN_REGISTRATION_DIGEST` mỗi ngày một lần cho người tạo + manager của mỗi campaign có đăng ký mới, tách số theo ngày của campaign, rồi đánh dấu `managerNotifiedAt` (BR-174).
 - `GET /campaigns/volunteers/approved` giữ đường dẫn, trả mỗi người có ≥ 1 đăng ký ca (BR-158). Check-in QR và giao task yêu cầu đang đăng ký ca (BR-181, BR-177).
-- **File:** `INC/modules/campaign/campaign_registration/campaign_registration.service.ts`, `campaign_registration.repository.ts`, `registration-digest.ts`.
+- **File:** `INC/modules/campaign/campaign_registration/campaign_registration.service.ts > getOptions(), setMyShifts(), listByShift(), inviteNearby(), closeShift()`, `campaign_registration.repository.ts`, `registration-digest.ts`, `staffing-alerts.ts`, `staffing-shared.ts`, `INC/modules/campaign/nearby-users.ts`.
 
 ```mermaid
 sequenceDiagram
@@ -779,11 +783,17 @@ sequenceDiagram
   participant NS as notification
   actor M as Manager
   V->>INC: GET /campaigns/:id/registration-options
-  INC-->>V: ca mở, số đăng ký, trùng giờ, số lần vắng
+  INC-->>V: ca mở, số đăng ký, trùng giờ
   V->>INC: PUT /campaigns/:id/registrations/me {shiftIds, acceptConditions}
-  INC->>INC: thêm ca mới, rời ca bị bỏ (lateLeave nếu < 24h)
+  INC->>INC: thêm ca mới, rời ca bị bỏ (tự do, không ghi nhận)
   INC-->>V: shiftIds + warnings (không chặn)
-  M->>INC: GET /campaigns/:id/registrations
+  M->>INC: GET /campaigns/:id/registrations (chỉ xem)
+  Note over INC: job, 72h trước mỗi ngày và khi ca vượt max
+  INC->>NS: CAMPAIGN_SHIFT_UNDERSTAFFED / CAMPAIGN_SHIFT_OVER_MAX → người tạo + manager
+  M->>INC: POST /campaigns/:id/invite-nearby
+  INC->>NS: CAMPAIGN_JOIN_INVITE → người dân trong 5 km
+  M->>INC: POST /campaigns/:id/shifts/:shiftId/close
+  INC->>NS: CAMPAIGN_SHIFT_CLOSED → TNV của ca
   Note over INC: job, sau 20h mỗi ngày
   INC->>NS: CAMPAIGN_REGISTRATION_DIGEST → người tạo + manager
 ```
@@ -1067,6 +1077,10 @@ sequenceDiagram
 | VOLUNTEER_REQUEST | website | owner / LR / ADMIN tổ chức | Có người xin gia nhập tổ chức | `organization.service.ts` |
 | VOLUNTEER_APPROVED / REJECTED | website | người xin | Được duyệt hoặc bị từ chối gia nhập tổ chức | như trên |
 | CAMPAIGN_REGISTRATION_DIGEST | website | người tạo + manager của campaign | Mỗi ngày một lần sau `CAMPAIGN_REGISTRATION_DIGEST_HOUR`, khi campaign có đăng ký ca mới; payload `campaignId`, `total`, `breakdown` ("dd/MM: +n · …"), tiêu đề | `INC/modules/campaign/campaign_registration/registration-digest.ts > sendRegistrationDigests()` |
+| CAMPAIGN_SHIFT_UNDERSTAFFED | website | người tạo + manager | Job: ngày bắt đầu trong vòng 72h có ca dưới số tối thiểu, mỗi ngày một lần; payload `campaignId`, `day`, `shifts` ("Điểm 07:00: 2/5 · …"), tiêu đề | `INC/modules/campaign/campaign_registration/staffing-alerts.ts > sendUnderstaffedAlerts()` |
+| CAMPAIGN_SHIFT_OVER_MAX | website | người tạo + manager | Job: ca chưa bắt đầu vượt `maxVolunteers` (một lần, báo lại nếu về ≤ max rồi vượt lần nữa); payload `day`, `shift`, `registered`, `max` | `staffing-alerts.ts > sendOverMaxAlerts()` |
+| CAMPAIGN_JOIN_INVITE | website | người dân trong 5 km quanh các điểm tập trung (trừ người tạo, manager, người đã đăng ký) | Manager bấm mời lại (tối đa một lần mỗi 24h); payload `campaignId`, `shortBy`, tiêu đề | `campaign_registration.service.ts > inviteNearby()` |
+| CAMPAIGN_SHIFT_CLOSED | website (bỏ qua tắt thông báo) | TNV đang đăng ký ca bị tắt | Manager tắt ca; payload `day`, `shift`, tiêu đề; mời chọn ca khác | `campaign_registration.service.ts > closeShift()` |
 | CAMPAIGN_PENDING_REVIEW | website | user id trong `CAMPAIGN_ADMIN_NOTIFY_USER_IDS` | Gửi duyệt / nộp lại campaign | `campaign-lifecycle.service.ts > submit() → notifySubmitted()` |
 | CAMPAIGN_CREATED | website | owner + manager của campaign (trừ người gửi) | Gửi duyệt lần đầu | như trên |
 | CAMPAIGN_APPROVED | website | owner, manager, thành viên active của tổ chức | Admin duyệt campaign | `campaign-lifecycle.service.ts > review() → notifyReviewed()` |

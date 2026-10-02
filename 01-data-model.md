@@ -182,7 +182,7 @@ erDiagram
     uuid shiftId FK
     uuid userId
     datetime leftAt "null = đang hiệu lực"
-    bool lateLeave
+    bool closedByShift
     datetime managerNotifiedAt
   }
   Sos {
@@ -316,6 +316,7 @@ erDiagram
 | safetyNotes | text? | | Dụng cụ, trang phục, rủi ro |
 | requirements | jsonb? | | `{minAge, skills[], bringOwnTools}`; difficulty ≥ 3 thì mặc định minAge 18 |
 | minVolunteersReason | text? | | Lý do khi tổng TNV tối thiểu của một ngày thấp hơn mức gợi ý của độ khó; bắt buộc khi đó lúc gửi duyệt (BR-164) |
+| lastNearbyInviteAt | timestamp? | | Lần cuối manager mời lại người dân gần đó (`POST /:id/invite-nearby`); mời lại cách nhau ≥ 24h (spec 3.2) |
 | revisionDeadline | datetime? | | Hạn nộp lại khi NEEDS_REVISION (19) = lúc yêu cầu chỉnh sửa + 7 ngày |
 | submittedAt | datetime? | | Lần gửi duyệt gần nhất |
 | lastSubmittedSnapshot | jsonb? | | Nội dung đã gửi duyệt lần trước; nộp lại thì diff với bản này được ghi vào `campaign_status_logs.changes` |
@@ -327,11 +328,11 @@ erDiagram
 |---|---|---|
 | CampaignManager (`campaign_managers`) | campaignId, userId, assignedBy, assignedAt, deletedAt | PK kép (campaignId, userId) |
 | CampaignMeetingPoint (`campaign_meeting_points`) | campaignId, name? (≤120), latitude, longitude, detailAddress? (≤255), radiusKm, sortOrder, deletedAt | index campaignId; 1–5 điểm mỗi campaign (kiểm khi gửi duyệt). Giờ tập trung, số suất, người phụ trách nằm ở `campaign_shifts` |
-| CampaignDay (`campaign_days`) | campaignId (cascade), startAt, endAt, sortOrder | index campaignId, startAt; 1–7 ngày trong 14 ngày kể từ ngày đầu, mỗi ngày ≤ 12h và trong một ngày địa phương (kiểm khi gửi duyệt, BR-164). Lưu lại thì xoá hết và tạo lại |
-| CampaignShift (`campaign_shifts`) | campaignId, dayId (cascade), meetingPointId (cascade), startAt / endAt (`start_at` / `end_at`, NOT NULL, index startAt; khung giờ ca, mặc định = giờ của ngày, migration `20261002100000_shift_registrations` backfill từ `campaign_days`), gatherAt?, minVolunteers (`min_volunteers`, default 0, **0 = ca tắt**), maxVolunteers? (`max_volunteers`, tối đa dự kiến), leaderUserId? — hai số chỉ để cảnh báo, không chặn (migration `20261001100000_shift_min_max_volunteers` đổi tên từ `slots`) | **unique (dayId, meetingPointId)**; server luôn lưu đủ lưới ngày × điểm tập trung (ô không gửi = 0). Người phụ trách các ca đang bật thành `campaign_managers` khi gửi duyệt |
+| CampaignDay (`campaign_days`) | campaignId (cascade), startAt, endAt, sortOrder, understaffedNotifiedAt? (`understaffed_notified_at`, đã xét báo ca thiếu người 72h trước ngày, mỗi ngày một lần) | index campaignId, startAt; 1–7 ngày trong 14 ngày kể từ ngày đầu, mỗi ngày ≤ 12h và trong một ngày địa phương (kiểm khi gửi duyệt, BR-164). Lưu lại thì xoá hết và tạo lại |
+| CampaignShift (`campaign_shifts`) | campaignId, dayId (cascade), meetingPointId (cascade), startAt / endAt (`start_at` / `end_at`, NOT NULL, index startAt; khung giờ ca, mặc định = giờ của ngày, migration `20261002100000_shift_registrations` backfill từ `campaign_days`), gatherAt?, minVolunteers (`min_volunteers`, default 0, **0 = ca tắt**), maxVolunteers? (`max_volunteers`, tối đa dự kiến), leaderUserId?, overMaxNotifiedAt? (`over_max_notified_at`, đã báo vượt tối đa; đặt lại null khi về ≤ max) — hai số chỉ để cảnh báo, không chặn (migration `20261001100000_shift_min_max_volunteers` đổi tên từ `slots`) | **unique (dayId, meetingPointId)**; server luôn lưu đủ lưới ngày × điểm tập trung (ô không gửi = 0). Người phụ trách các ca đang bật thành `campaign_managers` khi gửi duyệt |
 | CampaignMeetingPointReport (`campaign_meeting_point_reports`) | meetingPointId (cascade), reportId, campaignId | PK kép (meetingPointId, reportId); **unique (campaignId, reportId)**. Lưu lựa chọn điểm rác của cả bản nháp, **không khoá** report; khoá thật vẫn là `reports.campaignId` + status 22 (một cột nên mỗi report chỉ thuộc một campaign) |
 | CampaignStatusLog (`campaign_status_logs`) | campaignId, type (`STATUS_CHANGE` \| `EDIT`), event (submit, approve, block, … hoặc `edit`), fromStatus?, toStatus?, actorId?, actorRole (`manager` \| `admin` \| `system`), reason?, changes (jsonb: diff `{field: {from, to}}`) | index (campaignId, createdAt); ghi ở `INC/modules/campaign/campaign-state-machine.ts > transitionCampaign(), logCampaignEdit()` |
-| CampaignShiftRegistration (`campaign_shift_registrations`) | campaignId (cascade), shiftId (FK **Restrict**), userId, createdAt, leftAt? (null = đang hiệu lực), lateLeave (default false; rời < 24h trước giờ bắt đầu ca), managerNotifiedAt? (đã tính vào bản tin hằng ngày cho manager) | **unique một phần (shift_id, user_id) WHERE left_at IS NULL** (viết bằng SQL trong migration, Prisma không biết); index (campaignId, leftAt), (userId, leftAt), shiftId. Đăng ký ca không duyệt, không giới hạn (BR-170..BR-174) |
+| CampaignShiftRegistration (`campaign_shift_registrations`) | campaignId (cascade), shiftId (FK **Restrict**), userId, createdAt, leftAt? (null = đang hiệu lực), closedByShift (`closed_by_shift`, default false; rời vì manager tắt ca, không phải tự rời), managerNotifiedAt? (đã tính vào bản tin hằng ngày cho manager). Cột `late_leave` đã bỏ ở migration `20261002120000_staffing_alerts` (spec -6: không ghi nhận vi phạm) | **unique một phần (shift_id, user_id) WHERE left_at IS NULL** (viết bằng SQL trong migration, Prisma không biết); index (campaignId, leftAt), (userId, leftAt), shiftId. Đăng ký ca không duyệt, không giới hạn (BR-170..BR-174) |
 | CampaignJoiningRequest (`campaign_joining_requests`) | campaignId?, volunteerId?, status (default 12) | **Không có unique** (campaignId, volunteerId). Bảng còn giữ nhưng server và web **không còn dùng** (đã thay bằng `campaign_shift_registrations`) |
 | CampaignAttendanceCheckIn (`campaign_attendance_check_ins`) | campaignId (cascade), userId, checkedInAt | **unique (campaignId, userId)** |
 | CampaignTask (`campaign_tasks`) | campaignId?, title/titleVi/titleEn, description*, priority (default 2; DTO 1..3), status (default 12), scheduledDate, scheduledTime varchar(50) | |

@@ -1,6 +1,6 @@
 # 00 — Tổng quan hệ thống Ecolink
 
-> Tài liệu này được viết dựa trên source code tại thời điểm 2026-10-01. Phạm vi gồm `ecolink-server/` (gateway, 5 service, 3 thư viện dùng chung) và `ecolink-client/` (web). Hai phần **không** thuộc phạm vi: `ecolink-mobile`, `ecolink-research-lab`, `ecolink-image-dedup-benchmark`.
+> Tài liệu này được viết dựa trên source code tại thời điểm 2026-10-02. Phạm vi gồm `ecolink-server/` (gateway, 5 service, 3 thư viện dùng chung) và `ecolink-client/` (web). Hai phần **không** thuộc phạm vi: `ecolink-mobile`, `ecolink-research-lab`, `ecolink-image-dedup-benchmark`.
 > Mọi đường dẫn tính từ thư mục gốc `/Users/ngoc/ecolink`.
 
 ## Mục lục tài liệu

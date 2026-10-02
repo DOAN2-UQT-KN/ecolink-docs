@@ -94,17 +94,20 @@ Thay cho yêu cầu tham gia có duyệt (`campaign_joining_requests` không cò
 ```mermaid
 stateDiagram-v2
   [*] --> Live: tick ca (hiệu lực ngay, không duyệt)
-  Live --> Left: bỏ tick ≥ 24h trước giờ bắt đầu ca
-  Live --> LeftLate: bỏ tick < 24h trước giờ bắt đầu (lateLeave = true)
+  Live --> Left: bỏ tick hoặc Rời chiến dịch, trước giờ bắt đầu ca
+  Live --> Closed: manager tắt ca (closedByShift = true)
   Left --> [*]
-  LeftLate --> [*]
+  Closed --> [*]
 ```
 
 | Từ → sang | Ai | Điều kiện | Side effect | File |
 |---|---|---|---|---|
-| (mới) → đang hiệu lực | User đăng nhập (kể cả manager) | BR-170: campaign UPCOMING / ACTIVE, ca bật và chưa bắt đầu, `acceptConditions = true`; không chặn theo số người, trùng giờ hay vắng nhiều | Trả `warnings[]`; được tính vào bản tin hằng ngày cho manager (`managerNotifiedAt`) | `INC/modules/campaign/campaign_registration/campaign_registration.service.ts > setMyShifts()` |
-| đang hiệu lực → đã rời | Chính người đăng ký (bỏ tick) | Ca chưa bắt đầu (ca đã bắt đầu được giữ nguyên) | `leftAt = now`; `lateLeave = true` nếu còn < `CAMPAIGN_FREE_LEAVE_HOURS` (24h) | `setMyShifts()` |
+| (mới) → đang hiệu lực | User đăng nhập (kể cả manager) | BR-170: campaign UPCOMING / ACTIVE, ca bật và chưa bắt đầu, `acceptConditions = true`; không chặn theo số người hay trùng giờ | Trả `warnings[]`; được tính vào bản tin hằng ngày cho manager (`managerNotifiedAt`) | `INC/modules/campaign/campaign_registration/campaign_registration.service.ts > setMyShifts()` |
+| đang hiệu lực → đã rời | Chính người đăng ký (bỏ tick, hoặc nút "Rời chiến dịch") | Ca chưa bắt đầu (ca đã bắt đầu được giữ nguyên) | `leftAt = now`; không ghi nhận vi phạm (spec -6) | `setMyShifts()` |
+| đang hiệu lực → đã rời vì tắt ca | Manager (BR-159) | Ca bật, chưa bắt đầu, ngày còn ca bật khác (BR-174) | `leftAt = now`, `closedByShift = true`; `CAMPAIGN_SHIFT_CLOSED` cho TNV | `closeShift()` |
 | đã rời → (mới) | Chính người đó | Như đăng ký mới | Tạo dòng mới; unique một phần `(shift_id, user_id) WHERE left_at IS NULL` | `setMyShifts()` |
+
+Ngoài dòng đăng ký, job vòng đời còn đặt hai dấu báo số người (BR-172): `campaign_days.understaffed_notified_at` (đã xét thiếu người 72h trước ngày, một lần) và `campaign_shifts.over_max_notified_at` (đã báo vượt max; xoá khi về ≤ max).
 
 ## 4. Task của campaign (`campaign_tasks.status`)
 
