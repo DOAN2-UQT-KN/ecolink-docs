@@ -802,9 +802,11 @@ sequenceDiagram
 - `POST /campaigns/:id/add-managers {userIds[]}`, `POST /:id/remove-manager`, `GET /:id/managers`.
 - Người được làm: người quản lý campaign (người tạo, manager hiện tại, LR / OWNER của tổ chức — BR-159).
 - Người được thêm phải là thành viên active của tổ chức sở hữu campaign, nếu không → 422 `CAMPAIGN_MANAGER_NOT_MEMBER` (BR-155). Thêm lại người từng bị gỡ thì khôi phục dòng cũ. Không gỡ được người tạo → 422 `CANNOT_REMOVE_CAMPAIGN_CREATOR` (BR-156).
-- Rời hoặc bị gỡ khỏi tổ chức: dòng manager của người đó ở mọi campaign của tổ chức bị xoá mềm cùng transaction (BR-157).
-- **Client:** thẻ Managers ở tab thành viên của `/campaigns/:id` có nút "Add manager" (dialog `AutoCompleteUser` theo tổ chức của campaign, chỉ chọn được thành viên chưa là manager) và icon gỡ trên từng manager trừ người tạo, chỉ khi `can_manage_campaign`.
-- **File:** `INC/modules/campaign/campaign_manager/campaign_manager.service.ts`, `campaign_manager.repository.ts > removeFromOrganizationCampaigns()`.
+- Gỡ manager đang phụ trách ca chưa kết thúc → 409 `CAMPAIGN_MANAGER_LEADS_SHIFTS` kèm danh sách ca; gán người khác trước (BR-156).
+- Người phụ trách ca phải thuộc đội quản lý: người tạo, manager, LR / OWNER (BR-350). Đổi người phụ trách: `PUT /campaigns/:id/shifts/:shiftId/leader {leaderUserId}` (BR-351).
+- Rời hoặc bị gỡ khỏi tổ chức, cùng transaction (BR-157): dòng manager ở mọi campaign của tổ chức bị xoá mềm; campaign người đó tạo chuyển cho owner lâu năm nhất (log `transfer_creator`, `CAMPAIGN_CREATOR_TRANSFERRED`); ca chưa kết thúc người đó phụ trách bị bỏ người phụ trách (log `clear_shift_leader`, `CAMPAIGN_SHIFT_LEADER_REMOVED` cho đội). Owner hạ vai chỉ mất ca của campaign mà người đó không còn trong đội.
+- **Client:** tab Managers của `/campaigns/:id` có nút "Add manager" (dialog `AutoCompleteUser` theo tổ chức của campaign, chỉ chọn được thành viên chưa là manager) và icon gỡ trên từng manager trừ người tạo, chỉ khi `can_manage_campaign`; manager đang phụ trách ca sắp tới thì dialog gỡ liệt kê ca (link sang trang ca) và khoá nút gỡ. Trang ca có nút đổi người phụ trách; ca thiếu người phụ trách hiện nhãn đỏ "Cần gán người phụ trách".
+- **File:** `INC/modules/campaign/campaign_manager/campaign_manager.service.ts > removeManager(), assertLeadsNoShifts(), setShiftLeader()`, `campaign_manager/campaign-team.ts`, `campaign_manager/campaign-team-cleanup.ts > onMemberGone(), onRightsReduced()`.
 
 ### F30 — Quản lý task
 1. `POST /campaigns/:id/tasks` (canManage) → task TODO (21), priority 1..3.
@@ -1081,6 +1083,8 @@ sequenceDiagram
 | CAMPAIGN_SHIFT_OVER_MAX | website | người tạo + manager | Job: ca chưa bắt đầu vượt `maxVolunteers` (một lần, báo lại nếu về ≤ max rồi vượt lần nữa); payload `day`, `shift`, `registered`, `max` | `staffing-alerts.ts > sendOverMaxAlerts()` |
 | CAMPAIGN_JOIN_INVITE | website | người dân trong 5 km quanh các điểm tập trung (trừ người tạo, manager, người đã đăng ký) | Manager bấm mời lại (tối đa một lần mỗi 24h); payload `campaignId`, `shortBy`, tiêu đề | `campaign_registration.service.ts > inviteNearby()` |
 | CAMPAIGN_SHIFT_CLOSED | website (bỏ qua tắt thông báo) | TNV đang đăng ký ca bị tắt | Manager tắt ca; payload `day`, `shift`, tiêu đề; mời chọn ca khác | `campaign_registration.service.ts > closeShift()` |
+| CAMPAIGN_CREATOR_TRANSFERRED | website (bỏ qua tắt thông báo) | Owner nhận vai người tạo (`forYou`); các manager còn lại (thông báo riêng) | Người tạo rời / bị gỡ khỏi tổ chức (BR-157); payload tiêu đề | `campaign-team-cleanup.ts > onMemberGone()` → outbox `WEBSITE_NOTIFICATION` |
+| CAMPAIGN_SHIFT_LEADER_REMOVED | website (bỏ qua tắt thông báo) | Người tạo và manager của campaign | Người phụ trách ca rời tổ chức hoặc không còn trong đội (BR-157); payload `shifts`, tiêu đề | `campaign-team-cleanup.ts > onMemberGone(), onRightsReduced()` → outbox `WEBSITE_NOTIFICATION` |
 | CAMPAIGN_PENDING_REVIEW | website | user id trong `CAMPAIGN_ADMIN_NOTIFY_USER_IDS` | Gửi duyệt / nộp lại campaign | `campaign-lifecycle.service.ts > submit() → notifySubmitted()` |
 | CAMPAIGN_CREATED | website | owner + manager của campaign (trừ người gửi) | Gửi duyệt lần đầu | như trên |
 | CAMPAIGN_APPROVED | website | owner, manager, thành viên active của tổ chức | Admin duyệt campaign | `campaign-lifecycle.service.ts > review() → notifyReviewed()` |

@@ -180,7 +180,7 @@ Cột **Owner tổ chức** là thành viên vai `LEGAL_REPRESENTATIVE` / `OWNER
 | Xoá campaign | ❌ | ✅ | ✅ | ❌ | ❌ | ❌ | `assertCanDelete()`; chỉ 4 / 12 / 19 / 2 / 20 (409 `CAMPAIGN_NOT_DELETABLE`) |
 | Xem lịch sử (`GET /:id/history`) | ❌ | ✅ | ✅ | ✅ | ❌ | ✅ | `campaign-lifecycle.service.ts > getHistory()` |
 | Duyệt, yêu cầu chỉnh sửa, chặn hoặc ban (`PUT /:id/review`, alias `/verify`) | ❌ | ❌ | ❌ | ❌ | ❌ | ⚠️ trừ campaign của tổ chức mà admin là thành viên (403 `CAMPAIGN_REVIEW_CONFLICT_OF_INTEREST`) | `campaign.controller.ts > reviewCampaign` (JWT role admin), `campaign-lifecycle.service.ts > review()` |
-| Thêm hoặc gỡ manager | ❌ | ✅ | ✅ | ✅ | ❌ | ❌ | `assertCanManage()`; người được thêm phải là thành viên (422 `CAMPAIGN_MANAGER_NOT_MEMBER`); không gỡ được người tạo (422 `CANNOT_REMOVE_CAMPAIGN_CREATOR`) |
+| Thêm hoặc gỡ manager | ❌ | ✅ | ✅ | ✅ | ❌ | ❌ | `assertCanManage()`; người được thêm phải là thành viên (422 `CAMPAIGN_MANAGER_NOT_MEMBER`); không gỡ được người tạo (422 `CANNOT_REMOVE_CAMPAIGN_CREATOR`); không gỡ được manager đang phụ trách ca chưa kết thúc, trừ LR / OWNER (409 `CAMPAIGN_MANAGER_LEADS_SHIFTS`, BR-156) |
 | Tạo, sửa, xoá, giao task | ❌ | ✅ | ✅ | ✅ | ❌ | ❌ | `canManageCampaign()` → `campaignAccessService.canManage()` |
 | Cập nhật kết quả task | ❌ | ✅ | ✅ | ✅ | ⚠️ (task được giao) | ❌ | `updateTaskResult()` |
 | Đổi status task qua `/status` | ❌ | | | | ⚠️ (task được giao) | ❌ | `updateTaskStatusByVolunteer()` |
@@ -188,6 +188,7 @@ Cột **Owner tổ chức** là thành viên vai `LEGAL_REPRESENTATIVE` / `OWNER
 | Xem đăng ký theo ca (`GET /:id/registrations`, chỉ xem) | ❌ | ✅ | ✅ | ✅ | ✅ (đang đăng ký ca) | ❌ | `campaign_registration.service.ts > listByShift()` → `assertCanViewVolunteers()` |
 | Mời lại người dân gần đây (`POST /:id/invite-nearby`) | ❌ | ✅ | ✅ | ✅ | ❌ | ❌ | `inviteNearby()` → `assertCanManage()`; 24h một lần (BR-174) |
 | Tắt ca (`POST /:id/shifts/:shiftId/close`) | ❌ | ✅ | ✅ | ✅ | ❌ | ❌ | `closeShift()` → `assertCanManage()` (BR-174) |
+| Đổi người phụ trách ca (`PUT /:id/shifts/:shiftId/leader`) | ❌ | ✅ | ✅ | ✅ | ❌ | ❌ | `setShiftLeader()` → `assertCanManage()`; người mới phải thuộc đội quản lý = người tạo, manager, LR / OWNER (BR-350, BR-351) |
 | Gỡ hoặc chuyển ca của TNV | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | Không có (spec -6: danh sách đăng ký chỉ để xem; TNV tự rời) |
 | Xem danh sách volunteer (`/volunteers/approved`) | ❌ | ✅ | ✅ | ✅ | ✅ (đang đăng ký ca) | ✅ | `assertCanViewVolunteers()` |
 | Tạo QR điểm danh | ❌ | ✅ | ✅ | ✅ | ❌ | ❌ | `canManageCampaign()` |

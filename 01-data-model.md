@@ -638,7 +638,7 @@ Vòng đời campaign dùng tên riêng trong `DC/campaign-lifecycle.ts > Campai
 ### 6.3 Notification (`notification-service/prisma/schema.prisma`, `ecolink-server/shared/da2-constants/src/notification-preferences.ts`)
 
 - `NotificationType`: `EMAIL`, `WEBSITE` (in-app).
-- `NotificationKind` (47 giá trị). Bảng dưới liệt kê từng kind, key preference tương ứng và nơi phát:
+- `NotificationKind` (55 giá trị). Bảng dưới liệt kê từng kind, key preference tương ứng và nơi phát:
 
 | Kind | Preference key | Có nơi phát? |
 |---|---|---|
@@ -657,6 +657,9 @@ Vòng đời campaign dùng tên riêng trong `DC/campaign-lifecycle.ts > Campai
 | ORG_INVITATION_PENDING, ORG_INVITATION_REJECTED, ORG_MEMBERSHIP_CHANGED (website; migration `20260926130000_notification_org_membership_kinds`) | (luôn gửi) | Có |
 | ORG_OWNER_CHANGE_APPROVAL_REQUEST, ORG_OWNER_REMOVAL_PROPOSED (website + email theo `userId`), ORG_OWNER_CHANGE_DECIDED, ORG_OWNER_LEFT (website); migration `20260926160000_notification_owner_change_kinds` | (luôn gửi) | Có |
 | REPORT_APPROVED, REPORT_REJECTED | (luôn gửi) | Có |
+| CAMPAIGN_REGISTRATION_DIGEST, CAMPAIGN_SHIFT_UNDERSTAFFED, CAMPAIGN_SHIFT_OVER_MAX (migration `20261002100000_campaign_registration_digest_kind`, `20261002120000_staffing_kinds`) | volunteerRequest | Có |
+| CAMPAIGN_JOIN_INVITE (migration `20261002120000_staffing_kinds`) | campaignNearbyVerify | Có |
+| CAMPAIGN_SHIFT_CLOSED (migration `20261002120000_staffing_kinds`); CAMPAIGN_CREATOR_TRANSFERRED, CAMPAIGN_SHIFT_LEADER_REMOVED (migration `20261002140000_campaign_team_kinds`) | (luôn gửi) | Có |
 | RESET_PASSWORD, GENERIC | (luôn gửi) | Không |
 
 Các key preference (tất cả mặc định `true`): `campaignNew`, `campaignNearbyVerify`, `campaignDone`, `campaignCompletionRejected`, `volunteerRequest`, `reportStatus`.
@@ -685,7 +688,7 @@ Các key preference (tất cả mặc định `true`): `campaignNew`, `campaignN
 | `MediaResourceType` | REPORT, USER, REPORT_RESULT, AI_PREDICT, OTHER | như trên |
 | `MediaFileStage` | BEFORE, AFTER | Không dùng |
 | `AppLocale` | `en`, `vi` | `da2-constants/src/i18n.ts` |
-| Outbox `OutboxEventType` | REPORT_COMPLETION_GREEN_POINTS, CAMPAIGN_COMPLETION_GREEN_POINTS, REPORT_VOTE_MILESTONE_GREEN_POINTS, CAMPAIGN_FACEBOOK_RECOGNITION, ORG_OWNER_ONBOARD | `incident-service/src/outbox/outbox.types.ts` |
+| Outbox `OutboxEventType` | REPORT_COMPLETION_GREEN_POINTS, CAMPAIGN_COMPLETION_GREEN_POINTS, REPORT_VOTE_MILESTONE_GREEN_POINTS, CAMPAIGN_FACEBOOK_RECOGNITION, ORG_OWNER_ONBOARD, WEBSITE_NOTIFICATION | `incident-service/src/outbox/outbox.types.ts` |
 | Job type (incident) | ANALYZE_REPORT, TRANSLATE_TEXT | `incident-service/src/constants/job-type.enum.ts` |
 | Job type (reward) | CAMPAIGN_COMPLETION_GREEN_POINTS, REPORT_COMPLETION_GREEN_POINTS, REPORT_VOTE_MILESTONE_GREEN_POINTS, UPVOTE_ADDING_GREEN_POINTS, REFERRAL_ADDING_GREEN_POINTS, CAMPAIGN_FACEBOOK_RECOGNITION, TRANSLATE_TEXT | reward-service `src/queue/*` |
 | ai `ChatMessageRole` | system, user, assistant, tool | `ai-service/app/db/models.py` |
