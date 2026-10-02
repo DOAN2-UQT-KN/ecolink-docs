@@ -771,7 +771,7 @@ Thay luồng xin tham gia có duyệt (spec 3.1). Đăng ký có hiệu lực ng
    - trả `{shiftIds, added, left, warnings[]}`; `warnings` (`OVERLAP` / `OVER_MAX`) không chặn (BR-171).
 3. Người quản lý (BR-159), TNV đã đăng ký, admin: `GET /api/v1/campaigns/:id/registrations` → `{shifts, nextInviteAt}`, từng ca kèm người đăng ký, **chỉ để xem** (manager không gỡ, không chuyển ca TNV).
 3a. Ca thiếu người (spec 3.2): manager bấm "Mời người dân gần đây" → `POST /api/v1/campaigns/:id/invite-nearby`: tìm người dân trong 5 km quanh mọi điểm tập trung có ca mở (`nearby-users.ts > findNearbyUserIds()`: vị trí đã lưu + người từng báo cáo gần đó), trừ người tạo / manager / người đã đăng ký, gửi `CAMPAIGN_JOIN_INVITE` (payload `shortBy`); tối đa một lần mỗi 24h, giữ chỗ bằng compare-and-set trên `campaigns.last_nearby_invite_at` → `{invited}` (BR-174).
-3b. Manager tắt một ca chưa bắt đầu (ngày đó còn ca bật khác): `POST /api/v1/campaigns/:id/shifts/:shiftId/close` → transaction: ca `minVolunteers = 0`, `maxVolunteers = null`; đăng ký đang hiệu lực của ca → `leftAt`, `closedByShift = true`; log `EDIT / close_shift` → gửi `CAMPAIGN_SHIFT_CLOSED` cho các TNV đó, mời mở popup chọn ca khác → `{notified}` (BR-174). Gộp ca **[CHƯA HOÀN THIỆN]**.
+3b. Manager tắt một ca chưa bắt đầu (ngày đó còn ca bật khác): `POST /api/v1/campaigns/:id/shifts/:shiftId/close` → transaction: ca `minVolunteers = 0`, `maxVolunteers = null`; đăng ký đang hiệu lực của ca → `leftAt`, `closedByShift = true`; log `EDIT / close_shift`, và outbox `WEBSITE_NOTIFICATION` (cùng transaction) → relay của worker gửi `CAMPAIGN_SHIFT_CLOSED` cho các TNV đó, có thử lại nếu notification-service lỗi, mời mở popup chọn ca khác → `{notified}` (BR-174). Gộp ca **[CHƯA HOÀN THIỆN]**.
 4. Không gửi thông báo theo từng lượt. Job vòng đời (F27b) gửi `CAMPAIGN_REGISTRATION_DIGEST` mỗi ngày một lần cho người tạo + manager của mỗi campaign có đăng ký mới, tách số theo ngày của campaign, rồi đánh dấu `managerNotifiedAt` (BR-174).
 - `GET /campaigns/volunteers/approved` giữ đường dẫn, trả mỗi người có ≥ 1 đăng ký ca (BR-158). Check-in QR và giao task yêu cầu đang đăng ký ca (BR-181, BR-177).
 - **File:** `INC/modules/campaign/campaign_registration/campaign_registration.service.ts > getOptions(), setMyShifts(), listByShift(), inviteNearby(), closeShift()`, `campaign_registration.repository.ts`, `registration-digest.ts`, `staffing-alerts.ts`, `staffing-shared.ts`, `INC/modules/campaign/nearby-users.ts`.
@@ -793,7 +793,7 @@ sequenceDiagram
   M->>INC: POST /campaigns/:id/invite-nearby
   INC->>NS: CAMPAIGN_JOIN_INVITE → người dân trong 5 km
   M->>INC: POST /campaigns/:id/shifts/:shiftId/close
-  INC->>NS: CAMPAIGN_SHIFT_CLOSED → TNV của ca
+  INC->>NS: (outbox relay) CAMPAIGN_SHIFT_CLOSED → TNV của ca
   Note over INC: job, sau 20h mỗi ngày
   INC->>NS: CAMPAIGN_REGISTRATION_DIGEST → người tạo + manager
 ```
