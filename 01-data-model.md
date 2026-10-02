@@ -184,8 +184,6 @@ erDiagram
     datetime leftAt "null = đang hiệu lực"
     bool closedByShift
     datetime managerNotifiedAt
-    datetime reconfirmBy
-    bool reconfirmExpired
   }
   Sos {
     int id PK "autoincrement"
@@ -322,7 +320,6 @@ erDiagram
 | revisionDeadline | datetime? | | Hạn nộp lại khi NEEDS_REVISION (19) = lúc yêu cầu chỉnh sửa + 7 ngày |
 | submittedAt | datetime? | | Lần gửi duyệt gần nhất |
 | approvedAt | datetime? (`approved_at`) | | Lần admin duyệt đầu tiên (migration `20261002160000_campaign_approved_at`, backfill theo log `approve` hoặc `updated_at` của campaign đã qua duyệt). Có giá trị thì sửa sau này đi theo id và có thể đưa campaign về duyệt lại (BR-352). Migration `20261002180000_campaign_upcoming_backfill` chuyển các campaign ACTIVE 1 chưa tới ngày đầu (duyệt trước khi có UPCOMING) sang 27, log `backfill_upcoming` |
-| rescheduleCount | int (`reschedule_count`, default 0) | | Số lần đã dời lịch sau duyệt, tối đa `CAMPAIGN_RESCHEDULE_MAX` = 2 (BR-356; migration `20261003100000_campaign_reschedule`) |
 | lastSubmittedSnapshot | jsonb? | | Nội dung đã gửi duyệt lần trước; nộp lại thì diff với bản này được ghi vào `campaign_status_logs.changes` |
 | difficulty | int | default 1 | Level bên reward-service `difficulties.level` |
 | organizationId | uuid | NOT NULL, FK → organizations | |
@@ -336,7 +333,7 @@ erDiagram
 | CampaignShift (`campaign_shifts`) | campaignId, dayId (cascade), meetingPointId (cascade), startAt / endAt (`start_at` / `end_at`, NOT NULL, index startAt; khung giờ ca, mặc định = giờ của ngày, migration `20261002100000_shift_registrations` backfill từ `campaign_days`), gatherAt?, minVolunteers (`min_volunteers`, default 0, **0 = ca tắt**), maxVolunteers? (`max_volunteers`, tối đa dự kiến), leaderUserId?, overMaxNotifiedAt? (`over_max_notified_at`, đã báo vượt tối đa; đặt lại null khi về ≤ max) — hai số chỉ để cảnh báo, không chặn (migration `20261001100000_shift_min_max_volunteers` đổi tên từ `slots`) | **unique (dayId, meetingPointId)**; server luôn lưu đủ lưới ngày × điểm tập trung (ô không gửi = 0). Người phụ trách các ca đang bật thành `campaign_managers` khi gửi duyệt |
 | CampaignMeetingPointReport (`campaign_meeting_point_reports`) | meetingPointId (cascade), reportId, campaignId | PK kép (meetingPointId, reportId); **unique (campaignId, reportId)**. Lưu lựa chọn điểm rác của cả bản nháp, **không khoá** report; khoá thật vẫn là `reports.campaignId` + status 22 (một cột nên mỗi report chỉ thuộc một campaign) |
 | CampaignStatusLog (`campaign_status_logs`) | campaignId, type (`STATUS_CHANGE` \| `EDIT`), event (submit, approve, block, … hoặc `edit`), fromStatus?, toStatus?, actorId?, actorRole (`manager` \| `admin` \| `system`), reason?, changes (jsonb: diff `{field: {from, to}}`) | index (campaignId, createdAt); ghi ở `INC/modules/campaign/campaign-state-machine.ts > transitionCampaign(), logCampaignEdit()` |
-| CampaignShiftRegistration (`campaign_shift_registrations`) | campaignId (cascade), shiftId (FK **Restrict**), userId, createdAt, leftAt? (null = đang hiệu lực), closedByShift (`closed_by_shift`, default false; rời vì manager tắt ca, không phải tự rời), managerNotifiedAt? (đã tính vào bản tin hằng ngày cho manager), reconfirmBy? (`reconfirm_by`; ngày của ca bị dời, phải xác nhận trước hạn này), reconfirmExpired (`reconfirm_expired`, default false; rời vì không xác nhận kịp) — BR-358, migration `20261003100000_campaign_reschedule`, index một phần `(reconfirm_by) WHERE left_at IS NULL AND reconfirm_by IS NOT NULL`. Cột `late_leave` đã bỏ ở migration `20261002120000_staffing_alerts` (spec -6: không ghi nhận vi phạm) | **unique một phần (shift_id, user_id) WHERE left_at IS NULL** (viết bằng SQL trong migration, Prisma không biết); index (campaignId, leftAt), (userId, leftAt), shiftId. Đăng ký ca không duyệt, không giới hạn (BR-170..BR-174) |
+| CampaignShiftRegistration (`campaign_shift_registrations`) | campaignId (cascade), shiftId (FK **Restrict**), userId, createdAt, leftAt? (null = đang hiệu lực), closedByShift (`closed_by_shift`, default false; rời vì manager tắt ca, không phải tự rời), managerNotifiedAt? (đã tính vào bản tin hằng ngày cho manager). Cột `late_leave` đã bỏ ở migration `20261002120000_staffing_alerts` (spec -6: không ghi nhận vi phạm) | **unique một phần (shift_id, user_id) WHERE left_at IS NULL** (viết bằng SQL trong migration, Prisma không biết); index (campaignId, leftAt), (userId, leftAt), shiftId. Đăng ký ca không duyệt, không giới hạn (BR-170..BR-174) |
 | CampaignJoiningRequest (`campaign_joining_requests`) | campaignId?, volunteerId?, status (default 12) | **Không có unique** (campaignId, volunteerId). Bảng còn giữ nhưng server và web **không còn dùng** (đã thay bằng `campaign_shift_registrations`) |
 | CampaignAttendanceCheckIn (`campaign_attendance_check_ins`) | campaignId (cascade), userId, checkedInAt | **unique (campaignId, userId)** |
 | CampaignTask (`campaign_tasks`) | campaignId?, title/titleVi/titleEn, description*, priority (default 2; DTO 1..3), status (default 12), scheduledDate, scheduledTime varchar(50) | |
@@ -663,7 +660,7 @@ Vòng đời campaign dùng tên riêng trong `DC/campaign-lifecycle.ts > Campai
 | REPORT_APPROVED, REPORT_REJECTED | (luôn gửi) | Có |
 | CAMPAIGN_REGISTRATION_DIGEST, CAMPAIGN_SHIFT_UNDERSTAFFED, CAMPAIGN_SHIFT_OVER_MAX (migration `20261002100000_campaign_registration_digest_kind`, `20261002120000_staffing_kinds`) | volunteerRequest | Có |
 | CAMPAIGN_JOIN_INVITE (migration `20261002120000_staffing_kinds`) | campaignNearbyVerify | Có |
-| CAMPAIGN_SHIFT_CLOSED (migration `20261002120000_staffing_kinds`); CAMPAIGN_CREATOR_TRANSFERRED, CAMPAIGN_SHIFT_LEADER_REMOVED (migration `20261002140000_campaign_team_kinds`); CAMPAIGN_UPDATED_NEEDS_REVIEW, CAMPAIGN_REREVIEW_EXPIRED (migration `20261002160000_campaign_update_kinds`); CAMPAIGN_RESCHEDULED, CAMPAIGN_RECONFIRM_EXPIRED (migration `20261003100000_campaign_reschedule_kinds`) | (luôn gửi) | Có |
+| CAMPAIGN_SHIFT_CLOSED (migration `20261002120000_staffing_kinds`); CAMPAIGN_CREATOR_TRANSFERRED, CAMPAIGN_SHIFT_LEADER_REMOVED (migration `20261002140000_campaign_team_kinds`); CAMPAIGN_UPDATED_NEEDS_REVIEW, CAMPAIGN_REREVIEW_EXPIRED (migration `20261002160000_campaign_update_kinds`) | (luôn gửi) | Có |
 | RESET_PASSWORD, GENERIC | (luôn gửi) | Không |
 
 Các key preference (tất cả mặc định `true`): `campaignNew`, `campaignNearbyVerify`, `campaignDone`, `campaignCompletionRejected`, `volunteerRequest`, `reportStatus`.

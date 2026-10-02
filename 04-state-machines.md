@@ -87,8 +87,7 @@ stateDiagram-v2
 - `PUT /campaigns/:id` **không** đổi được status: body có `status` → 400 (validator). Sửa khi đang PENDING_REVIEW / NEEDS_REVISION ghi log `type=EDIT` (`logCampaignEdit()`).
 - Không còn đường BLOCKED 2 → ACTIVE 1 ("duyệt lại"). `PUT /:id/verify` (deprecated) chỉ là alias của `review`: status 1 → approve, status 2 → block/ban.
 - Không có code nào chuyển campaign sang LEGACY_IN_REVIEW (9). Trạng thái này chỉ còn trong điều kiện của mark-done.
-- Dời lịch (BR-356) không đổi trạng thái: chỉ ghi log `EDIT / reschedule`.
-- **[CHƯA HOÀN THIỆN]** (các đợt sau của đặc tả): huỷ chiến dịch đã duyệt; lựa chọn "huỷ hay chạy tiếp" khi khoá tổ chức cho campaign UPCOMING.
+- **[CHƯA HOÀN THIỆN]** (các đợt sau của đặc tả): sửa trường quan trọng sau khi duyệt → quay về Chờ duyệt, dời lịch, huỷ chiến dịch đã duyệt; lựa chọn "huỷ hay chạy tiếp" khi khoá tổ chức cho campaign UPCOMING.
 
 ## 3. Đăng ký ca của campaign (`campaign_shift_registrations`)
 
@@ -99,11 +98,6 @@ stateDiagram-v2
   [*] --> Live: tick ca (hiệu lực ngay, không duyệt)
   Live --> Left: bỏ tick hoặc Rời chiến dịch, trước giờ bắt đầu ca
   Live --> Closed: manager tắt ca (closedByShift = true)
-  Live --> Pending: ngày của ca bị dời (reconfirmBy = now + 24h)
-  Pending --> Live: TNV xác nhận hoặc lưu lại ca
-  Pending --> Expired: quá hạn (reconfirmExpired = true)
-  Pending --> Left: TNV bỏ ca
-  Expired --> [*]
   Left --> [*]
   Closed --> [*]
 ```
@@ -113,9 +107,6 @@ stateDiagram-v2
 | (mới) → đang hiệu lực | User đăng nhập (kể cả manager) | BR-170: campaign UPCOMING / ACTIVE, ca bật và chưa bắt đầu, `acceptConditions = true`; không chặn theo số người hay trùng giờ | Trả `warnings[]`; được tính vào bản tin hằng ngày cho manager (`managerNotifiedAt`) | `INC/modules/campaign/campaign_registration/campaign_registration.service.ts > setMyShifts()` |
 | đang hiệu lực → đã rời | Chính người đăng ký (bỏ tick, hoặc nút "Rời chiến dịch") | Ca chưa bắt đầu (ca đã bắt đầu được giữ nguyên) | `leftAt = now`; không ghi nhận vi phạm (spec -6) | `setMyShifts()` |
 | đang hiệu lực → đã rời vì tắt ca | Manager (BR-159) | Ca bật, chưa bắt đầu, ngày còn ca bật khác (BR-174) | `leftAt = now`, `closedByShift = true`; `CAMPAIGN_SHIFT_CLOSED` cho TNV | `closeShift()` |
-| đang hiệu lực → chờ xác nhận | Manager dời lịch (BR-356) | Ca thuộc ngày bị dời | `reconfirmBy = now + 24h`; `CAMPAIGN_RESCHEDULED` | `campaign-reschedule.ts > rescheduleCampaign()` |
-| chờ xác nhận → đang hiệu lực | Chính TNV | Trước khi job quét | `reconfirmBy = null` | `reconfirm()`, `setMyShifts()` |
-| chờ xác nhận → đã rời vì không xác nhận | Hệ thống (job 15 phút) | `reconfirmBy ≤ now`, ca chưa bắt đầu | `leftAt = now`, `reconfirmExpired = true`; `CAMPAIGN_RECONFIRM_EXPIRED` | `reconfirm-expiry.ts > expireReconfirmations()` |
 | đã rời → (mới) | Chính người đó | Như đăng ký mới | Tạo dòng mới; unique một phần `(shift_id, user_id) WHERE left_at IS NULL` | `setMyShifts()` |
 
 Ngoài dòng đăng ký, job vòng đời còn đặt hai dấu báo số người (BR-172): `campaign_days.understaffed_notified_at` (đã xét thiếu người 72h trước ngày, một lần) và `campaign_shifts.over_max_notified_at` (đã báo vượt max; xoá khi về ≤ max).
