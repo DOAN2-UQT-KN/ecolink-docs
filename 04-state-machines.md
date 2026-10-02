@@ -46,6 +46,7 @@ stateDiagram-v2
   DRAFT_4 --> PENDING_REVIEW_12: submit (manager)
   NEEDS_REVISION_19 --> PENDING_REVIEW_12: resubmit (manager)
   PENDING_REVIEW_12 --> UPCOMING_27: approve (admin)
+  UPCOMING_27 --> PENDING_REVIEW_12: edit_major (manager, sửa trường quan trọng)
   UPCOMING_27 --> ACTIVE_1: start (system, ngày đầu đã tới)
   UPCOMING_27 --> BLOCKED_2: ban (admin, lý do)
   PENDING_REVIEW_12 --> NEEDS_REVISION_19: request_revision (admin, lý do)
@@ -69,7 +70,8 @@ stateDiagram-v2
 | (tạo) | (mới) → DRAFT 4 | Thành viên có `CAMPAIGN_CREATE`, tổ chức status 1 | BR-150..BR-153 | Người tạo thành manager; lưu điểm tập kết và lựa chọn report (**không khoá** report); TRANSLATE_TEXT. Không gửi thông báo, không ghi log | `INC/modules/campaign/campaign.service.ts > createCampaign()` |
 | `submit` | DRAFT 4 → PENDING_REVIEW 12 | canManage | Giới hạn tổ chức (BR-163) và mọi rule nội dung (BR-164) kiểm lại trong transaction Serializable | Khoá report (21 → 22, BR-169); người tạo + trưởng điểm thành manager; lưu `submittedAt`, `lastSubmittedSnapshot`; thông báo CAMPAIGN_PENDING_REVIEW (admin trong env) và CAMPAIGN_CREATED (owner + manager) | `INC/modules/campaign/campaign-lifecycle.service.ts > submit()` |
 | `resubmit` | NEEDS_REVISION 19 → PENDING_REVIEW 12 | canManage | Như submit | Như submit, xoá `revisionDeadline`; diff với lần gửi trước ghi vào `changes`; chỉ báo admin (không gửi CAMPAIGN_CREATED) | `submit()` |
-| `approve` | PENDING_REVIEW 12 → UPCOMING 27 (Sắp diễn ra) | Admin không phải thành viên của tổ chức | — | Mở đăng ký ca (BR-170); giữ khoá report; xoá rejectReason; thông báo CAMPAIGN_APPROVED (owner, manager, thành viên) và CAMPAIGN_VERIFY_INVITE (người dân trong 5 km) | `campaign-lifecycle.service.ts > review()`, `campaign.service.ts > reviewCampaign()` |
+| `approve` | PENDING_REVIEW 12 → UPCOMING 27 (Sắp diễn ra) | Admin không phải thành viên của tổ chức | — | Mở đăng ký ca (BR-170); giữ khoá report; xoá rejectReason; đặt `approvedAt` lần đầu; thông báo CAMPAIGN_APPROVED (owner, manager, thành viên) và CAMPAIGN_VERIFY_INVITE (người dân trong 5 km) | `campaign-lifecycle.service.ts > review()`, `campaign.service.ts > reviewCampaign()` |
+| `edit_major` | UPCOMING 27 → PENDING_REVIEW 12 | canManage | Sửa trường quan trọng của campaign đã duyệt (BR-353) | Giữ khoá report và đăng ký; `changes` = diff trước / sau; `submittedAt`, `lastSubmittedSnapshot` đặt lại; outbox CAMPAIGN_UPDATED_NEEDS_REVIEW cho TNV; admin nhận CAMPAIGN_PENDING_REVIEW. Duyệt lại (`approve`) giữ `approvedAt`, không mời người dân, báo owner / manager / TNV | `campaign-post-approval-edit.ts > applyPostApprovalEdit()` |
 | `start` | UPCOMING 27 → ACTIVE 1 | system (job) | Có `campaign_days.startAt` ≤ now | Không gửi thông báo, không gỡ report; điểm danh và SOS chỉ mở từ ACTIVE | `campaign-lifecycle.service.ts > startDueCampaigns()`, `campaign-lifecycle.job.ts` |
 | `request_revision` | PENDING_REVIEW 12 → NEEDS_REVISION 19 | Admin (như trên) | Có lý do ≤ 5000 | rejectReason; `revisionDeadline` = now + 7 ngày; giữ khoá report; thông báo CAMPAIGN_REVISION_REQUESTED (người tạo + owner) | `review()` |
 | `block` | PENDING_REVIEW 12 / NEEDS_REVISION 19 → BLOCKED 2 | Admin (như trên) | Có lý do | Gỡ report (22 → 21); thông báo CAMPAIGN_BLOCKED (người tạo + owner) | `review()`, `releaseAllReports()` |

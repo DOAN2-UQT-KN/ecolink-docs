@@ -319,6 +319,7 @@ erDiagram
 | lastNearbyInviteAt | timestamp? | | Lần cuối manager mời lại người dân gần đó (`POST /:id/invite-nearby`); mời lại cách nhau ≥ 24h (spec 3.2) |
 | revisionDeadline | datetime? | | Hạn nộp lại khi NEEDS_REVISION (19) = lúc yêu cầu chỉnh sửa + 7 ngày |
 | submittedAt | datetime? | | Lần gửi duyệt gần nhất |
+| approvedAt | datetime? (`approved_at`) | | Lần admin duyệt đầu tiên (migration `20261002160000_campaign_approved_at`, backfill theo log `approve` hoặc `updated_at` của campaign đã qua duyệt). Có giá trị thì sửa sau này đi theo id và có thể đưa campaign về duyệt lại (BR-352) |
 | lastSubmittedSnapshot | jsonb? | | Nội dung đã gửi duyệt lần trước; nộp lại thì diff với bản này được ghi vào `campaign_status_logs.changes` |
 | difficulty | int | default 1 | Level bên reward-service `difficulties.level` |
 | organizationId | uuid | NOT NULL, FK → organizations | |
@@ -638,7 +639,7 @@ Vòng đời campaign dùng tên riêng trong `DC/campaign-lifecycle.ts > Campai
 ### 6.3 Notification (`notification-service/prisma/schema.prisma`, `ecolink-server/shared/da2-constants/src/notification-preferences.ts`)
 
 - `NotificationType`: `EMAIL`, `WEBSITE` (in-app).
-- `NotificationKind` (55 giá trị). Bảng dưới liệt kê từng kind, key preference tương ứng và nơi phát:
+- `NotificationKind` (57 giá trị). Bảng dưới liệt kê từng kind, key preference tương ứng và nơi phát:
 
 | Kind | Preference key | Có nơi phát? |
 |---|---|---|
@@ -659,7 +660,7 @@ Vòng đời campaign dùng tên riêng trong `DC/campaign-lifecycle.ts > Campai
 | REPORT_APPROVED, REPORT_REJECTED | (luôn gửi) | Có |
 | CAMPAIGN_REGISTRATION_DIGEST, CAMPAIGN_SHIFT_UNDERSTAFFED, CAMPAIGN_SHIFT_OVER_MAX (migration `20261002100000_campaign_registration_digest_kind`, `20261002120000_staffing_kinds`) | volunteerRequest | Có |
 | CAMPAIGN_JOIN_INVITE (migration `20261002120000_staffing_kinds`) | campaignNearbyVerify | Có |
-| CAMPAIGN_SHIFT_CLOSED (migration `20261002120000_staffing_kinds`); CAMPAIGN_CREATOR_TRANSFERRED, CAMPAIGN_SHIFT_LEADER_REMOVED (migration `20261002140000_campaign_team_kinds`) | (luôn gửi) | Có |
+| CAMPAIGN_SHIFT_CLOSED (migration `20261002120000_staffing_kinds`); CAMPAIGN_CREATOR_TRANSFERRED, CAMPAIGN_SHIFT_LEADER_REMOVED (migration `20261002140000_campaign_team_kinds`); CAMPAIGN_UPDATED_NEEDS_REVIEW, CAMPAIGN_REREVIEW_EXPIRED (migration `20261002160000_campaign_update_kinds`) | (luôn gửi) | Có |
 | RESET_PASSWORD, GENERIC | (luôn gửi) | Không |
 
 Các key preference (tất cả mặc định `true`): `campaignNew`, `campaignNearbyVerify`, `campaignDone`, `campaignCompletionRejected`, `volunteerRequest`, `reportStatus`.

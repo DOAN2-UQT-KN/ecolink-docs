@@ -188,6 +188,7 @@ Cột **Owner tổ chức** là thành viên vai `LEGAL_REPRESENTATIVE` / `OWNER
 | Xem đăng ký theo ca (`GET /:id/registrations`, chỉ xem) | ❌ | ✅ | ✅ | ✅ | ✅ (đang đăng ký ca) | ❌ | `campaign_registration.service.ts > listByShift()` → `assertCanViewVolunteers()` |
 | Mời lại người dân gần đây (`POST /:id/invite-nearby`) | ❌ | ✅ | ✅ | ✅ | ❌ | ❌ | `inviteNearby()` → `assertCanManage()`; 24h một lần (BR-174) |
 | Tắt ca (`POST /:id/shifts/:shiftId/close`) | ❌ | ✅ | ✅ | ✅ | ❌ | ❌ | `closeShift()` → `assertCanManage()` (BR-174) |
+| Sửa campaign đã duyệt (`PUT /:id`, UPCOMING hoặc đang duyệt lại) | ❌ | ✅ | ✅ | ✅ | ❌ | ❌ | `assertCanManage()`; ACTIVE trở đi không ai sửa được (BR-352); TNV còn đăng ký vẫn xem campaign đang duyệt lại (BR-355) |
 | Đổi người phụ trách ca (`PUT /:id/shifts/:shiftId/leader`) | ❌ | ✅ | ✅ | ✅ | ❌ | ❌ | `setShiftLeader()` → `assertCanManage()`; người mới phải thuộc đội quản lý = người tạo, manager, LR / OWNER (BR-350, BR-351) |
 | Gỡ hoặc chuyển ca của TNV | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | Không có (spec -6: danh sách đăng ký chỉ để xem; TNV tự rời) |
 | Xem danh sách volunteer (`/volunteers/approved`) | ❌ | ✅ | ✅ | ✅ | ✅ (đang đăng ký ca) | ✅ | `assertCanViewVolunteers()` |
