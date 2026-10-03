@@ -716,6 +716,7 @@ sequenceDiagram
 - **Đang diễn ra trở đi** (ACTIVE 1 và sau đó): `PUT /:id` luôn 409 `CAMPAIGN_NOT_EDITABLE`, kể cả trường tự do.
 - Không có luồng dời lịch riêng (spec 3.6 bỏ theo quyết định sản phẩm 2026-10-02): đổi giờ đi qua sửa như trên.
 - **Xoá:** `DELETE /campaigns/:id`, người tạo hoặc LR / OWNER của tổ chức, chỉ khi 4 / 12 / 19 / 2 / 20 (khác → 409 `CAMPAIGN_NOT_DELETABLE`). Campaign bị xoá mềm; report gắn với nó trở về TODO và `campaignId=null`.
+- **Huỷ (spec -7 3.6, BR-356):** `POST /campaigns/:id/cancel` `{reason}`, người tạo hoặc LR / OWNER. Campaign UPCOMING / ACTIVE, hoặc đã duyệt đang 12 / 19 → transaction Serializable: `transitionCampaign(event=cancel)` → CANCELLED 11 (`rejectReason`), `releaseAllReports()`, outbox `CAMPAIGN_CANCELLED` (`byOrganizer`) cho TNV còn đăng ký và đội quản lý. Không cấp điểm. Client: nút "Cancel campaign" (`CancelCampaignButton.tsx`) trên overview và trang chi tiết khi `can_cancel_campaign`; trang chi tiết hiện banner "đã huỷ" kèm lý do. Campaign đã duyệt còn TNV thì không xoá được (409 `CAMPAIGN_HAS_VOLUNTEERS`, BR-357); bảng `/campaigns/me` ẩn nút xoá với campaign đã duyệt.
 - **Lịch sử:** `GET /campaigns/:id/history` (người quản lý hoặc admin) trả các dòng `campaign_status_logs`.
 - **Client:** `/campaigns/:id/edit` dùng chung `CampaignForm` với trang tạo, mở được tới UPCOMING; lối vào giống Draft / Pending: nút Edit ở từng mục và "Edit campaign" trên màn overview `/campaigns/:id/overview`. Campaign đã duyệt chạy y như nháp (Save draft / Continue tự lưu), chỉ khác: lần lưu có trường quan trọng thì hỏi xác nhận trước khi đưa về chờ duyệt, giờ ngày / ca đã có bị khoá, các trường quan trọng có nhãn "Needs review again". Trang chi tiết có banner khi đang duyệt lại. `/campaigns/me` có cột thao tác Sửa / Gửi duyệt / Xoá theo trạng thái.
 - **File:** `campaign.service.ts > updateCampaign(), deleteCampaign()`, `campaign-post-approval-edit.ts > planPostApprovalEdit(), applyPostApprovalEdit()`, `campaign-lifecycle.service.ts > replaceSchedule(), syncReportLocks(), releaseAllReports(), getHistory(), notifyReReview()`, `campaign-access.service.ts > assertCanManage(), assertCanDelete()`.
@@ -763,8 +764,9 @@ sequenceDiagram
 - `deleteStaleDrafts()`: DRAFT có `updatedAt` quá 30 ngày → xoá mềm (bản nháp không khoá report).
 - `sendUnderstaffedAlerts()`: ngày bắt đầu trong vòng 72h (`CAMPAIGN_UNDERSTAFFED_NOTICE_HOURS`) có ca dưới số tối thiểu → `CAMPAIGN_SHIFT_UNDERSTAFFED` cho người tạo + manager; mỗi ngày xét một lần (`campaign_days.understaffed_notified_at`) (BR-172).
 - `sendOverMaxAlerts()`: ca chưa bắt đầu vượt `maxVolunteers` → `CAMPAIGN_SHIFT_OVER_MAX` một lần; về ≤ max thì xoá dấu để lần vượt sau báo tiếp (BR-172).
+- `sendShiftReminders()`: nhắc TNV 24h và 1h trước giờ tập trung của mỗi ngày đã đăng ký (`CAMPAIGN_SHIFT_REMINDER`, theo cài đặt `volunteerRequest`; dấu `reminded24hAt` / `reminded1hAt`) (BR-358).
 - `sendRegistrationDigests()`: sau `CAMPAIGN_REGISTRATION_DIGEST_HOUR` (mặc định 20h giờ VN), bản tin đăng ký hằng ngày cho manager (F28, BR-174).
-- **File:** `campaign-lifecycle.service.ts > startDueCampaigns(), expireOverdue(), deleteStaleDrafts(), notifyExpired()`, `INC/modules/campaign/campaign_registration/registration-digest.ts`, `staffing-alerts.ts` (BR-186).
+- **File:** `campaign-lifecycle.service.ts > startDueCampaigns(), expireOverdue(), deleteStaleDrafts(), notifyExpired()`, `INC/modules/campaign/campaign_registration/registration-digest.ts`, `staffing-alerts.ts`, `shift-reminders.ts` (BR-186).
 
 ### F28 — Tình nguyện viên đăng ký ca của chiến dịch
 Thay luồng xin tham gia có duyệt (spec 3.1). Đăng ký có hiệu lực ngay, không cần duyệt, không giới hạn số người; chỉ để nhận thông báo và ước lượng số người, không ghi nhận vi phạm (spec -6). Ai thực sự tham gia được xác nhận khi điểm danh.
@@ -1099,6 +1101,8 @@ sequenceDiagram
 | CAMPAIGN_REVISION_REQUESTED / CAMPAIGN_BLOCKED | website | người tạo + owner | Admin yêu cầu chỉnh sửa / chặn / ban | như trên |
 | CAMPAIGN_EXPIRED | website | người tạo | Job hết hạn duyệt | `campaign-lifecycle.service.ts > expireOverdue() → notifyExpired()` |
 | CAMPAIGN_CANCELLED | website | người tạo + owner | Admin khoá tổ chức, campaign 4 / 12 / 19 bị huỷ (BR-189) | `organization.service.ts > adminVerifyOrganization()` → `campaign-lifecycle.service.ts > notifyCancelledForLockedOrganization()` |
+| CAMPAIGN_CANCELLED (`byOrganizer = 1`) | website (bỏ qua tắt thông báo) | TNV còn đăng ký; đội quản lý trừ người huỷ | Người tạo / owner huỷ campaign (BR-356); payload `reason` | `campaign-lifecycle.service.ts > cancel()` → outbox `WEBSITE_NOTIFICATION` |
+| CAMPAIGN_SHIFT_REMINDER | website (theo `volunteerRequest`) | TNV | 24h / 1h trước giờ tập trung (BR-358); payload `hours`, `soon`, `day`, `gatherTime`, `meetingPoint`, `address`, `safetyNotes` | `shift-reminders.ts > sendShiftReminders()` |
 | CAMPAIGN_VERIFY_INVITE | website | người dân trong 5 km | Admin duyệt campaign | `campaign.service.ts > reviewCampaign() → notifyNearbyCitizensToJoinApprovedCampaign()` |
 | CAMPAIGN_COMPLETION_PENDING_ADMIN | website | user id trong env | Manager gửi hoàn thành | `submitCampaignCompletionForAdminApproval()` |
 | CAMPAIGN_COMPLETION_VERIFY_INVITE | website | người dân trong 5 km | Manager gửi hoàn thành | như trên |

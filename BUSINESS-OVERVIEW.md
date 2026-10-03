@@ -565,7 +565,7 @@ flowchart LR
 | → Hoàn thành | Quản trị viên | Tình nguyện viên: "hoàn thành" và điểm (nếu đã điểm danh); các owner: "được duyệt" |
 | → Quay lại hoạt động | Quản trị viên | Các owner: lý do từ chối |
 
-Đổi ngày giờ sau khi duyệt đi qua sửa chiến dịch (quay về chờ duyệt lại). Chưa hỗ trợ huỷ chiến dịch đã duyệt.
+Đổi ngày giờ sau khi duyệt đi qua sửa chiến dịch (quay về chờ duyệt lại). Người tạo hoặc owner huỷ được chiến dịch sắp hoặc đang diễn ra (bắt buộc lý do): điểm rác được trả lại, mọi tình nguyện viên được báo, không ai nhận điểm. Tình nguyện viên được nhắc lịch 24 giờ và 1 giờ trước giờ tập trung.
 
 ### 6.3 Đăng ký ca chiến dịch và yêu cầu gia nhập tổ chức
 Đăng ký ca chiến dịch không có bước duyệt: tick ca là có hiệu lực, bỏ tick là rời, tự do trước giờ bắt đầu và không ghi nhận vi phạm. Ca bị người quản lý tắt thì đăng ký của ca đó kết thúc và tình nguyện viên được báo. Người quản lý nhận bản tin hằng ngày.

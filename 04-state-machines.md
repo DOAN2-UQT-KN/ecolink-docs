@@ -58,6 +58,8 @@ stateDiagram-v2
   DRAFT_4 --> CANCELLED_11: cancel_org_locked (admin khoá tổ chức)
   PENDING_REVIEW_12 --> CANCELLED_11: cancel_org_locked
   NEEDS_REVISION_19 --> CANCELLED_11: cancel_org_locked
+  UPCOMING_27 --> CANCELLED_11: cancel (người tạo / owner)
+  ACTIVE_1 --> CANCELLED_11: cancel
   ACTIVE_1 --> PENDING_COMPLETION_7: submit_completion (manager, mọi task xong)
   LEGACY_IN_REVIEW_9 --> PENDING_COMPLETION_7: submit_completion (manager)
   PENDING_COMPLETION_7 --> COMPLETED_17: approve_completion (admin)
@@ -77,6 +79,7 @@ stateDiagram-v2
 | `block` | PENDING_REVIEW 12 / NEEDS_REVISION 19 → BLOCKED 2 | Admin (như trên) | Có lý do | Gỡ report (22 → 21); thông báo CAMPAIGN_BLOCKED (người tạo + owner) | `review()`, `releaseAllReports()` |
 | `ban` | UPCOMING 27 / ACTIVE 1 → BLOCKED 2 | Admin (như trên) | Có lý do; là `decision=block` trên campaign đang UPCOMING hoặc ACTIVE | Như block | `review()` |
 | `cancel_org_locked` | DRAFT 4 / PENDING_REVIEW 12 / NEEDS_REVISION 19 → CANCELLED 11 | admin (qua ban tổ chức) | Lý do = lý do ban tổ chức (BR-189) | Gỡ report; `rejectReason` = lý do; thông báo CAMPAIGN_CANCELLED cho người tạo + owner. Campaign UPCOMING / ACTIVE / 7 không bị đụng (chạy nốt; admin vẫn ban từng campaign). Mở khoá tổ chức không khôi phục | `campaign-lifecycle.service.ts > cancelForLockedOrganization()`, gọi trong `organization.service.ts > adminVerifyOrganization()` |
+| `cancel` | UPCOMING 27 / ACTIVE 1 → CANCELLED 11; PENDING_REVIEW 12 / NEEDS_REVISION 19 chỉ khi đã từng duyệt (`approvedAt`) | Người tạo hoặc LR / OWNER (BR-356) | Lý do bắt buộc | `rejectReason` = lý do; gỡ report; outbox CAMPAIGN_CANCELLED cho TNV còn đăng ký và đội quản lý; không cấp điểm | `campaign-lifecycle.service.ts > cancel()` |
 | `expire` | PENDING_REVIEW 12 / NEEDS_REVISION 19 → EXPIRED 20 | system (job) | Ngày đầu (`campaign_days.startAt`) đã tới, hoặc NEEDS_REVISION quá `revisionDeadline` (BR-186) | Gỡ report; thông báo CAMPAIGN_EXPIRED cho người tạo; `reason` = `start_passed` / `revision_overdue` | `campaign-lifecycle.service.ts > expireOverdue()`, `INC/modules/campaign/campaign-lifecycle.job.ts` |
 | `submit_completion` | ACTIVE 1 / LEGACY_IN_REVIEW 9 → PENDING_COMPLETION 7 | canManage | Mọi task đều 17 | Thông báo CAMPAIGN_COMPLETION_PENDING_ADMIN (admin trong env) và COMPLETION_VERIFY_INVITE (người dân gần) | `submitCampaignCompletionForAdminApproval()` |
 | `approve_completion` | PENDING_COMPLETION 7 → COMPLETED 17 | Admin | Mọi task 17; có tier | Report và SOS → 17; outbox CAMPAIGN_COMPLETION_GREEN_POINTS; thông báo CAMPAIGN_DONE và APPROVED_BY_ADMIN | `adminFinalizeCampaignCompletion()` |
@@ -87,7 +90,7 @@ stateDiagram-v2
 - `PUT /campaigns/:id` **không** đổi được status: body có `status` → 400 (validator). Sửa khi đang PENDING_REVIEW / NEEDS_REVISION ghi log `type=EDIT` (`logCampaignEdit()`).
 - Không còn đường BLOCKED 2 → ACTIVE 1 ("duyệt lại"). `PUT /:id/verify` (deprecated) chỉ là alias của `review`: status 1 → approve, status 2 → block/ban.
 - Không có code nào chuyển campaign sang LEGACY_IN_REVIEW (9). Trạng thái này chỉ còn trong điều kiện của mark-done.
-- **[CHƯA HOÀN THIỆN]** (các đợt sau của đặc tả): huỷ chiến dịch đã duyệt; lựa chọn "huỷ hay chạy tiếp" khi khoá tổ chức cho campaign UPCOMING.
+- **[CHƯA HOÀN THIỆN]** (các đợt sau của đặc tả): lựa chọn "huỷ hay chạy tiếp" khi khoá tổ chức cho campaign UPCOMING.
 
 ## 3. Đăng ký ca của campaign (`campaign_shift_registrations`)
 
