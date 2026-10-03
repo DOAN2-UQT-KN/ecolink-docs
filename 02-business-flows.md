@@ -830,15 +830,16 @@ sequenceDiagram
 ### F31 — Điểm danh theo ca (QR động, GPS)
 Spec -8 4.1. Điểm danh theo **từng ca**, check-in và check-out; thay QR theo campaign cũ (hai endpoint cũ `POST /campaigns/:id/attendance-qr`, `POST /campaigns/:id/attendance-check-in` luôn trả 410 `ATTENDANCE_LEGACY_GONE`, bảng `campaign_attendance_check_ins` chỉ còn là lịch sử — BR-367).
 1. Người phụ trách ca hoặc người quản lý campaign mở phiên: `POST /campaigns/:id/shifts/:shiftId/attendance/session` → `{session: {id, openedBy, expiresAt}}` (đang có phiên mở thì trả phiên đó). Phiên ≤ 60 phút, không quá giờ kết thúc ca + 30 phút, mở lại được. Chỉ khi ca bật, campaign UPCOMING / ACTIVE, now trong [min(gatherAt, startAt) − 30 phút, endAt + 30 phút], ngoài ra 409 `ATTENDANCE_NOT_OPEN` (BR-359).
-2. Màn hình người phụ trách gọi `GET /campaigns/:id/shifts/:shiftId/attendance/qr` mỗi `periodSec` (20 giây) → `{token, periodSec, sessionId, sessionExpiresAt}`; token là JWT `{purpose: "shift_attendance_qr_v2", campaignId, shiftId, sessionId, ts}` ký bằng `JWT_SECRET`, không có `exp`. QR mã hoá `${origin}/campaigns/:id?attendance=<jwt>` (BR-360).
-3. Người tham gia quét bằng camera, web mở link, lấy GPS chính xác rồi `POST /campaigns/:id/attendance/scan {token, latitude, longitude, accuracy, scannedAt?}`. Server kiểm theo thứ tự (BR-361): `scannedAt` không ở tương lai quá 1 phút; chữ ký + purpose, `0 ≤ scannedAt − ts ≤ 2 chu kỳ` (lệch đồng hồ 5 giây) → 422 `ATTENDANCE_QR_INVALID`; đúng campaign; phiên còn mở lúc quét → 409 `ATTENDANCE_NOT_OPEN`; khung giờ ca; người quét là người phụ trách ca hoặc người mở phiên → 403 `ATTENDANCE_SELF_CHECK_IN`; `accuracy` > 50 m → 422 `ATTENDANCE_GPS_INACCURATE`; cách điểm tập trung của ca > 50 m → 422 `ATTENDANCE_OUTSIDE_AREA {distanceM}`.
-4. Kết quả (BR-362): lần đầu = check-in (không sau giờ kết thúc ca; ghi `preRegistered`, người chưa đăng ký vẫn vào được); lần sau ≥ 10 phút sau check-in = check-out (`checkOutMethod = scan`), sớm hơn → `already_checked_in`, đã ra → `already_checked_out`. Response `{action, shiftId, checkInAt, checkOutAt, eligible}`. Client gửi `scannedAt` khi đồng bộ offline (dành cho app mobile; web chỉ quét online), request tới trễ hơn một chu kỳ thì gắn `offline`.
+2. Màn hình người phụ trách gọi `GET /campaigns/:id/shifts/:shiftId/attendance/qr` mỗi `periodSec` (600 giây = 10 phút; spec -8 ghi 15–30 giây, đổi theo quyết định sản phẩm) → `{token, periodSec, sessionId, sessionExpiresAt}`; token là JWT `{purpose: "shift_attendance_qr_v2", campaignId, shiftId, sessionId, ts}` ký bằng `JWT_SECRET`, không có `exp`. QR mã hoá `${origin}/campaigns/:id?attendance=<jwt>` (BR-360).
+3. Người tham gia quét bằng camera, web mở link, lấy GPS chính xác rồi `POST /campaigns/:id/attendance/scan {token, latitude, longitude, accuracy, scannedAt?}`. Server kiểm theo thứ tự (BR-361): `scannedAt` không ở tương lai quá 1 phút; chữ ký + purpose, `0 ≤ scannedAt − ts ≤ 2 chu kỳ` (lệch đồng hồ 5 giây) → 422 `ATTENDANCE_QR_INVALID`; đúng campaign; phiên còn mở lúc quét → 409 `ATTENDANCE_NOT_OPEN`; khung giờ ca; người quét là người phụ trách ca hoặc người mở phiên → 403 `ATTENDANCE_SELF_CHECK_IN`. Vì mã hợp lệ tới 2 chu kỳ, một mã (hoặc ảnh chụp của nó) dùng được tối đa khoảng 20 phút. Vị trí **không còn chặn**: cách điểm tập trung của ca > 50 m hoặc `accuracy` > 50 m thì vẫn ghi check-in / check-out nhưng gắn cờ `outOfArea` / `lowAccuracy` (kèm khoảng cách) và log `EDIT / attendance_flagged` (actorRole `volunteer`, `changes {shiftId, userId, phase, distanceM, accuracy, outOfArea, lowAccuracy}`).
+4. Kết quả (BR-362): lần đầu = check-in (không sau giờ kết thúc ca; ghi `preRegistered`, người chưa đăng ký vẫn vào được); lần sau ≥ 10 phút sau check-in = check-out (`checkOutMethod = scan`), sớm hơn → `already_checked_in`, đã ra → `already_checked_out`. Response `{action, shiftId, checkInAt, checkOutAt, eligible, flags {outOfArea, lowAccuracy, distanceM}}`; bị gắn cờ thì client vẫn báo thành công kèm cảnh báo vàng. Client gửi `scannedAt` khi đồng bộ offline (dành cho app mobile; web chỉ quét online), request tới trễ hơn một chu kỳ (10 phút) thì gắn `offline`.
 5. Điểm danh tay (BR-364): `POST /campaigns/:id/shifts/:shiftId/attendance/manual {userId, reason, checkInAt?}` (người phụ trách / người quản lý, trong khung giờ phiên, không cho chính mình, tối đa max(1, 20% số người có mặt)); transaction Serializable, log `EDIT / manual_attendance`.
 6. Kết thúc (BR-363): `POST /campaigns/:id/shifts/:shiftId/attendance/close` → đóng phiên đang mở, check-out mọi người còn trong ca tại min(now, giờ kết thúc ca) với `checkOutMethod = session_close` → `{checkedOut}`.
-7. Xem (BR-366): `GET /campaigns/:id/shifts/:shiftId/attendance` (người phụ trách, người quản lý, platform admin) → phiên, `canRun`, số có mặt / tay / đủ điều kiện, từng dòng.
-- **Ý nghĩa:** một ca đủ điều kiện khi có check-out và thời gian có mặt trong giờ ca ≥ 60% độ dài ca (BR-365); điểm khi hoàn thành chia theo tỉ lệ ca đủ điều kiện / ca đã đăng ký (F34, BR-167).
+7. Xem (BR-366): `GET /campaigns/:id/shifts/:shiftId/attendance` (người phụ trách, người quản lý, platform admin) → phiên, `canRun`, số có mặt / tay / đủ điều kiện / `flagged` (gắn cờ, chưa loại), từng dòng (kèm cờ, khoảng cách, `excluded`, `excludeReason`); dòng gắn cờ xếp trước.
+8. Loại / khôi phục (BR-368): người phụ trách ca hoặc người quản lý xem các dòng gắn cờ rồi `POST /campaigns/:id/shifts/:shiftId/attendance/:userId/exclude {reason}` (ghi `excludedAt`, `excludedBy`, `excludeReason`, log `attendance_excluded`) hoặc `.../restore` (xoá các cột đó, log `attendance_restored`); không có dòng → 404; campaign COMPLETED → 409 `CAMPAIGN_NOT_EDITABLE`. Dòng gắn cờ mà không bị loại vẫn được tính điểm (quyết định sản phẩm).
+- **Ý nghĩa:** một ca đủ điều kiện khi có check-out, thời gian có mặt trong giờ ca ≥ 60% độ dài ca và không bị loại (BR-365); điểm khi hoàn thành chia theo tỉ lệ ca đủ điều kiện / ca đã đăng ký (F34, BR-167).
 - Kết quả và trạng thái ca (spec -8 4.2), xử lý chiến dịch quá ngày kết thúc (spec -8 4.4) **[CHƯA HOÀN THIỆN]**.
-- **File:** `INC/modules/campaign/campaign_attendance/shift-attendance.service.ts > openSession(), issueQr(), scan(), closeSession(), addManual(), listForShift(), completionCredits()`, `shift-attendance-qr.ts > signShiftQr(), verifyShiftQr()`, `campaign_attendance.repository.ts`, `DC/campaign-lifecycle.ts` (hằng `CAMPAIGN_ATTENDANCE_*`), `FE/app/(pages)/(main)/campaigns/[id]/_components/ShiftAttendancePanel.tsx`, `CampaignAttendanceCheckInHandler.tsx`.
+- **File:** `INC/modules/campaign/campaign_attendance/shift-attendance.service.ts > openSession(), issueQr(), scan(), closeSession(), addManual(), setExcluded(), listForShift(), completionCredits()`, `shift-attendance-qr.ts > signShiftQr(), verifyShiftQr()`, `campaign_attendance.repository.ts`, `DC/campaign-lifecycle.ts` (hằng `CAMPAIGN_ATTENDANCE_*`), `FE/app/(pages)/(main)/campaigns/[id]/_components/ShiftAttendancePanel.tsx`, `CampaignAttendanceCheckInHandler.tsx`.
 
 ```mermaid
 sequenceDiagram
@@ -847,15 +848,19 @@ sequenceDiagram
   participant INC as incident
   L->>INC: POST /campaigns/:id/shifts/:shiftId/attendance/session
   INC-->>L: session (≤ 60 phút)
-  loop mỗi 20 giây
+  loop mỗi 10 phút
     L->>INC: GET /campaigns/:id/shifts/:shiftId/attendance/qr
     INC-->>L: token (JWT có ts)
   end
   L-->>V: hiển thị QR
-  V->>V: lấy GPS (độ chính xác ≤ 50 m)
+  V->>V: lấy GPS
   V->>INC: POST /campaigns/:id/attendance/scan {token, lat, lng, accuracy}
-  INC->>INC: token ≤ 2 chu kỳ, phiên mở, không tự quét, trong 50 m
-  INC-->>V: checked_in / checked_out (eligible)
+  INC->>INC: token ≤ 2 chu kỳ, phiên mở, không tự quét
+  INC->>INC: > 50 m hoặc GPS > 50 m: vẫn ghi, gắn cờ, log attendance_flagged
+  INC-->>V: checked_in / checked_out (eligible, flags)
+  opt dòng bị gắn cờ
+    L->>INC: POST .../attendance/:userId/exclude {reason} hoặc /restore
+  end
   L->>INC: POST /campaigns/:id/shifts/:shiftId/attendance/close
   INC->>INC: check-out người còn lại (session_close)
 ```

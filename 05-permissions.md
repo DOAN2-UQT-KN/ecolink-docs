@@ -49,7 +49,7 @@
 | PASSWORD_RESET | 1h | `POST /auth/reset-password` |
 | ACCOUNT_ACTIVATION | 72h (`ACCOUNT_ACTIVATION_TTL_MS`), user phải đang PENDING_ACTIVATION | `POST /auth/activate-account` (gửi lại: `POST /auth/activation/resend`) |
 | ORGANIZATION_CONTACT_EMAIL | 72h | `GET /organizations/verify-contact-email` |
-| QR điểm danh theo ca (JWT `shift_attendance_qr_v2` `{campaignId, shiftId, sessionId, ts}`, ký bằng `JWT_SECRET`, không có `exp`) | Đổi mỗi 20 giây; hợp lệ khi `0 ≤ lúc quét − ts ≤ 2 chu kỳ` (lệch đồng hồ 5 giây) và phiên của ca còn mở (BR-360, BR-361) | `POST /campaigns/:id/attendance/scan` (kèm GPS) |
+| QR điểm danh theo ca (JWT `shift_attendance_qr_v2` `{campaignId, shiftId, sessionId, ts}`, ký bằng `JWT_SECRET`, không có `exp`) | Đổi mỗi 10 phút (`CAMPAIGN_ATTENDANCE_QR_PERIOD_SEC = 600`; spec -8 ghi 15–30 giây, đổi theo quyết định sản phẩm); hợp lệ khi `0 ≤ lúc quét − ts ≤ 2 chu kỳ` (lệch đồng hồ 5 giây) và phiên của ca còn mở, nên ảnh chụp mã dùng được tối đa khoảng 20 phút; vị trí chỉ gắn cờ, không chặn (BR-360, BR-361) | `POST /campaigns/:id/attendance/scan` (kèm GPS) |
 
 ### 1.5 Vai trò
 
@@ -193,8 +193,9 @@ Cột **Owner tổ chức** là thành viên vai `LEGAL_REPRESENTATIVE` / `OWNER
 | Gỡ hoặc chuyển ca của TNV | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | Không có (spec -6: danh sách đăng ký chỉ để xem; TNV tự rời) |
 | Xem danh sách volunteer (`/volunteers/approved`) | ❌ | ✅ | ✅ | ✅ | ✅ (đang đăng ký ca) | ✅ | `assertCanViewVolunteers()` |
 | Mở phiên / lấy QR / kết thúc điểm danh / điểm danh tay của một ca (`/:id/shifts/:shiftId/attendance/session`, `/qr`, `/close`, `/manual`) | ❌ | ✅ | ✅ | ✅ | ❌ | ❌ | `shift-attendance.service.ts` (`canRun`): người phụ trách ca (`leader_user_id`) **hoặc** `campaignAccessService.canManage()`; sai → 403 `CAMPAIGN_PERMISSION_DENIED`. Điểm danh tay không cho chính mình (403 `ATTENDANCE_SELF_CHECK_IN`, BR-364) |
+| Loại / khôi phục dòng điểm danh (`POST /:id/shifts/:shiftId/attendance/:userId/exclude`, `/restore`) | ❌ | ✅ | ✅ | ✅ | ❌ | ❌ | `setExcluded()`: người phụ trách ca **hoặc** `canManage()`; sai → 403 `CAMPAIGN_PERMISSION_DENIED`; campaign COMPLETED → 409 `CAMPAIGN_NOT_EDITABLE` (BR-368) |
 | Xem điểm danh của ca (`GET /:id/shifts/:shiftId/attendance`) | ❌ | ✅ | ✅ | ✅ | ❌ | ✅ | `listForShift()`: người phụ trách ca, người quản lý, platform admin (BR-366) |
-| Quét QR điểm danh (`POST /:id/attendance/scan`) | ✅ | ⚠️ | ⚠️ | ⚠️ | ✅ | ✅ | `authenticate`; không cần đăng ký ca. Người phụ trách ca hoặc người mở phiên không tự điểm danh ở ca đó (403 `ATTENDANCE_SELF_CHECK_IN`, spec 4.1.6); phải ở trong 50 m, GPS ≤ 50 m (BR-361) |
+| Quét QR điểm danh (`POST /:id/attendance/scan`) | ✅ | ⚠️ | ⚠️ | ⚠️ | ✅ | ✅ | `authenticate`; không cần đăng ký ca. Người phụ trách ca hoặc người mở phiên không tự điểm danh ở ca đó (403 `ATTENDANCE_SELF_CHECK_IN`, spec 4.1.6); ngoài 50 m hoặc GPS > 50 m vẫn ghi nhưng gắn cờ (BR-361) |
 | Endpoint cũ `attendance-qr`, `attendance-check-in` | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | luôn 410 `ATTENDANCE_LEGACY_GONE` (BR-367) |
 | Gửi hoàn thành (mark-done) | ❌ | ✅ | ✅ | ✅ | ❌ | ❌ | `assertCanManage()` |
 | Xác nhận sạch (completion-verification) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | `authenticate` |
