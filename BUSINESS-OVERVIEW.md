@@ -1,6 +1,6 @@
 # Ecolink — Tổng quan nghiệp vụ
 
-> Tài liệu dành cho PM, BA, khách hàng, nhà tài trợ và tình nguyện viên nòng cốt. Nội dung tổng hợp từ bộ tài liệu kỹ thuật trong thư mục `docs/`, và được viết dựa trên **đúng những gì sản phẩm đang làm** tại thời điểm 02/10/2026. Nó không mô tả những gì sản phẩm "dự định" làm.
+> Tài liệu dành cho PM, BA, khách hàng, nhà tài trợ và tình nguyện viên nòng cốt. Nội dung tổng hợp từ bộ tài liệu kỹ thuật trong thư mục `docs/`, và được viết dựa trên **đúng những gì sản phẩm đang làm** tại thời điểm 03/10/2026. Nó không mô tả những gì sản phẩm "dự định" làm.
 > Những chỗ sản phẩm chưa làm xong, hoặc đang làm khác với mong đợi, được nêu rõ ở mục 3 (cột Trạng thái) và mục 10.
 
 ---
@@ -34,11 +34,11 @@ Ecolink là nền tảng kết nối cộng đồng để **phát hiện và d�
 |---|---|---|---|---|
 | **Khách** | Người chưa đăng nhập | Tìm hiểu, đăng ký tài khoản, nộp hồ sơ tổ chức | Đăng ký, đăng nhập, xem danh sách quà và bảng xếp hạng, **nộp hồ sơ đăng ký tổ chức** (không cần tài khoản) | Xem báo cáo, chiến dịch, bản đồ (sẽ được yêu cầu đăng nhập) |
 | **Người dùng** (người dân) | Người có tài khoản cá nhân | Báo cáo rác, theo dõi, bình chọn, tham gia | Gửi và sửa báo cáo của mình; bình chọn và lưu báo cáo hoặc chiến dịch; đăng ký ca của chiến dịch, xin gia nhập tổ chức; gửi yêu cầu khẩn cấp (SOS); chat với trợ lý AI; đổi quà; cài đặt thông báo | Duyệt nội dung; tạo chiến dịch (chỉ owner hoặc quản lý chiến dịch của tổ chức được tạo) |
-| **Tình nguyện viên** | Người dùng đã được chấp nhận vào một chiến dịch | Làm việc trong chiến dịch và nhận điểm | Nhận việc được giao, cập nhật kết quả, điểm danh bằng mã QR, nhận điểm khi chiến dịch hoàn thành | Quản lý chiến dịch |
+| **Tình nguyện viên** | Người dùng đã được chấp nhận vào một chiến dịch | Làm việc trong chiến dịch và nhận điểm | Nhận việc được giao, cập nhật kết quả, điểm danh vào / ra từng ca bằng mã QR tại điểm tập trung, nhận điểm khi chiến dịch hoàn thành | Quản lý chiến dịch |
 | **Owner tổ chức** (gồm người đại diện pháp lý) | Người dùng cá nhân được gắn vai owner sau khi hồ sơ được duyệt, hoặc qua **đề xuất thêm owner** được các owner khác đồng ý. Một tổ chức có thể có nhiều owner (tối đa 5 lúc đăng ký); một người làm owner tối đa 3 tổ chức. Tổ chức **không** có tài khoản đăng nhập riêng | Quản lý tổ chức và chiến dịch | Mọi quyền của Admin tổ chức, cộng: nâng / hạ vai Admin, **đề xuất thêm owner**, **đề xuất thu hồi owner khác**, đồng ý / từ chối đề xuất của owner khác, **tự hạ vai hoặc rời tổ chức** (khi còn owner khác; người đại diện pháp lý phải chọn người thay, người thay xác nhận và các owner khác đồng ý); **tạo chiến dịch**; quản lý, sửa và xoá **mọi** chiến dịch của tổ chức (kể cả chiến dịch người khác tạo) | Tự tạo tổ chức mà không qua thẩm định; rời tổ chức khi là owner duy nhất |
 | **Admin tổ chức** | Thành viên được owner nâng vai | Vận hành tổ chức thay owner | Sửa thông tin tổ chức; duyệt người xin gia nhập và lời mời; đổi vai / gỡ Quản lý chiến dịch và Thành viên | Đụng tới owner hoặc admin khác; đề xuất owner; tạo hoặc quản lý chiến dịch (trừ khi được thêm làm người quản lý của một chiến dịch) |
 | **Quản lý chiến dịch của tổ chức** (vai trong tổ chức) | Thành viên được owner / admin gán vai | Chạy chiến dịch cho tổ chức | Mời thành viên (cần duyệt); **tạo chiến dịch** cho tổ chức (tự thành người quản lý chiến dịch đó) | Quản lý thành viên; quản lý chiến dịch người khác tạo (trừ khi được thêm làm người quản lý) |
-| **Người quản lý chiến dịch** | Người đã tạo chiến dịch, những người được thêm làm quản lý (phải là thành viên của tổ chức), và mọi owner của tổ chức. Rời tổ chức là mất quyền quản lý | Vận hành chiến dịch | Sửa chiến dịch, gửi duyệt / nộp lại, duyệt người tham gia, xem danh sách tình nguyện viên, tạo và giao việc, tạo mã điểm danh, báo hoàn thành chiến dịch, thêm hoặc bớt người quản lý, đóng SOS của chiến dịch | Tự duyệt hoàn thành chiến dịch (cần quản trị viên); gỡ người tạo khỏi danh sách quản lý; xoá chiến dịch (chỉ người tạo hoặc owner) |
+| **Người quản lý chiến dịch** | Người đã tạo chiến dịch, những người được thêm làm quản lý (phải là thành viên của tổ chức), và mọi owner của tổ chức. Rời tổ chức là mất quyền quản lý | Vận hành chiến dịch | Sửa chiến dịch, gửi duyệt / nộp lại, duyệt người tham gia, xem danh sách tình nguyện viên, tạo và giao việc, mở điểm danh từng ca (hiện mã QR, thêm tay, kết thúc điểm danh), báo hoàn thành chiến dịch, thêm hoặc bớt người quản lý, đóng SOS của chiến dịch | Tự duyệt hoàn thành chiến dịch (cần quản trị viên); gỡ người tạo khỏi danh sách quản lý; xoá chiến dịch (chỉ người tạo hoặc owner) |
 | **Thành viên tổ chức** | Người dùng được owner / admin chấp nhận yêu cầu gia nhập, hoặc nhận lời mời | Theo dõi hoạt động của tổ chức | Nhận thông báo khi chiến dịch của tổ chức được duyệt; **mời người khác** (lời mời chờ owner / admin duyệt); rời tổ chức | Quản lý tổ chức |
 | **Người được mời vào tổ chức** | Người dùng đã có tài khoản được một thành viên mời | Nhận hoặc từ chối | Mở link trong email (không cần đăng nhập), bấm Chấp nhận hoặc Từ chối trong 7 ngày | Vào tổ chức khi chưa tự chấp nhận |
 | **Người nộp hồ sơ tổ chức** | Người lập hồ sơ, không cần tài khoản; bắt buộc là một trong các owner | Đăng ký tổ chức lên Ecolink | Xác thực email bằng mã, lưu nháp, khai danh sách owner, nộp hồ sơ và giấy tờ, gửi lại email xác nhận cho owner, theo dõi, sửa, rút hồ sơ qua đường link trong email | — |
@@ -100,10 +100,11 @@ Trạng thái: ✅ đã có · 🟡 đang làm dở / có hạn chế · ❌ ch�
 | Đăng ký tham gia | Tình nguyện viên chọn một hoặc nhiều ca (kể cả nhiều ca cùng ngày); có hiệu lực ngay, không cần duyệt, không giới hạn số người. Hệ thống chỉ cảnh báo khi trùng giờ hoặc ca đã vượt dự kiến. Tình nguyện viên rời ca tự do trước giờ bắt đầu (bỏ tick hoặc nút "Rời chiến dịch"), không bị ghi nhận gì. Người quản lý nhận một bản tin số đăng ký mỗi tối, xem danh sách theo ca (chỉ xem, không gỡ hay chuyển ca của ai), được báo khi ca thiếu người (72 giờ trước mỗi ngày) hoặc vượt dự kiến, có thể mời lại người dân trong 5 km (mỗi ngày một lần) và tắt bớt ca | Người dùng, quản lý | ✅ (chưa có gộp ca) |
 | Quản lý người quản lý | Thêm người quản lý (chỉ chọn được thành viên của tổ chức) hoặc bớt người quản lý (trừ người tạo) ngay trên trang chiến dịch | Quản lý | ✅ |
 | Công việc | Tạo việc, giao cho tình nguyện viên, cập nhật kết quả kèm ảnh hoặc video | Quản lý, tình nguyện viên | ✅ |
-| Điểm danh QR | Quản lý hiển thị mã QR, tình nguyện viên quét để điểm danh | Quản lý, tình nguyện viên | ✅ |
-| Yêu cầu khẩn cấp (SOS) | Gửi yêu cầu khẩn cấp tại chiến dịch đang diễn ra; hiện trên bản đồ | Người dùng; người quản lý chiến dịch và quản trị viên đóng SOS | 🟡 Chưa có thông báo |
+| Điểm danh theo ca | Người phụ trách ca hoặc quản lý mở điểm danh cho từng ca và hiện **mã QR đổi mỗi 20 giây**; người tham gia quét khi đến (vào) và khi về (ra), phải đứng trong **50 m** quanh điểm tập trung và bật vị trí chính xác. Người chưa đăng ký ca vẫn điểm danh được. Quản lý thêm tay được người quên điện thoại (có lý do, tối đa 20% số người có mặt). Kết thúc điểm danh thì mọi người còn trong ca được tính là đã ra | Người phụ trách ca, quản lý, tình nguyện viên | ✅ (chỉ quét online trên web) |
+| Kết quả và trạng thái ca; xử lý chiến dịch quá ngày kết thúc | Spec 4.2 và 4.4 | Quản lý, hệ thống | **[CHƯA HOÀN THIỆN]** |
+| Yêu cầu khẩn cấp (SOS) | Gửi yêu cầu khẩn cấp tại chiến dịch đang diễn ra; hiện trên bản đồ | Người dùng; người quản lý chiến dịch và quản trị viên đóng SOS | 🟡 Chưa có thông báo và leo thang (spec 4.3) **[CHƯA HOÀN THIỆN]** |
 | Báo hoàn thành | Khi mọi việc xong, quản lý báo hoàn thành; người dân quanh khu vực được mời xác nhận khu vực "đã sạch" | Quản lý, người dân | ✅ |
-| Duyệt hoàn thành và trao điểm | Quản trị viên duyệt, tình nguyện viên **đã điểm danh** nhận điểm; hoặc từ chối để chiến dịch tiếp tục | Quản trị viên | ✅ |
+| Duyệt hoàn thành và trao điểm | Quản trị viên duyệt, người có ít nhất một ca **điểm danh đủ** (có mặt ≥ 60% thời gian ca) nhận điểm theo tỉ lệ số ca đủ / số ca đã đăng ký; hoặc từ chối để chiến dịch tiếp tục | Quản trị viên | ✅ |
 | Nộp kết quả (submission) | Quản lý nộp bộ kết quả và duyệt nội bộ | Quản lý | 🟡 Chưa gắn với luồng hoàn thành, hiện không có tác dụng |
 | Vinh danh trên Facebook | Tự đăng bài cảm ơn tình nguyện viên lên Facebook | Hệ thống | ❌ Đã viết nhưng đang tắt |
 
@@ -256,26 +257,26 @@ Các trường hợp thường gặp:
 2. Tình nguyện viên sửa ca bằng "Sửa ca đã đăng ký" hoặc bấm "Rời chiến dịch"; rời ca được bất cứ lúc nào trước khi ca bắt đầu và **không bị ghi nhận gì** — đăng ký chỉ để nhận thông báo và để tổ chức ước lượng số người. Người quản lý không nhận thông báo từng lượt mà nhận **một bản tin mỗi tối** (khoảng 20h) về số đăng ký mới theo ngày, và xem danh sách đăng ký theo ca (chỉ xem).
 2a. 72 giờ trước mỗi ngày, ca nào còn dưới số tối thiểu thì người quản lý được báo; ca vượt số tối đa dự kiến cũng được báo để chuẩn bị thêm dụng cụ. Người quản lý có thể **mời lại người dân trong 5 km** quanh các điểm tập trung (mỗi 24 giờ một lần) hoặc **tắt một ca** chưa bắt đầu (ngày đó phải còn ca khác): tình nguyện viên của ca bị tắt được báo để chọn ca khác. Ca vẫn thiếu người vào ngày diễn ra thì vẫn chạy.
 3. Tình nguyện viên được giao việc và cập nhật kết quả (ảnh hoặc video).
-4. Ngày diễn ra, người quản lý mở **mã QR**, tình nguyện viên quét để điểm danh. Chỉ người **đã điểm danh** mới được nhận điểm.
+4. Ngày diễn ra, từ 30 phút trước giờ tập trung, người phụ trách ca (hoặc quản lý) mở điểm danh cho ca và hiện **mã QR đổi mỗi 20 giây**. Người tham gia quét khi đến và quét lại khi về (sau ít nhất 10 phút); phải ở trong **50 m** quanh điểm tập trung, vị trí đủ chính xác. Người không đăng ký trước vẫn điểm danh được. Người quên điện thoại được thêm tay (có lý do, tối đa 20% số người có mặt). Người phụ trách và người mở điểm danh không tự điểm danh ở ca mình chạy. Cuối ca, "Kết thúc điểm danh" tính mọi người còn lại là đã ra. Một ca **đủ** khi có giờ ra và có mặt ≥ 60% thời gian ca; quên quét ra (và không ai kết thúc điểm danh) thì ca không được tính.
 5. Xong mọi việc, người quản lý báo hoàn thành. Quản trị viên được báo; người dân gần đó được mời xác nhận khu vực đã sạch.
 6. Quản trị viên duyệt hoàn thành:
    - Chiến dịch **hoàn thành**, các điểm rác chuyển sang **đã xử lý**.
-   - Tình nguyện viên đã điểm danh nhận điểm xanh theo mức độ khó.
-   - Mọi tình nguyện viên nhận thông báo "chiến dịch hoàn thành".
+   - Người có ít nhất một ca điểm danh đủ nhận điểm xanh theo mức độ khó, nhân tỉ lệ số ca đủ / số ca đã đăng ký (tối đa 100%; người không đăng ký trước nhận đủ).
+   - Mọi người đang đăng ký ca và mọi người được cộng điểm nhận thông báo "chiến dịch hoàn thành".
    - Nếu quản trị viên từ chối, chiến dịch tiếp tục hoạt động và các owner của tổ chức nhận lý do.
 
 Các trường hợp thường gặp:
 - Bị từ chối tham gia: người xin nhận thông báo và có thể xin lại.
 - Tự huỷ yêu cầu: được khi yêu cầu còn đang chờ.
 - Đã được chấp nhận: hiện **không có cách rời** chiến dịch.
-- Mã QR sai chiến dịch hoặc hết hạn (sau 1 giờ): không điểm danh được.
+- Mã QR cũ (quá khoảng 40 giây), sai chiến dịch, điểm danh chưa mở hoặc đã kết thúc: không điểm danh được. Đứng xa điểm tập trung quá 50 m hoặc vị trí không đủ chính xác: báo lỗi, có nút "Thử lại".
 
 ```mermaid
 flowchart LR
   A[Xin tham gia] --> B{Quản lý duyệt}
   B -->|Từ chối| A
   B -->|Duyệt| C[Nhận việc]
-  C --> D[Quét QR điểm danh]
+  C --> D[Quét QR vào / ra từng ca]
   D --> E[Hoàn thành việc]
   E --> F[Quản lý báo hoàn thành]
   F --> G{Quản trị viên duyệt}
@@ -435,18 +436,18 @@ Mã BR-xxx dùng để đối chiếu với `docs/03-business-rules.md`.
 - **BR-169:** Điểm rác được giữ cho chiến dịch từ lúc gửi duyệt; mỗi điểm rác chỉ thuộc một chiến dịch.
 - **BR-165:** Chỉ báo hoàn thành được khi **mọi công việc đã xong**.
 - **BR-166:** Quản trị viên chỉ duyệt hoặc từ chối khi chiến dịch đang chờ duyệt hoàn thành; từ chối phải có lý do.
-- **BR-167:** Điểm thưởng theo mức độ khó, chỉ dành cho tình nguyện viên **đã được chấp nhận và đã điểm danh**.
+- **BR-167:** Điểm thưởng theo mức độ khó, nhân tỉ lệ số ca điểm danh đủ / số ca đã đăng ký; không cần đăng ký trước mới được điểm.
 - **BR-168:** Chiến dịch hoàn thành thì các điểm rác và SOS liên quan cũng hoàn thành; bị từ chối thì chiến dịch tiếp tục hoạt động.
 - **BR-170:** Đăng ký ca có hiệu lực ngay, không cần duyệt, không giới hạn số người; chỉ đăng ký được ca đang bật, chưa bắt đầu, của chiến dịch "Sắp diễn ra" hoặc "Đang diễn ra", và phải xác nhận điều kiện tham gia.
 - **BR-171:** Trùng giờ hay ca đã vượt dự kiến chỉ hiện cảnh báo, không chặn; không ghi nhận vắng mặt hay rời ca.
 - **BR-172:** Người quản lý được báo khi ca còn thiếu người 72 giờ trước ngày diễn ra (mỗi ngày một lần) và khi ca vượt số tối đa dự kiến.
 - **BR-173:** Bỏ tick hoặc "Rời chiến dịch" là rời ca, tự do trước giờ bắt đầu; ca đã bắt đầu không rời được. Người quản lý không gỡ hay chuyển ca của tình nguyện viên.
 - **BR-174:** Danh sách đăng ký theo ca chỉ để xem; người quản lý nhận một bản tin đăng ký mỗi tối, mời lại người dân gần đó tối đa mỗi 24 giờ một lần, và tắt được ca chưa bắt đầu nếu ngày đó còn ca khác.
-- **BR-175:** Người quản lý chiến dịch quản lý được công việc, người quản lý khác và mã điểm danh.
+- **BR-175:** Người quản lý chiến dịch quản lý được công việc và người quản lý khác.
 - **BR-176:** Công việc có 3 mức ưu tiên; mặc định là trung bình.
 - **BR-177:** Chỉ giao việc cho tình nguyện viên đã được chấp nhận.
 - **BR-178, BR-179:** Tình nguyện viên chỉ cập nhật kết quả và trạng thái của việc được giao cho mình.
-- **BR-180, BR-181:** Mã QR điểm danh chỉ tạo được khi chiến dịch đang hoạt động, hiệu lực 1 giờ; mỗi người chỉ điểm danh một lần; chỉ tình nguyện viên đã được chấp nhận mới điểm danh được.
+- **BR-359..BR-367:** Điểm danh theo ca: người phụ trách ca hoặc quản lý mở điểm danh (mỗi lần tối đa 60 phút, từ 30 phút trước giờ tập trung tới 30 phút sau khi ca kết thúc); mã QR đổi mỗi 20 giây; quét phải trong 50 m quanh điểm tập trung với vị trí chính xác tới 50 m; quét lần đầu là vào, quét lại sau ít nhất 10 phút là ra; thêm tay tối đa 20% số người có mặt, có lý do; không tự điểm danh ở ca mình chạy; ca đủ khi có mặt ≥ 60% thời gian ca. Cách điểm danh cũ (một mã cho cả chiến dịch, hiệu lực 1 giờ) đã bỏ.
 - **BR-182:** Người dân chỉ xác nhận "đã sạch" hoặc "chưa sạch" sau khi chiến dịch báo hoàn thành.
 - **BR-183:** Chỉ người quản lý nộp và duyệt bộ kết quả.
 - **BR-184:** Danh sách hiển thị tối đa 100 mục mỗi trang.
@@ -562,7 +563,7 @@ flowchart LR
 | → Bị chặn | Quản trị viên | Người tạo và owner: lý do |
 | → Hết hạn | Hệ thống | Người tạo: "chiến dịch đã hết hạn" |
 | → Chờ duyệt hoàn thành | Người quản lý | Quản trị viên: "có chiến dịch chờ duyệt"; người dân gần đó: mời xác nhận đã sạch |
-| → Hoàn thành | Quản trị viên | Tình nguyện viên: "hoàn thành" và điểm (nếu đã điểm danh); các owner: "được duyệt" |
+| → Hoàn thành | Quản trị viên | Người đăng ký ca và người được cộng điểm: "hoàn thành"; điểm cho người có ca điểm danh đủ; các owner: "được duyệt" |
 | → Quay lại hoạt động | Quản trị viên | Các owner: lý do từ chối |
 
 Đổi ngày giờ sau khi duyệt đi qua sửa chiến dịch (quay về chờ duyệt lại). Người tạo hoặc owner huỷ được chiến dịch sắp hoặc đang diễn ra (bắt buộc lý do): điểm rác được trả lại, mọi tình nguyện viên được báo, không ai nhận điểm. Tình nguyện viên được nhắc lịch 24 giờ và 1 giờ trước giờ tập trung.
@@ -653,10 +654,10 @@ Có = được · Không = không được · ĐK = có điều kiện
 | Duyệt, yêu cầu chỉnh sửa hoặc chặn chiến dịch | Không | Không | Không | Không | Không | ĐK: không phải thành viên của tổ chức đó |
 | Xin tham gia chiến dịch | Không | Có | — | Có | Có | Có |
 | Duyệt người tham gia | Không | Không | Không | Có | Có | Không |
-| Tạo và giao việc, tạo mã điểm danh, thêm / bớt người quản lý | Không | Không | Không | Có | Có | Không |
+| Tạo và giao việc, mở điểm danh ca (cả người phụ trách ca), thêm / bớt người quản lý | Không | Không | Không | Có | Có | Không |
 | Xem danh sách tình nguyện viên | Không | Không | Có | Có | Có | Có |
 | Cập nhật kết quả việc | Không | Không | ĐK: việc được giao | Có | Có | Không |
-| Điểm danh | Không | Không | Có | — | — | — |
+| Điểm danh (quét QR) | Không | Có | Có | ĐK: không ở ca mình phụ trách / mở điểm danh | ĐK: như quản lý | Có |
 | Báo hoàn thành chiến dịch | Không | Không | Không | Có | Có | Không |
 | Duyệt hoàn thành, trao điểm | Không | Không | Không | Không | Không | Có |
 | Gửi SOS | Không | ĐK: chiến dịch đang hoạt động | ĐK | ĐK | ĐK | ĐK |
@@ -738,7 +739,7 @@ Hiện **không có** thông báo cho các sự kiện: đặt lại mật khẩ
 | **Người quản lý chiến dịch** | Người tạo chiến dịch và những người được thêm vào để vận hành |
 | **Tình nguyện viên** | Người dùng đã được chấp nhận tham gia một chiến dịch |
 | **Công việc** | Một đầu việc trong chiến dịch được giao cho tình nguyện viên |
-| **Điểm danh QR** | Tình nguyện viên quét mã QR do quản lý hiển thị để xác nhận có mặt; bắt buộc để nhận điểm |
+| **Điểm danh theo ca** | Người tham gia quét mã QR (đổi mỗi 20 giây) do người phụ trách ca hiển thị, khi đến và khi về, trong 50 m quanh điểm tập trung; ca có mặt ≥ 60% thời gian mới được tính điểm |
 | **SOS** | Yêu cầu hỗ trợ khẩn cấp gửi tại một chiến dịch đang diễn ra |
 | **Xác nhận đã sạch** | Người dân quanh khu vực đánh giá khu vực đã sạch hay chưa sau khi chiến dịch báo hoàn thành; chỉ để quản trị viên tham khảo |
 | **Điểm xanh** | Điểm thưởng ghi nhận đóng góp (hoàn thành chiến dịch, báo cáo được xử lý, báo cáo đạt mốc bình chọn) |
@@ -765,7 +766,7 @@ Phần này viết lại các vấn đề trong `docs/99-open-issues.md` theo g�
 | 3 | ~~Tổ chức tự đổi được trạng thái chiến dịch (tự duyệt, tự hoàn thành, tự bỏ chặn)~~ | **Đã giải quyết (30/09/2026):** trạng thái chỉ đổi qua gửi duyệt, quản trị viên duyệt và báo hoàn thành | — |
 | 4 | Người dùng bất kỳ đổi được trạng thái đơn đổi quà của người khác | Huỷ đơn người khác, hoặc tự đánh dấu "đã giao" | Chỉ quản trị viên |
 | 5 | Người bị khoá vẫn thao tác được thêm một thời gian (tới khi phiên hết hạn, có thể lên đến 30 ngày tuỳ cấu hình) | Khoá tài khoản không có hiệu lực ngay | Có cần hiệu lực tức thì không? |
-| 6 | Mã QR điểm danh có thể chụp và chia sẻ để điểm danh từ xa | Nhận điểm dù không có mặt | Có cần gắn điểm danh với vị trí hoặc thời gian thực không? |
+| 6 | ~~Mã QR điểm danh có thể chụp và chia sẻ để điểm danh từ xa~~ | **Đã giải quyết (03/10/2026):** mã QR đổi mỗi 20 giây và phải đứng trong 50 m quanh điểm tập trung | — |
 | 7 | Một số thông tin cá nhân (email, số điện thoại trong SOS, danh sách thành viên) hiện ai đăng nhập cũng xem được | Quyền riêng tư | Ai được xem những thông tin này? |
 | 8 | Khoá bí mật của trang Facebook đang nằm trong mã nguồn | Có thể bị lạm dụng tài khoản Facebook | Thu hồi và cấp lại khoá |
 
@@ -781,7 +782,7 @@ Phần này viết lại các vấn đề trong `docs/99-open-issues.md` theo g�
 | 14 | **Hạn mức 3 tổ chức cho mỗi owner** | Cố định 3, tính theo tài khoản (cả owner lẫn người đại diện pháp lý); không có ngoại lệ | Có cần ngoại lệ không? |
 | 15 | **Ai được tạo chiến dịch** | Owner (kể cả người đại diện pháp lý) và vai quản lý chiến dịch của tổ chức (từ 27/09/2026). Admin tổ chức và thành viên thường không tạo được | Có muốn thành viên thường được tạo không? |
 | 16 | ~~Ai quản lý chiến dịch~~ | **Đã giải quyết (27/09/2026):** một quy tắc chung — người tạo, người được thêm (phải là thành viên tổ chức) và owner của tổ chức; rời tổ chức là mất quyền; không gỡ được người tạo | — |
-| 17 | **Điểm thưởng chiến dịch** | Chỉ người đã điểm danh nhận điểm, nhưng mọi người được chấp nhận đều nhận thông báo "hoàn thành" | Người không điểm danh có được ghi nhận gì không? |
+| 17 | **Điểm thưởng chiến dịch** | Điểm chia theo số ca điểm danh đủ (≥ 60% thời gian ca); người không điểm danh không được điểm nhưng vẫn nhận thông báo "hoàn thành" nếu đang đăng ký | Người không điểm danh có được ghi nhận gì không? |
 | 18 | **Điểm cho người báo cáo** | Được điểm khi quản trị viên đánh dấu trực tiếp, nhưng **không** được điểm khi báo cáo được xử lý qua chiến dịch. Mức điểm mặc định là 0 | Người báo cáo có nên nhận điểm khi chiến dịch xử lý điểm rác của họ không? Bao nhiêu điểm? |
 | 19 | **Chiến dịch không có công việc nào** | Vẫn báo hoàn thành được | Có bắt buộc phải có công việc không? |
 | 20 | **Rời chiến dịch** | Đã được chấp nhận thì không rời được; người bị từ chối có thể xin lại ngay | Cho phép rời không? Có giới hạn số lần xin lại không? |

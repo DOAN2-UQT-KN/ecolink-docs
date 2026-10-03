@@ -1,6 +1,6 @@
 # 00 — Tổng quan hệ thống Ecolink
 
-> Tài liệu này được viết dựa trên source code tại thời điểm 2026-10-02. Phạm vi gồm `ecolink-server/` (gateway, 5 service, 3 thư viện dùng chung) và `ecolink-client/` (web). Hai phần **không** thuộc phạm vi: `ecolink-mobile`, `ecolink-research-lab`, `ecolink-image-dedup-benchmark`.
+> Tài liệu này được viết dựa trên source code tại thời điểm 2026-10-03. Phạm vi gồm `ecolink-server/` (gateway, 5 service, 3 thư viện dùng chung) và `ecolink-client/` (web). Hai phần **không** thuộc phạm vi: `ecolink-mobile`, `ecolink-research-lab`, `ecolink-image-dedup-benchmark`.
 > Mọi đường dẫn tính từ thư mục gốc `/Users/ngoc/ecolink`.
 
 ## Mục lục tài liệu
@@ -30,7 +30,7 @@ Ecolink là nền tảng cộng đồng về môi trường. Code thể hiện c
 
 - **Báo cáo điểm rác/ô nhiễm (report/incident):** người dùng gửi ảnh, toạ độ và mức độ nghiêm trọng. Hệ thống dùng AI phân tích ảnh và sinh gợi ý xử lý. Admin duyệt hoặc ban report (`incident-service/src/modules/report`).
 - **Tổ chức (organization):** người nộp lập **đơn đăng ký** (xác thực email bằng OTP, lưu nháp, kèm giấy tờ pháp lý và danh sách owner). Mỗi owner tự xác nhận qua email, rồi admin thẩm định; duyệt thì hệ thống tạo tổ chức và gắn vai owner cho từng người (tổ chức **không** có tài khoản đăng nhập riêng). Tổ chức có thể được gắn **Blue Tick** (`trustTier = VERIFIED`) (`incident-service/src/modules/organization_application`).
-- **Chiến dịch (campaign):** owner hoặc quản lý chiến dịch của tổ chức tạo bản nháp chiến dịch dọn dẹp với 1–5 điểm tập kết, mỗi điểm gom các report cần xử lý, rồi gửi duyệt (report bị khoá từ lúc này). Admin duyệt (chiến dịch thành "Sắp diễn ra", tự chuyển "Đang diễn ra" khi tới ngày đầu), yêu cầu chỉnh sửa hoặc chặn; chờ duyệt quá hạn thì hết hạn. Tình nguyện viên đăng ký theo ca (có hiệu lực ngay, không cần duyệt), được giao task và điểm danh bằng QR. Khi xong, manager gửi hoàn thành, admin duyệt, và người tham gia nhận **điểm xanh** (`incident-service/src/modules/campaign`).
+- **Chiến dịch (campaign):** owner hoặc quản lý chiến dịch của tổ chức tạo bản nháp chiến dịch dọn dẹp với 1–5 điểm tập kết, mỗi điểm gom các report cần xử lý, rồi gửi duyệt (report bị khoá từ lúc này). Admin duyệt (chiến dịch thành "Sắp diễn ra", tự chuyển "Đang diễn ra" khi tới ngày đầu), yêu cầu chỉnh sửa hoặc chặn; chờ duyệt quá hạn thì hết hạn. Tình nguyện viên đăng ký theo ca (có hiệu lực ngay, không cần duyệt), được giao task và điểm danh vào / ra theo từng ca (QR động đổi mỗi 20 giây, phải ở trong 50 m quanh điểm tập trung). Khi xong, manager gửi hoàn thành, admin duyệt, và người có ca điểm danh đủ nhận **điểm xanh** theo tỉ lệ ca (`incident-service/src/modules/campaign`).
 - **SOS:** yêu cầu khẩn cấp gắn với một chiến dịch đang hoạt động (`incident-service/src/modules/sos`).
 - **Vote và lưu (bookmark)** cho report và campaign.
 - **Điểm thưởng và gamification:** điểm xanh, ví SP có hạn dùng, điểm xếp hạng CRP/VRP theo season, bảng xếp hạng, badge, đổi quà (`reward-service`).

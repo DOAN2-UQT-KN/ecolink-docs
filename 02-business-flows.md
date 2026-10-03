@@ -45,7 +45,7 @@
 | F28 | Tình nguyện viên đăng ký ca của chiến dịch | Chiến dịch |
 | F29 | Quản lý manager của chiến dịch | Chiến dịch |
 | F30 | Quản lý task | Chiến dịch |
-| F31 | Điểm danh bằng QR | Chiến dịch |
+| F31 | Điểm danh theo ca (QR động, GPS) | Chiến dịch |
 | F32 | Gửi SOS và giải quyết SOS | Chiến dịch |
 | F33 | Gửi hoàn thành chiến dịch và cộng đồng xác nhận | Chiến dịch |
 | F34 | Admin duyệt hoặc từ chối hoàn thành chiến dịch và trao điểm | Chiến dịch + Điểm |
@@ -781,7 +781,7 @@ Thay luồng xin tham gia có duyệt (spec 3.1). Đăng ký có hiệu lực ng
 3a. Ca thiếu người (spec 3.2): manager bấm "Mời người dân gần đây" → `POST /api/v1/campaigns/:id/invite-nearby`: tìm người dân trong 5 km quanh mọi điểm tập trung có ca mở (`nearby-users.ts > findNearbyUserIds()`: vị trí đã lưu + người từng báo cáo gần đó), trừ người tạo / manager / người đã đăng ký, gửi `CAMPAIGN_JOIN_INVITE` (payload `shortBy`); tối đa một lần mỗi 24h, giữ chỗ bằng compare-and-set trên `campaigns.last_nearby_invite_at` → `{invited}` (BR-174).
 3b. Manager tắt một ca chưa bắt đầu (ngày đó còn ca bật khác): `POST /api/v1/campaigns/:id/shifts/:shiftId/close` → transaction: ca `minVolunteers = 0`, `maxVolunteers = null`; đăng ký đang hiệu lực của ca → `leftAt`, `closedByShift = true`; log `EDIT / close_shift`, và outbox `WEBSITE_NOTIFICATION` (cùng transaction) → relay của worker gửi `CAMPAIGN_SHIFT_CLOSED` cho các TNV đó, có thử lại nếu notification-service lỗi, mời mở popup chọn ca khác → `{notified}` (BR-174). Gộp ca **[CHƯA HOÀN THIỆN]**.
 4. Không gửi thông báo theo từng lượt. Job vòng đời (F27b) gửi `CAMPAIGN_REGISTRATION_DIGEST` mỗi ngày một lần cho người tạo + manager của mỗi campaign có đăng ký mới, tách số theo ngày của campaign, rồi đánh dấu `managerNotifiedAt` (BR-174).
-- `GET /campaigns/volunteers/approved` giữ đường dẫn, trả mỗi người có ≥ 1 đăng ký ca (BR-158). Check-in QR và giao task yêu cầu đang đăng ký ca (BR-181, BR-177).
+- `GET /campaigns/volunteers/approved` giữ đường dẫn, trả mỗi người có ≥ 1 đăng ký ca (BR-158). Giao task yêu cầu đang đăng ký ca (BR-177); điểm danh thì không (người chưa đăng ký vẫn check-in được, F31).
 - **File:** `INC/modules/campaign/campaign_registration/campaign_registration.service.ts > getOptions(), setMyShifts(), listByShift(), inviteNearby(), closeShift()`, `campaign_registration.repository.ts`, `registration-digest.ts`, `staffing-alerts.ts`, `staffing-shared.ts`, `INC/modules/campaign/nearby-users.ts`.
 
 ```mermaid
@@ -827,28 +827,37 @@ sequenceDiagram
 - Điều kiện để gửi hoàn thành campaign: **mọi task phải ở COMPLETED (17)** (F33).
 - **File:** `INC/modules/campaign/campaign_task/campaign_task.service.ts`, `FE/components/client/shared/PopoverCreateUpdateTask.tsx`.
 
-### F31 — Điểm danh bằng QR
-1. Manager: `POST /campaigns/:id/attendance-qr` (campaign phải ACTIVE) → JWT `{purpose: "campaign_attendance_qr_v1", campaignId}`, TTL 1 giờ. Client hiển thị mã QR.
-2. Tình nguyện viên quét: `POST /campaigns/:id/attendance-check-in {token}`:
-   - Token hợp lệ và đúng campaign.
-   - Campaign đang ACTIVE.
-   - Người quét đã được APPROVED.
-   - Tạo `campaign_attendance_check_ins`. Idempotent nhờ unique (campaignId, userId).
-- **Ý nghĩa:** chỉ volunteer **vừa APPROVED vừa đã check-in** mới nhận điểm khi campaign hoàn thành (F34).
-- **Lỗi:** token sai hoặc hết hạn → 500 (bug); QR không đúng campaign → 400; không phải thành viên → 403.
-- **File:** `INC/modules/campaign/campaign_attendance/campaign_attendance.service.ts`, `campaign_attendance_jwt.util.ts`.
+### F31 — Điểm danh theo ca (QR động, GPS)
+Spec -8 4.1. Điểm danh theo **từng ca**, check-in và check-out; thay QR theo campaign cũ (hai endpoint cũ `POST /campaigns/:id/attendance-qr`, `POST /campaigns/:id/attendance-check-in` luôn trả 410 `ATTENDANCE_LEGACY_GONE`, bảng `campaign_attendance_check_ins` chỉ còn là lịch sử — BR-367).
+1. Người phụ trách ca hoặc người quản lý campaign mở phiên: `POST /campaigns/:id/shifts/:shiftId/attendance/session` → `{session: {id, openedBy, expiresAt}}` (đang có phiên mở thì trả phiên đó). Phiên ≤ 60 phút, không quá giờ kết thúc ca + 30 phút, mở lại được. Chỉ khi ca bật, campaign UPCOMING / ACTIVE, now trong [min(gatherAt, startAt) − 30 phút, endAt + 30 phút], ngoài ra 409 `ATTENDANCE_NOT_OPEN` (BR-359).
+2. Màn hình người phụ trách gọi `GET /campaigns/:id/shifts/:shiftId/attendance/qr` mỗi `periodSec` (20 giây) → `{token, periodSec, sessionId, sessionExpiresAt}`; token là JWT `{purpose: "shift_attendance_qr_v2", campaignId, shiftId, sessionId, ts}` ký bằng `JWT_SECRET`, không có `exp`. QR mã hoá `${origin}/campaigns/:id?attendance=<jwt>` (BR-360).
+3. Người tham gia quét bằng camera, web mở link, lấy GPS chính xác rồi `POST /campaigns/:id/attendance/scan {token, latitude, longitude, accuracy, scannedAt?}`. Server kiểm theo thứ tự (BR-361): `scannedAt` không ở tương lai quá 1 phút; chữ ký + purpose, `0 ≤ scannedAt − ts ≤ 2 chu kỳ` (lệch đồng hồ 5 giây) → 422 `ATTENDANCE_QR_INVALID`; đúng campaign; phiên còn mở lúc quét → 409 `ATTENDANCE_NOT_OPEN`; khung giờ ca; người quét là người phụ trách ca hoặc người mở phiên → 403 `ATTENDANCE_SELF_CHECK_IN`; `accuracy` > 50 m → 422 `ATTENDANCE_GPS_INACCURATE`; cách điểm tập trung của ca > 50 m → 422 `ATTENDANCE_OUTSIDE_AREA {distanceM}`.
+4. Kết quả (BR-362): lần đầu = check-in (không sau giờ kết thúc ca; ghi `preRegistered`, người chưa đăng ký vẫn vào được); lần sau ≥ 10 phút sau check-in = check-out (`checkOutMethod = scan`), sớm hơn → `already_checked_in`, đã ra → `already_checked_out`. Response `{action, shiftId, checkInAt, checkOutAt, eligible}`. Client gửi `scannedAt` khi đồng bộ offline (dành cho app mobile; web chỉ quét online), request tới trễ hơn một chu kỳ thì gắn `offline`.
+5. Điểm danh tay (BR-364): `POST /campaigns/:id/shifts/:shiftId/attendance/manual {userId, reason, checkInAt?}` (người phụ trách / người quản lý, trong khung giờ phiên, không cho chính mình, tối đa max(1, 20% số người có mặt)); transaction Serializable, log `EDIT / manual_attendance`.
+6. Kết thúc (BR-363): `POST /campaigns/:id/shifts/:shiftId/attendance/close` → đóng phiên đang mở, check-out mọi người còn trong ca tại min(now, giờ kết thúc ca) với `checkOutMethod = session_close` → `{checkedOut}`.
+7. Xem (BR-366): `GET /campaigns/:id/shifts/:shiftId/attendance` (người phụ trách, người quản lý, platform admin) → phiên, `canRun`, số có mặt / tay / đủ điều kiện, từng dòng.
+- **Ý nghĩa:** một ca đủ điều kiện khi có check-out và thời gian có mặt trong giờ ca ≥ 60% độ dài ca (BR-365); điểm khi hoàn thành chia theo tỉ lệ ca đủ điều kiện / ca đã đăng ký (F34, BR-167).
+- Kết quả và trạng thái ca (spec -8 4.2), xử lý chiến dịch quá ngày kết thúc (spec -8 4.4) **[CHƯA HOÀN THIỆN]**.
+- **File:** `INC/modules/campaign/campaign_attendance/shift-attendance.service.ts > openSession(), issueQr(), scan(), closeSession(), addManual(), listForShift(), completionCredits()`, `shift-attendance-qr.ts > signShiftQr(), verifyShiftQr()`, `campaign_attendance.repository.ts`, `DC/campaign-lifecycle.ts` (hằng `CAMPAIGN_ATTENDANCE_*`), `FE/app/(pages)/(main)/campaigns/[id]/_components/ShiftAttendancePanel.tsx`, `CampaignAttendanceCheckInHandler.tsx`.
 
 ```mermaid
 sequenceDiagram
-  actor M as Manager
-  actor V as Tình nguyện viên
+  actor L as Người phụ trách ca
+  actor V as Người tham gia
   participant INC as incident
-  M->>INC: POST /campaigns/:id/attendance-qr
-  INC-->>M: token (JWT 1h)
-  M-->>V: hiển thị QR
-  V->>INC: POST /campaigns/:id/attendance-check-in {token}
-  INC->>INC: verify, ACTIVE, APPROVED
-  INC-->>V: check-in (idempotent)
+  L->>INC: POST /campaigns/:id/shifts/:shiftId/attendance/session
+  INC-->>L: session (≤ 60 phút)
+  loop mỗi 20 giây
+    L->>INC: GET /campaigns/:id/shifts/:shiftId/attendance/qr
+    INC-->>L: token (JWT có ts)
+  end
+  L-->>V: hiển thị QR
+  V->>V: lấy GPS (độ chính xác ≤ 50 m)
+  V->>INC: POST /campaigns/:id/attendance/scan {token, lat, lng, accuracy}
+  INC->>INC: token ≤ 2 chu kỳ, phiên mở, không tự quét, trong 50 m
+  INC-->>V: checked_in / checked_out (eligible)
+  L->>INC: POST /campaigns/:id/shifts/:shiftId/attendance/close
+  INC->>INC: check-out người còn lại (session_close)
 ```
 
 ### F32 — Gửi SOS và giải quyết SOS
@@ -856,7 +865,7 @@ sequenceDiagram
 - `GET /api/v1/sos` (có lọc theo khoảng cách PostGIS nếu gửi lat/lng). Trang `/maps` poll mỗi 10 giây.
 - `PUT /api/v1/sos/:id/solved` → COMPLETED (17). Chỉ platform admin hoặc người quản lý campaign của SOS; người khác → 403 `SOS_PERMISSION_DENIED` (BR-192).
 - Khi campaign được duyệt hoàn thành, mọi SOS chưa xong của campaign chuyển COMPLETED.
-- **Không có thông báo** nào khi tạo SOS.
+- **Không có thông báo** nào khi tạo SOS; thông báo và leo thang SOS (spec -8 4.3) **[CHƯA HOÀN THIỆN]**.
 - **File:** `INC/modules/sos/*`.
 
 ### F33 — Gửi hoàn thành chiến dịch và cộng đồng xác nhận
@@ -875,14 +884,14 @@ sequenceDiagram
 - `PUT /campaigns/:id/completion-review {decision: approve|reject, rejectReason?}`.
 - **Approve** (campaign phải ở 7):
   1. Kiểm tra lại mọi task đã COMPLETED; lấy tier difficulty từ reward.
-  2. Xác định người nhận điểm = volunteer APPROVED **∩** đã check-in; mỗi người nhận `tier.greenPoints`.
+  2. `shift-attendance.service.ts > completionCredits()`: mỗi người có ≥ 1 ca đủ điều kiện (BR-365) nhận `round(tier.greenPoints × min(1, số ca đủ điều kiện / số ca đăng ký đang hiệu lực))`, 0 ca đăng ký tính là 1 (người không đăng ký trước nhận 100%); hệ số duyệt một phần (spec 5.2) tạm 100% (BR-167).
   3. Transaction Serializable:
      - campaign → COMPLETED (17), rejectReason=null.
      - Mọi report của campaign → 17.
      - Mọi SOS → 17.
      - Outbox `CAMPAIGN_COMPLETION_GREEN_POINTS {campaignId, credits[]}` (nếu có người nhận), dedup theo campaignId.
   4. Sau commit:
-     - `CAMPAIGN_DONE` tới **mọi** volunteer APPROVED (kể cả người không check-in).
+     - `CAMPAIGN_DONE` tới mọi người đang đăng ký ca **cộng** mọi người được cộng điểm (kể cả người không điểm danh).
      - `CAMPAIGN_COMPLETION_APPROVED_BY_ADMIN` tới mọi owner tổ chức.
   5. Relay đẩy event lên SQS `reward-intake`; reward cộng điểm (F36).
 - **Reject** (campaign phải ở 7, cần lý do):
@@ -1106,7 +1115,7 @@ sequenceDiagram
 | CAMPAIGN_VERIFY_INVITE | website | người dân trong 5 km | Admin duyệt campaign | `campaign.service.ts > reviewCampaign() → notifyNearbyCitizensToJoinApprovedCampaign()` |
 | CAMPAIGN_COMPLETION_PENDING_ADMIN | website | user id trong env | Manager gửi hoàn thành | `submitCampaignCompletionForAdminApproval()` |
 | CAMPAIGN_COMPLETION_VERIFY_INVITE | website | người dân trong 5 km | Manager gửi hoàn thành | như trên |
-| CAMPAIGN_DONE | website | volunteer đã được duyệt | Admin duyệt hoàn thành | `adminFinalizeCampaignCompletion()` |
+| CAMPAIGN_DONE | website | người đang đăng ký ca và người được cộng điểm | Admin duyệt hoàn thành | `adminFinalizeCampaignCompletion()` |
 | CAMPAIGN_COMPLETION_APPROVED_BY_ADMIN / REJECTED_BY_ADMIN | website | mọi owner tổ chức | Admin duyệt hoặc từ chối hoàn thành | `adminFinalizeCampaignCompletion()`, `adminRejectCampaign()` |
 | REPORT_APPROVED / REPORT_REJECTED | website | người báo cáo | Admin duyệt hoặc ban report | `report.service.ts` |
 | REPORT_STATUS | website | người báo cáo | Admin đánh dấu report đã xử lý | `adminMarkReportDone()` |

@@ -117,7 +117,9 @@ erDiagram
   Campaign ||--o{ CampaignJoiningRequest : "(không còn dùng)"
   Campaign ||--o{ CampaignShiftRegistration : ""
   CampaignShift ||--o{ CampaignShiftRegistration : "Restrict"
-  Campaign ||--o{ CampaignAttendanceCheckIn : ""
+  Campaign ||--o{ CampaignAttendanceCheckIn : "(lịch sử, không còn ghi)"
+  CampaignShift ||--o{ CampaignShiftAttendanceSession : "cascade"
+  CampaignShift ||--o{ CampaignShiftAttendance : "cascade"
   Campaign ||--o{ CampaignTask : ""
   CampaignTask ||--o{ CampaignTaskAssignment : ""
   CampaignTask ||--o| CampaignTaskResult : "1-1"
@@ -337,7 +339,9 @@ erDiagram
 | CampaignStatusLog (`campaign_status_logs`) | campaignId, type (`STATUS_CHANGE` \| `EDIT`), event (submit, approve, block, … hoặc `edit`), fromStatus?, toStatus?, actorId?, actorRole (`manager` \| `admin` \| `system`), reason?, changes (jsonb: diff `{field: {from, to}}`) | index (campaignId, createdAt); ghi ở `INC/modules/campaign/campaign-state-machine.ts > transitionCampaign(), logCampaignEdit()` |
 | CampaignShiftRegistration (`campaign_shift_registrations`) | campaignId (cascade), shiftId (FK **Restrict**), userId, createdAt, leftAt? (null = đang hiệu lực), closedByShift (`closed_by_shift`, default false; rời vì manager tắt ca, không phải tự rời), managerNotifiedAt? (đã tính vào bản tin hằng ngày cho manager), reminded24hAt? / reminded1hAt? (`reminded_24h_at` / `reminded_1h_at`; đã nhắc lịch cho ngày của ca, BR-358, migration `20261003100000_shift_reminders`). Cột `late_leave` đã bỏ ở migration `20261002120000_staffing_alerts` (spec -6: không ghi nhận vi phạm) | **unique một phần (shift_id, user_id) WHERE left_at IS NULL** (viết bằng SQL trong migration, Prisma không biết); index (campaignId, leftAt), (userId, leftAt), shiftId. Đăng ký ca không duyệt, không giới hạn (BR-170..BR-174) |
 | CampaignJoiningRequest (`campaign_joining_requests`) | campaignId?, volunteerId?, status (default 12) | **Không có unique** (campaignId, volunteerId). Bảng còn giữ nhưng server và web **không còn dùng** (đã thay bằng `campaign_shift_registrations`) |
-| CampaignAttendanceCheckIn (`campaign_attendance_check_ins`) | campaignId (cascade), userId, checkedInAt | **unique (campaignId, userId)** |
+| CampaignAttendanceCheckIn (`campaign_attendance_check_ins`) | campaignId (cascade), userId, checkedInAt | **unique (campaignId, userId)**. Điểm danh cũ theo campaign; chỉ còn là dữ liệu lịch sử, **không còn chỗ nào ghi** (thay bằng hai bảng dưới) |
+| CampaignShiftAttendanceSession (`campaign_shift_attendance_sessions`) | id, campaignId (cascade), shiftId (cascade), openedBy, openedAt, expiresAt (≤ 60 phút, không quá giờ kết thúc ca + 30 phút), closedAt?, closedBy? | index (shiftId, openedAt). Phiên QR điểm danh của một ca (BR-359), migration `20261004100000_shift_attendance` |
+| CampaignShiftAttendance (`campaign_shift_attendances`) | id, campaignId (cascade), shiftId (cascade), userId, checkInAt, checkOutAt?, checkInLatitude / checkInLongitude / checkInAccuracy?, checkOutLatitude / checkOutLongitude / checkOutAccuracy?, checkOutMethod? (`scan` \| `session_close`), manual (bool), manualReason?, recordedBy?, preRegistered (bool: lúc check-in có đăng ký ca này đang hiệu lực), offline (bool: request tới server trễ hơn một chu kỳ QR so với lúc quét), sessionId?, createdAt, updatedAt | **unique (shiftId, userId)**; index (campaignId, userId). Mỗi người một dòng mỗi ca (BR-360..BR-364), cùng migration |
 | CampaignTask (`campaign_tasks`) | campaignId?, title/titleVi/titleEn, description*, priority (default 2; DTO 1..3), status (default 12), scheduledDate, scheduledTime varchar(50) | |
 | CampaignTaskAssignment (`campaign_task_assignments`) | campaignTaskId?, volunteerId?, deletedAt | Không có unique |
 | CampaignTaskResult (`campaign_task_results`) | campaignTaskId **unique** (cascade), description* | 1-1 với task |

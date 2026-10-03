@@ -383,7 +383,9 @@ stateDiagram-v2
 | Vote.value | 0 / 1 / -1 | Toggle (BR-130) | `INC/modules/vote/vote.service.ts` |
 | SavedResource | active / deleted | Toggle (BR-133) | `saved_resource.service.ts` |
 | CampaignCompletionVerification.value | 0 / 1 / -1 | Gửi lại cùng giá trị thì thành 0 | `campaign_completion_verification.service.ts` |
-| CampaignAttendanceCheckIn | chưa có / có | Chỉ thêm, idempotent | `campaign_attendance.service.ts` |
+| CampaignShiftAttendance (mỗi người, mỗi ca) | chưa có → đã check-in (`checkOutAt = null`) → đã check-out | Quét QR lần đầu = check-in, hoặc điểm danh tay (`manual = true`); quét lại ≥ 10 phút sau check-in → check-out (`checkOutMethod = scan`); kết thúc điểm danh → check-out mọi người còn trong ca (`session_close`). Đã check-out thì không đổi nữa (`already_checked_out`). Không check-out = ca không đủ điều kiện (BR-361..BR-365) | `INC/modules/campaign/campaign_attendance/shift-attendance.service.ts > scan(), addManual(), closeSession()` |
+| CampaignShiftAttendanceSession | mở (`closedAt = null`, now < `expiresAt`) → hết hạn / đóng (`closedAt`, `closedBy`) | Mở lại được (phiên mới); đang mở thì mở lần nữa trả phiên cũ (BR-359, BR-363) | `shift-attendance.service.ts > openSession(), closeSession()` |
+| CampaignAttendanceCheckIn (cũ) | chưa có / có | Chỉ còn lịch sử, không còn chỗ ghi (BR-367) | — |
 | Notification.readAt | null → thời điểm | Chỉ một chiều | `NS/modules/notification/notification.service.ts > markRead()` |
 | AuthToken | active → revoked / used / hết hạn | Xem BR-008..BR-012 | `ID/modules/auth/*` |
 | OTP đơn tổ chức | active → used / expired | Xem BR-053, BR-054 | `organization-application-otp.service.ts` |
