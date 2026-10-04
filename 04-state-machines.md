@@ -81,7 +81,7 @@ stateDiagram-v2
 | `cancel_org_locked` | DRAFT 4 / PENDING_REVIEW 12 / NEEDS_REVISION 19 → CANCELLED 11 | admin (qua ban tổ chức) | Lý do = lý do ban tổ chức (BR-189) | Gỡ report; `rejectReason` = lý do; thông báo CAMPAIGN_CANCELLED cho người tạo + owner. Campaign UPCOMING / ACTIVE / 7 không bị đụng (chạy nốt; admin vẫn ban từng campaign). Mở khoá tổ chức không khôi phục | `campaign-lifecycle.service.ts > cancelForLockedOrganization()`, gọi trong `organization.service.ts > adminVerifyOrganization()` |
 | `cancel` | UPCOMING 27 / ACTIVE 1 → CANCELLED 11; PENDING_REVIEW 12 / NEEDS_REVISION 19 chỉ khi đã từng duyệt (`approvedAt`) | Người tạo hoặc LR / OWNER (BR-356) | Lý do bắt buộc | `rejectReason` = lý do; gỡ report; outbox CAMPAIGN_CANCELLED cho TNV còn đăng ký và đội quản lý; không cấp điểm | `campaign-lifecycle.service.ts > cancel()` |
 | `expire` | PENDING_REVIEW 12 / NEEDS_REVISION 19 → EXPIRED 20 | system (job) | Ngày đầu (`campaign_days.startAt`) đã tới, hoặc NEEDS_REVISION quá `revisionDeadline` (BR-186) | Gỡ report; thông báo CAMPAIGN_EXPIRED cho người tạo; `reason` = `start_passed` / `revision_overdue` | `campaign-lifecycle.service.ts > expireOverdue()`, `INC/modules/campaign/campaign-lifecycle.job.ts` |
-| `submit_completion` | ACTIVE 1 / LEGACY_IN_REVIEW 9 → PENDING_COMPLETION 7 | canManage | Mọi task đều 17 | Thông báo CAMPAIGN_COMPLETION_PENDING_ADMIN (admin trong env) và COMPLETION_VERIFY_INVITE (người dân gần) | `submitCampaignCompletionForAdminApproval()` |
+| `submit_completion` | ACTIVE 1 / LEGACY_IN_REVIEW 9 → PENDING_COMPLETION 7 | canManage | Mọi task đều 17; mọi ca đang bật đã Kết thúc (mục 3b, BR-374) | Thông báo CAMPAIGN_COMPLETION_PENDING_ADMIN (admin trong env) và COMPLETION_VERIFY_INVITE (người dân gần) | `submitCampaignCompletionForAdminApproval()` |
 | `approve_completion` | PENDING_COMPLETION 7 → COMPLETED 17 | Admin | Mọi task 17; có tier | Report và SOS → 17; outbox CAMPAIGN_COMPLETION_GREEN_POINTS; thông báo CAMPAIGN_DONE và APPROVED_BY_ADMIN | `adminFinalizeCampaignCompletion()` |
 | `reject_completion` | PENDING_COMPLETION 7 → ACTIVE 1 | Admin | Có lý do | rejectReason; thông báo REJECTED_BY_ADMIN | `adminRejectCampaign()` |
 | (xoá) | DRAFT 4 / PENDING_REVIEW 12 / NEEDS_REVISION 19 / BLOCKED 2 / EXPIRED 20 → xoá mềm | canDelete | Trạng thái khác → 409 `CAMPAIGN_NOT_DELETABLE` | Gỡ report | `deleteCampaign()` |
@@ -113,6 +113,31 @@ stateDiagram-v2
 | đã rời → (mới) | Chính người đó | Như đăng ký mới | Tạo dòng mới; unique một phần `(shift_id, user_id) WHERE left_at IS NULL` | `setMyShifts()` |
 
 Ngoài dòng đăng ký, job vòng đời còn đặt hai dấu báo số người (BR-172): `campaign_days.understaffed_notified_at` (đã xét thiếu người 72h trước ngày, một lần) và `campaign_shifts.over_max_notified_at` (đã báo vượt max; xoá khi về ≤ max).
+
+## 3b. Trạng thái ca (`campaign_shifts`, tính từ dữ liệu)
+
+Spec -8 4.2. **Không có cột status**: trạng thái tính mỗi lần đọc từ giờ hiện tại, `startAt`, giờ kết thúc thực tế `endedAt ?? endAt`, `minVolunteers` và việc ca đã có dòng `campaign_shift_results` hay chưa (`shift-status.ts > shiftStatusOf()`, BR-369), nên không lệch giờ do job.
+
+```mermaid
+stateDiagram-v2
+  [*] --> upcoming: ca bật (minVolunteers > 0)
+  upcoming --> running: tới startAt
+  running --> awaiting_result: tới endAt, chưa có kết quả
+  running --> ended: kết thúc sớm (đã có kết quả, endedAt = now)
+  awaiting_result --> ended: nộp kết quả
+  running --> running: nộp / sửa kết quả (vẫn chạy tới end)
+  upcoming --> off: manager tắt ca (minVolunteers = 0)
+```
+
+| Trạng thái | Điều kiện | Ghi chú |
+|---|---|---|
+| `off` | `minVolunteers = 0` | Không tính vào tổng quan, không chặn Báo hoàn thành |
+| `upcoming` | now < startAt | Chưa nộp kết quả được (409 `SHIFT_NOT_STARTED`) |
+| `running` | startAt ≤ now < `endedAt ?? endAt` | Nộp / sửa kết quả được; đã có kết quả thì kết thúc sớm được (BR-371) |
+| `awaiting_result` | now ≥ end, chưa có kết quả | Sau 24h nhắc mỗi ngày (BR-375); chặn Báo hoàn thành |
+| `ended` | now ≥ end, có kết quả | Kết quả vẫn sửa được tới khi campaign rời ACTIVE |
+
+Kết thúc sớm chỉ đi một chiều (`endedAt` không bị xoá). Admin từ chối hoàn thành để mở lại ca (spec 5.2) **[CHƯA HOÀN THIỆN]**.
 
 ## 4. Task của campaign (`campaign_tasks.status`)
 
@@ -387,6 +412,7 @@ stateDiagram-v2
 | CampaignShiftAttendance — cờ vị trí (`outOfArea`, `lowAccuracy`) | false → true | Quét > 50 m từ điểm tập trung hoặc GPS > 50 m thì bật cờ (vẫn ghi vào / ra); chỉ bật, không tắt (BR-361) | `shift-attendance.service.ts > scan()` |
 | CampaignShiftAttendance — loại khỏi tính điểm | tính (`excludedAt = null`) ↔ bị loại (`excludedAt`, `excludedBy`, `excludeReason`) | Người phụ trách ca hoặc người quản lý loại (có lý do) / khôi phục, bao nhiêu lần cũng được tới khi campaign COMPLETED (409 `CAMPAIGN_NOT_EDITABLE`); bị loại = không đủ điều kiện (BR-365, BR-368) | `shift-attendance.service.ts > setExcluded()` |
 | CampaignShiftAttendanceSession | mở (`closedAt = null`, now < `expiresAt`) → hết hạn / đóng (`closedAt`, `closedBy`) | Mở lại được (phiên mới); đang mở thì mở lần nữa trả phiên cũ (BR-359, BR-363) | `shift-attendance.service.ts > openSession(), closeSession()` |
+| CampaignShiftMedia | còn (`deletedAt = null`) → đã xoá; `includedInResult` false ↔ true | Thêm / xoá mềm (BR-372); nộp kết quả đặt `includedInResult` theo `mediaIds` (BR-370) | `shift-result.service.ts` |
 | CampaignAttendanceCheckIn (cũ) | chưa có / có | Chỉ còn lịch sử, không còn chỗ ghi (BR-367) | — |
 | Notification.readAt | null → thời điểm | Chỉ một chiều | `NS/modules/notification/notification.service.ts > markRead()` |
 | AuthToken | active → revoked / used / hết hạn | Xem BR-008..BR-012 | `ID/modules/auth/*` |

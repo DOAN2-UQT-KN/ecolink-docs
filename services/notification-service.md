@@ -19,7 +19,7 @@
 ```
 notification-service/
 ├─ prisma/schema.prisma            # Notification, NotificationJob, enum NotificationType/NotificationKind
-├─ prisma/migrations/              # 17 migration (init → notification_org_owner_kinds)
+├─ prisma/migrations/              # 29 migration (init → shift_result_missing_kind)
 ├─ templates/notifications/<KIND>/ # Handlebars: website.title|body[.vi].hbs, email.subject|text|html[.vi].hbs
 ├─ src/index.ts                    # Express app (API) — đồng thời import "./worker" nên API process cũng chạy worker
 ├─ src/worker.ts                   # entry của worker: startAllQueues()
@@ -108,6 +108,7 @@ Lọc theo preferences: các client dùng `enqueueWebsiteNotificationsToUsers()`
 | 8c | `CAMPAIGN_REVISION_REQUESTED` / `CAMPAIGN_BLOCKED` | website | Người tạo campaign + owner tổ chức | `review("request_revision" \| "block")` → `notifyReviewed()` (payload `reason`, `revisionDeadline`) | `enqueueWebsiteNotificationsToUsers()` | Admin-only → luôn bật |
 | 8e | `CAMPAIGN_CANCELLED` | website | Người tạo + owner của campaign bị huỷ vì khoá tổ chức; hoặc TNV + đội khi người tạo / owner huỷ (outbox, `byOrganizer`, template rẽ nhánh `{{#if byOrganizer}}`) | `campaign-lifecycle.service.ts > notifyCancelledForLockedOrganization()` (sau khi admin khoá tổ chức; payload `reason`) | `enqueueWebsiteNotificationsToUsers()` | Admin-only → luôn bật |
 | 8f | `CAMPAIGN_SHIFT_REMINDER` | website | TNV, 24h và 1h trước giờ tập trung (title / body rẽ nhánh `{{#if soon}}`, `{{#if safetyNotes}}`); migration `20261003100000_campaign_reminder_kind` | `IS/.../campaign_registration/shift-reminders.ts` | `enqueueWebsiteNotificationsToUsers()` | `volunteerRequest` |
+| 8g | `CAMPAIGN_SHIFT_RESULT_MISSING` | website | Người phụ trách ca + người tạo + manager, khi ca đang bật vẫn chưa có kết quả 24h sau giờ kết thúc (thực tế), lặp lại mỗi 24h (payload `campaignId`, `shiftId`, `day`, `meetingPoint`, `campaignTitle*`); migration `20261005100000_shift_result_missing_kind` | `IS/.../campaign_shift_result/shift-result-reminders.ts > sendShiftResultReminders()` (job vòng đời) | `enqueueWebsiteNotificationsToUsers()` | Admin-only set → luôn bật |
 | 8d | `CAMPAIGN_EXPIRED` | website | Người tạo campaign | `campaign-lifecycle.service.ts > expireOverdue()` → `notifyExpired()` (job `campaign-lifecycle.job.ts`; payload `revisionOverdue`) | `enqueueWebsiteNotificationsToUsers()` | Admin-only → luôn bật |
 | 9 | `CAMPAIGN_VERIFY_INVITE` | website | Người dân trong bán kính 5 000 m (vị trí đã lưu ở identity + người từng gửi report gần đó), trừ admin duyệt, người tạo, manager | `campaign.service.ts > reviewCampaign()` (decision approve) → `notifyNearbyCitizensToJoinApprovedCampaign()` → `notifyNearbyCitizensForCampaignVerify()` | `enqueueWebsiteNotificationsToUsers()` | `campaignNearbyVerify` |
 | 10 | `CAMPAIGN_COMPLETION_PENDING_ADMIN` | website | Danh sách user id trong env `CAMPAIGN_ADMIN_NOTIFY_USER_IDS` của IS (tên cũ `CAMPAIGN_COMPLETION_ADMIN_NOTIFY_USER_IDS` vẫn đọc khi chưa đặt tên mới) | `campaign.service.ts > submitCampaignCompletionForAdminApproval()` → `notifyAdminsCampaignCompletionPendingApproval()` | `enqueueCampaignCompletionPendingAdminWebsiteNotification()` → `postWebsiteNotificationJob()` | **Không** (gọi thẳng, bỏ qua filter) |

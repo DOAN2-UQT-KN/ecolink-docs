@@ -197,7 +197,12 @@ Cột **Owner tổ chức** là thành viên vai `LEGAL_REPRESENTATIVE` / `OWNER
 | Xem điểm danh của ca (`GET /:id/shifts/:shiftId/attendance`) | ❌ | ✅ | ✅ | ✅ | ❌ | ✅ | `listForShift()`: người phụ trách ca, người quản lý, platform admin (BR-366) |
 | Quét QR điểm danh (`POST /:id/attendance/scan`) | ✅ | ⚠️ | ⚠️ | ⚠️ | ✅ | ✅ | `authenticate`; không cần đăng ký ca. Người phụ trách ca hoặc người mở phiên không tự điểm danh ở ca đó (403 `ATTENDANCE_SELF_CHECK_IN`, spec 4.1.6); ngoài 50 m hoặc GPS > 50 m vẫn ghi nhưng gắn cờ (BR-361) |
 | Endpoint cũ `attendance-qr`, `attendance-check-in` | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | luôn 410 `ATTENDANCE_LEGACY_GONE` (BR-367) |
-| Gửi hoàn thành (mark-done) | ❌ | ✅ | ✅ | ✅ | ❌ | ❌ | `assertCanManage()` |
+| Nộp / sửa kết quả ca, kết thúc ca sớm (`PUT /:id/shifts/:shiftId/result`, `POST /:id/shifts/:shiftId/end`) | ❌ | ✅ | ✅ | ✅ | ❌ | ❌ | `shift-result.service.ts > save(), endEarly()`: người phụ trách ca (`leader_user_id`) **hoặc** `canManage()`; sai → 403 `CAMPAIGN_PERMISSION_DENIED`; chỉ khi campaign ACTIVE (BR-370, BR-371) |
+| Thêm ảnh vào kho ảnh của ca (`POST /:id/shifts/:shiftId/media`) | ❌ | ✅ | ✅ | ✅ | ⚠️ (đã điểm danh ca, chưa bị loại) | ❌ | `addMedia()`: TNV có dòng điểm danh chưa bị loại, người phụ trách hoặc `canManage()` (BR-372) |
+| Xoá ảnh của ca (`DELETE /:id/shifts/:shiftId/media/:mediaId`) | ❌ | ✅ | ✅ | ✅ | ⚠️ (ảnh của mình) | ❌ | `removeMedia()`: người đăng, người phụ trách hoặc `canManage()` |
+| Xem kết quả ca (`GET /:id/shifts/:shiftId/result`) | ⚠️ (chỉ trạng thái) | ✅ | ✅ | ✅ | ⚠️ (đã điểm danh ca; người khác chỉ thấy trạng thái) | ✅ | `get()`: kết quả + kho ảnh cho người quản lý, admin, người phụ trách, TNV có dòng điểm danh (BR-373) |
+| Tổng quan các ca (`GET /:id/shift-overview`) | ❌ | ✅ | ✅ | ✅ | ❌ | ✅ | `overview()`: `assertCanManage()` hoặc platform admin (BR-374) |
+| Gửi hoàn thành (mark-done) | ❌ | ✅ | ✅ | ✅ | ❌ | ❌ | `assertCanManage()`; còn ca đang bật chưa Kết thúc → 409 `CAMPAIGN_SHIFTS_NOT_ENDED` (BR-374) |
 | Xác nhận sạch (completion-verification) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | `authenticate` |
 | Duyệt hoặc từ chối hoàn thành | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | `adminReviewCampaignCompletion` |
 | Tạo và duyệt submission | ❌ | ✅ | ✅ | ✅ (tự duyệt được) | ❌ | ❌ | `assertCanManage()` |

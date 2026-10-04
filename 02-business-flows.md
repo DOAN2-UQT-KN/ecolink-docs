@@ -46,6 +46,7 @@
 | F29 | Quản lý manager của chiến dịch | Chiến dịch |
 | F30 | Quản lý task | Chiến dịch |
 | F31 | Điểm danh theo ca (QR động, GPS) | Chiến dịch |
+| F31b | Kết quả và trạng thái ca, kết thúc ca sớm, kho ảnh, tổng quan | Chiến dịch |
 | F32 | Gửi SOS và giải quyết SOS | Chiến dịch |
 | F33 | Gửi hoàn thành chiến dịch và cộng đồng xác nhận | Chiến dịch |
 | F34 | Admin duyệt hoặc từ chối hoàn thành chiến dịch và trao điểm | Chiến dịch + Điểm |
@@ -765,6 +766,7 @@ sequenceDiagram
 - `sendUnderstaffedAlerts()`: ngày bắt đầu trong vòng 72h (`CAMPAIGN_UNDERSTAFFED_NOTICE_HOURS`) có ca dưới số tối thiểu → `CAMPAIGN_SHIFT_UNDERSTAFFED` cho người tạo + manager; mỗi ngày xét một lần (`campaign_days.understaffed_notified_at`) (BR-172).
 - `sendOverMaxAlerts()`: ca chưa bắt đầu vượt `maxVolunteers` → `CAMPAIGN_SHIFT_OVER_MAX` một lần; về ≤ max thì xoá dấu để lần vượt sau báo tiếp (BR-172).
 - `sendShiftReminders()`: nhắc TNV 24h và 1h trước giờ tập trung của mỗi ngày đã đăng ký (`CAMPAIGN_SHIFT_REMINDER`, theo cài đặt `volunteerRequest`; dấu `reminded24hAt` / `reminded1hAt`) (BR-358).
+- `sendShiftResultReminders()`: ca đang bật chưa có kết quả 24h sau giờ kết thúc thực tế, campaign ACTIVE → `CAMPAIGN_SHIFT_RESULT_MISSING` cho người phụ trách + người tạo + manager, lặp lại mỗi 24h (dấu `resultRemindedAt`) (BR-375).
 - `sendRegistrationDigests()`: sau `CAMPAIGN_REGISTRATION_DIGEST_HOUR` (mặc định 20h giờ VN), bản tin đăng ký hằng ngày cho manager (F28, BR-174).
 - **File:** `campaign-lifecycle.service.ts > startDueCampaigns(), expireOverdue(), deleteStaleDrafts(), notifyExpired()`, `INC/modules/campaign/campaign_registration/registration-digest.ts`, `staffing-alerts.ts`, `shift-reminders.ts` (BR-186).
 
@@ -834,11 +836,11 @@ Spec -8 4.1. Điểm danh theo **từng ca**, check-in và check-out; thay QR th
 3. Người tham gia quét bằng camera, web mở link, lấy GPS chính xác rồi `POST /campaigns/:id/attendance/scan {token, latitude, longitude, accuracy, scannedAt?}`. Server kiểm theo thứ tự (BR-361): `scannedAt` không ở tương lai quá 1 phút; chữ ký + purpose, `0 ≤ scannedAt − ts ≤ 2 chu kỳ` (lệch đồng hồ 5 giây) → 422 `ATTENDANCE_QR_INVALID`; đúng campaign; phiên còn mở lúc quét → 409 `ATTENDANCE_NOT_OPEN`; khung giờ ca; người quét là người phụ trách ca hoặc người mở phiên → 403 `ATTENDANCE_SELF_CHECK_IN`. Vì mã hợp lệ tới 2 chu kỳ, một mã (hoặc ảnh chụp của nó) dùng được tối đa khoảng 20 phút. Vị trí **không còn chặn**: cách điểm tập trung của ca > 50 m hoặc `accuracy` > 50 m thì vẫn ghi check-in / check-out nhưng gắn cờ `outOfArea` / `lowAccuracy` (kèm khoảng cách) và log `EDIT / attendance_flagged` (actorRole `volunteer`, `changes {shiftId, userId, phase, distanceM, accuracy, outOfArea, lowAccuracy}`).
 4. Kết quả (BR-362): lần đầu = check-in (không sau giờ kết thúc ca; ghi `preRegistered`, người chưa đăng ký vẫn vào được); lần sau ≥ 10 phút sau check-in = check-out (`checkOutMethod = scan`), sớm hơn → `already_checked_in`, đã ra → `already_checked_out`. Response `{action, shiftId, checkInAt, checkOutAt, eligible, flags {outOfArea, lowAccuracy, distanceM}}`; bị gắn cờ thì client vẫn báo thành công kèm cảnh báo vàng. Client gửi `scannedAt` khi đồng bộ offline (dành cho app mobile; web chỉ quét online), request tới trễ hơn một chu kỳ (10 phút) thì gắn `offline`.
 5. Điểm danh tay (BR-364): `POST /campaigns/:id/shifts/:shiftId/attendance/manual {userId, reason, checkInAt?}` (người phụ trách / người quản lý, trong khung giờ phiên, không cho chính mình, tối đa max(1, 20% số người có mặt)); transaction Serializable, log `EDIT / manual_attendance`.
-6. Kết thúc (BR-363): `POST /campaigns/:id/shifts/:shiftId/attendance/close` → đóng phiên đang mở, check-out mọi người còn trong ca tại min(now, giờ kết thúc ca) với `checkOutMethod = session_close` → `{checkedOut}`.
+6. Kết thúc (BR-363): `POST /campaigns/:id/shifts/:shiftId/attendance/close` → đóng phiên đang mở, check-out mọi người còn trong ca tại min(now, giờ kết thúc thực tế của ca) với `checkOutMethod = session_close` → `{checkedOut}`.
 7. Xem (BR-366): `GET /campaigns/:id/shifts/:shiftId/attendance` (người phụ trách, người quản lý, platform admin) → phiên, `canRun`, số có mặt / tay / đủ điều kiện / `flagged` (gắn cờ, chưa loại), từng dòng (kèm cờ, khoảng cách, `excluded`, `excludeReason`); dòng gắn cờ xếp trước.
 8. Loại / khôi phục (BR-368): người phụ trách ca hoặc người quản lý xem các dòng gắn cờ rồi `POST /campaigns/:id/shifts/:shiftId/attendance/:userId/exclude {reason}` (ghi `excludedAt`, `excludedBy`, `excludeReason`, log `attendance_excluded`) hoặc `.../restore` (xoá các cột đó, log `attendance_restored`); không có dòng → 404; campaign COMPLETED → 409 `CAMPAIGN_NOT_EDITABLE`. Dòng gắn cờ mà không bị loại vẫn được tính điểm (quyết định sản phẩm).
 - **Ý nghĩa:** một ca đủ điều kiện khi có check-out, thời gian có mặt trong giờ ca ≥ 60% độ dài ca và không bị loại (BR-365); điểm khi hoàn thành chia theo tỉ lệ ca đủ điều kiện / ca đã đăng ký (F34, BR-167).
-- Kết quả và trạng thái ca (spec -8 4.2), xử lý chiến dịch quá ngày kết thúc (spec -8 4.4) **[CHƯA HOÀN THIỆN]**.
+- Kết quả và trạng thái ca (spec -8 4.2): F31b. Xử lý chiến dịch quá ngày kết thúc (spec -8 4.4) **[CHƯA HOÀN THIỆN]**.
 - **File:** `INC/modules/campaign/campaign_attendance/shift-attendance.service.ts > openSession(), issueQr(), scan(), closeSession(), addManual(), setExcluded(), listForShift(), completionCredits()`, `shift-attendance-qr.ts > signShiftQr(), verifyShiftQr()`, `campaign_attendance.repository.ts`, `DC/campaign-lifecycle.ts` (hằng `CAMPAIGN_ATTENDANCE_*`), `FE/app/(pages)/(main)/campaigns/[id]/_components/ShiftAttendancePanel.tsx`, `CampaignAttendanceCheckInHandler.tsx`.
 
 ```mermaid
@@ -865,6 +867,39 @@ sequenceDiagram
   INC->>INC: check-out người còn lại (session_close)
 ```
 
+### F31b — Kết quả và trạng thái ca
+Spec -8 4.2 (và 5.1 cho Báo hoàn thành).
+- **Trạng thái ca** tính từ dữ liệu, không lưu cột (BR-369): `off` (ca tắt) → `upcoming` → `running` → `awaiting_result` (đã qua giờ kết thúc thực tế `endedAt ?? endAt`, chưa có kết quả) → `ended` (có kết quả). Trả trong `shifts[].status` của chi tiết campaign.
+1. Từ lúc ca bắt đầu, người phụ trách ca hoặc người quản lý mở tab Kết quả của ca: `GET /campaigns/:id/shifts/:shiftId/result` → trạng thái, quyền (`canEdit`, `canView`, `canContribute`, `locked`), điểm rác của điểm tập trung (`reportIds`), kết quả đã lưu và kho ảnh (BR-373).
+2. TNV đã điểm danh ca (chưa bị loại), người phụ trách và người quản lý upload ảnh / video thẳng lên Cloudinary từ client rồi `POST /campaigns/:id/shifts/:shiftId/media {url, kind}`; xoá bằng `DELETE …/media/:mediaId` (người đăng, người phụ trách, người quản lý) (BR-372).
+3. Người phụ trách nộp / sửa kết quả: `PUT /campaigns/:id/shifts/:shiftId/result {description, wasteBags?, wasteKg?, reports[{reportId, status: cleaned|partial, beforeUrls[], afterUrls[]}], mediaIds[]}` → kiểm điểm rác thuộc điểm tập trung, đủ ảnh trước / sau, có mô tả và có ≥ 1 điểm rác hoặc ≥ 1 ảnh; upsert kết quả, thay danh sách điểm rác, đánh dấu ảnh được chọn `includedInResult`; log `EDIT / shift_result` (BR-370). Sửa được tới khi campaign rời ACTIVE (Báo hoàn thành).
+4. Ca đang chạy đã có kết quả có thể kết thúc sớm: `POST /campaigns/:id/shifts/:shiftId/end` → transaction: `endedAt = now`, đóng phiên điểm danh và check-out mọi người tại now, log `EDIT / shift_ended_early`; ca thành `ended`, điều kiện 60% tính trên độ dài thực tế (BR-371, BR-365).
+5. Ca qua giờ kết thúc mà chưa có kết quả ở `awaiting_result`; sau 24h job vòng đời nhắc người phụ trách và đội quản lý mỗi ngày (`CAMPAIGN_SHIFT_RESULT_MISSING`, BR-375).
+6. Người quản lý / platform admin xem tổng quan: `GET /campaigns/:id/shift-overview` → từng ca (trạng thái, đăng ký, có mặt, đủ điều kiện, khối lượng) và tổng (ca Kết thúc / ca bật, có mặt / đăng ký, tỉ lệ, túi, kg, điểm rác sạch / làm dở / chưa xử lý) (BR-374). Web vẽ lưới ngày × điểm tập trung trong card "Tiến độ các ca".
+7. Báo hoàn thành (F33) chỉ qua khi mọi ca đang bật đã `ended` (409 `CAMPAIGN_SHIFTS_NOT_ENDED {shiftIds}`).
+- **[CHƯA HOÀN THIỆN]:** chưa kiểm GPS hay thời điểm chụp của ảnh (chỉ lưu URL); admin từ chối để mở lại ca (spec 5.2) chưa có; bản đồ điểm rác (sạch / làm dở / chưa xử lý) chưa có; Báo hoàn thành chưa tự tổng hợp submission từ kết quả ca (spec 5.1).
+- **File:** `INC/modules/campaign/campaign_shift_result/shift-status.ts > shiftStatusOf(), effectiveEnd()`, `shift-result.service.ts > get(), save(), endEarly(), addMedia(), removeMedia(), overview(), assertAllShiftsEnded()`, `shift-result-reminders.ts > sendShiftResultReminders()`, `shift-attendance.service.ts > closeAllInTx()`, `FE/app/(pages)/(main)/campaigns/[id]/_components/ShiftResultPanel.tsx`, `ShiftProgressCard.tsx`.
+
+```mermaid
+sequenceDiagram
+  participant L as Người phụ trách
+  participant V as TNV đã điểm danh
+  participant C as Cloudinary
+  participant INC as incident-service
+  participant NS as notification-service
+  V->>C: upload ảnh
+  V->>INC: POST /shifts/:shiftId/media {url, kind}
+  L->>C: upload ảnh trước / sau
+  L->>INC: PUT /shifts/:shiftId/result
+  INC->>INC: kiểm điểm rác + ảnh, upsert, log shift_result
+  opt Kết thúc sớm (ca đang chạy, đã có kết quả)
+    L->>INC: POST /shifts/:shiftId/end
+    INC->>INC: endedAt = now, đóng điểm danh, check-out mọi người
+  end
+  Note over INC: Chưa có kết quả 24h sau khi kết thúc
+  INC->>NS: CAMPAIGN_SHIFT_RESULT_MISSING (mỗi 24h)
+```
+
 ### F32 — Gửi SOS và giải quyết SOS
 - `POST /api/v1/sos {campaignId, content, phone}`: campaign phải ACTIVE và có toạ độ (BR-190). SOS lấy toạ độ và địa chỉ của campaign, status=1.
 - `GET /api/v1/sos` (có lọc theo khoảng cách PostGIS nếu gửi lat/lng). Trang `/maps` poll mỗi 10 giây.
@@ -877,12 +912,13 @@ sequenceDiagram
 1. Người quản lý campaign (BR-159): `PUT /campaigns/:id/mark-done`:
    - Campaign phải ở ACTIVE hoặc INREVIEW.
    - Mọi task đã COMPLETED (campaign 0 task vẫn qua).
+   - Mọi ca đang bật (`minVolunteers > 0`) đã Kết thúc, tức đã qua giờ kết thúc thực tế và có kết quả (BR-374); còn thì 409 `CAMPAIGN_SHIFTS_NOT_ENDED {shiftIds}`. Tự tổng hợp submission từ kết quả ca (spec 5.1) **[CHƯA HOÀN THIỆN]**.
    - → **WAITING_CONFIRMED (7)** qua `transitionCampaign(event=submit_completion)`.
 2. Gửi thông báo:
    - `CAMPAIGN_COMPLETION_PENDING_ADMIN` tới danh sách user id trong env `CAMPAIGN_ADMIN_NOTIFY_USER_IDS` (tên cũ `CAMPAIGN_COMPLETION_ADMIN_NOTIFY_USER_IDS` vẫn được đọc khi chưa đặt tên mới; không lọc preference).
    - `CAMPAIGN_COMPLETION_VERIFY_INVITE` tới người dân trong bán kính 5 km (trừ người gửi, người tạo, manager, volunteer).
 3. Cộng đồng: `POST /campaigns/:id/completion-verification {value: 1|-1}` (chỉ khi campaign ở 7 hoặc 17; gửi lại cùng giá trị thì huỷ). Kết quả **chỉ để admin tham khảo**, không tự động làm gì.
-- **Lỗi:** status sai → 500 (message không được map); còn task chưa xong → 400.
+- **Lỗi:** status sai → 500 (message không được map); còn task chưa xong → 400; còn ca chưa Kết thúc → 409 `CAMPAIGN_SHIFTS_NOT_ENDED`.
 - **File:** `campaign.service.ts > submitCampaignCompletionForAdminApproval()`, `campaign_completion_verification.service.ts > submit()`.
 
 ### F34 — Admin duyệt hoặc từ chối hoàn thành chiến dịch và trao điểm
