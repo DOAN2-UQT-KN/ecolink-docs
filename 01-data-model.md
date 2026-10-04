@@ -125,6 +125,7 @@ erDiagram
   Campaign ||--o{ CampaignResult : ""
   CampaignResult ||--o{ CampaignResultFile : ""
   Campaign ||--o{ CampaignCompletionVerification : ""
+  Campaign ||--o{ CampaignCompletionReport : "cascade, submission hoàn thành"
   Campaign ||--o{ Sos : ""
   Campaign ||--o{ CampaignMeetingPoint : "1–5 điểm tập kết"
   CampaignMeetingPoint ||--o{ CampaignMeetingPointReport : ""
@@ -316,6 +317,8 @@ erDiagram
 | requirements | jsonb? | | `{minAge, skills[], bringOwnTools}`; difficulty ≥ 3 thì mặc định minAge 18 |
 | minVolunteersReason | text? | | Lý do khi tổng TNV tối thiểu của một ngày thấp hơn mức gợi ý của độ khó; bắt buộc khi đó lúc gửi duyệt (BR-164) |
 | lastNearbyInviteAt | timestamp? | | Lần cuối manager mời lại người dân gần đó (`POST /:id/invite-nearby`); mời lại cách nhau ≥ 24h (spec 3.2) |
+| completionSubmittedAt | datetime? (`completion_submitted_at`) | | Lần cuối manager báo hoàn thành (BR-165), migration `20261007100000_completion_review` |
+| completionRejectionCount | int (`completion_rejection_count`) | default 0 | Số lần admin từ chối hoàn thành; đủ 3 thì chỉ còn duyệt hoặc huỷ (BR-378) |
 | revisionDeadline | datetime? | | Hạn nộp lại khi NEEDS_REVISION (19) = lúc yêu cầu chỉnh sửa + 7 ngày |
 | submittedAt | datetime? | | Lần gửi duyệt gần nhất |
 | approvedAt | datetime? (`approved_at`) | | Lần admin duyệt đầu tiên (migration `20261002160000_campaign_approved_at`, backfill theo log `approve` hoặc `updated_at` của campaign đã qua duyệt). Có giá trị thì sửa sau này đi theo id và có thể đưa campaign về duyệt lại (BR-352). Migration `20261002180000_campaign_upcoming_backfill` chuyển các campaign ACTIVE 1 chưa tới ngày đầu (duyệt trước khi có UPCOMING) sang 27, log `backfill_upcoming` |
@@ -337,13 +340,14 @@ erDiagram
 | CampaignAttendanceCheckIn (`campaign_attendance_check_ins`) | campaignId (cascade), userId, checkedInAt | **unique (campaignId, userId)**. Điểm danh cũ theo campaign; chỉ còn là dữ liệu lịch sử, **không còn chỗ nào ghi** (thay bằng hai bảng dưới) |
 | CampaignShiftAttendanceSession (`campaign_shift_attendance_sessions`) | id, campaignId (cascade), shiftId (cascade), openedBy, openedAt, expiresAt (≤ 60 phút, không quá giờ kết thúc ca + 30 phút), closedAt?, closedBy? | index (shiftId, openedAt). Phiên QR điểm danh của một ca (BR-359), migration `20261004100000_shift_attendance` |
 | CampaignShiftAttendance (`campaign_shift_attendances`) | id, campaignId (cascade), shiftId (cascade), userId, checkInAt, checkOutAt?, checkInLatitude / checkInLongitude / checkInAccuracy?, checkOutLatitude / checkOutLongitude / checkOutAccuracy?, checkOutMethod? (`scan` \| `session_close`), manual (bool), manualReason?, recordedBy?, preRegistered (bool: lúc check-in có đăng ký ca này đang hiệu lực), offline (bool: request tới server trễ hơn một chu kỳ QR (10 phút) so với lúc quét), sessionId?, checkInDistanceM? / checkOutDistanceM? (Float, mét tới điểm tập trung lúc vào / ra), outOfArea (bool: có lần quét > 50 m từ điểm tập trung), lowAccuracy (bool: có lần quét GPS kém hơn 50 m), excludedAt?, excludedBy? (uuid), excludeReason?, createdAt, updatedAt | **unique (shiftId, userId)**; index (campaignId, userId). Mỗi người một dòng mỗi ca (BR-360..BR-364), cùng migration. Các cột khoảng cách, `outOfArea`, `lowAccuracy`, `excluded*` thêm ở migration `20261004120000_attendance_location_flags`; hai cờ chỉ bật, không tự tắt; `excludedAt` khác null = bị loại khỏi tính điểm (BR-368) |
-| CampaignShiftResult (`campaign_shift_results`) | id, campaignId (cascade), shiftId (cascade, **unique**), description, wasteBags? (`waste_bags`), wasteKg? (`waste_kg`), submittedBy, submittedAt, updatedAt | index campaignId. Kết quả của một ca (spec 4.2, BR-370), migration `20261005100000_shift_results`; sửa được tới khi campaign rời ACTIVE |
+| CampaignShiftResult (`campaign_shift_results`) | id, campaignId (cascade), shiftId (cascade, **unique**), description, wasteBags? (`waste_bags`), wasteKg? (`waste_kg`), submittedBy, submittedAt, updatedAt, reopenedAt? / reopenReason? / reopenedBy? (`reopened_at` / `reopen_reason` / `reopened_by`; admin mở lại ca khi từ chối hoàn thành, BR-378; lưu lại kết quả thì xoá) | index campaignId. Kết quả của một ca (spec 4.2, BR-370), migration `20261005100000_shift_results` (cột mở lại: `20261007100000_completion_review`); sửa được tới khi campaign rời ACTIVE |
 | CampaignShiftResultReport (`campaign_shift_result_reports`) | id, resultId (cascade), reportId (không FK), status (`cleaned` \| `partial`), beforeUrls `text[]`, afterUrls `text[]` | **unique (resultId, reportId)**, index reportId. Điểm rác đã xử lý trong ca; điểm rác của điểm tập trung không có dòng = chưa xử lý |
 | CampaignShiftMedia (`campaign_shift_media`) | id, campaignId (cascade), shiftId (cascade), url, kind (`image` \| `video`), uploadedBy, includedInResult (`included_in_result`, default false), createdAt, deletedAt? | index (shiftId, createdAt), campaignId. Kho ảnh / video hoạt động của ca (BR-372); người phụ trách chọn ảnh vào kết quả. Chưa lưu GPS / thời điểm chụp |
 | CampaignSubmission (`campaign_submissions`) | campaignId, submittedBy, title*, description*, status (default 12) | |
 | CampaignResult (`campaign_results`) | campaignId, campaignSubmissionId? (null = nháp), title NOT NULL | Không có API tạo bản nháp |
 | CampaignResultFile (`campaign_result_files`) | campaignResultId, mediaId (không có FK) | |
-| CampaignCompletionVerification (`campaign_completion_verifications`) | campaignId, userId, value (1 sạch / -1 chưa sạch / 0 huỷ) | **unique (userId, campaignId)** |
+| CampaignCompletionVerification (`campaign_completion_verifications`) | campaignId, userId, value (1 sạch / -1 chưa sạch / 0 huỷ) | **unique (userId, campaignId)**. Cờ đỏ ≥ 30% chưa sạch trên ≥ 5 phiếu tính khi đọc, không lưu (BR-377) |
+| CampaignCompletionReport (`campaign_completion_reports`) | id, campaignId (cascade), reportId (không FK), status (`cleaned` \| `partial` \| `unhandled`), reason? (lý do chưa xử lý), beforeUrls `text[]`, afterUrls `text[]`, submittedAt | **unique (campaignId, reportId)**, index reportId. Submission hoàn thành (spec 5.1, BR-376): mỗi lần báo hoàn thành xoá và ghi lại; migration `20261007100000_completion_review` |
 
 Tính năng Task đã bỏ: migration `20261006100000_drop_campaign_tasks` xoá 4 bảng `campaign_task_result_files`, `campaign_task_results`, `campaign_task_assignments`, `campaign_tasks` và các dòng `media` loại `CAMPAIGN_TASK_RESULT`. Kết quả công việc giờ ghi theo ca (`campaign_shift_results`).
 

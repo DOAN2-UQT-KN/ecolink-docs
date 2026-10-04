@@ -168,7 +168,7 @@ Không có gRPC, WebSocket hay message broker nào khác. Không có service nà
 | `TRANSLATE_TEXT` | SQS job | incident (report, organization, campaign), reward (gift, difficulty) | `TranslationWorker` trong chính service đó | `{resourceType, resourceId, translations[]}` |
 | `REPORT_COMPLETION_GREEN_POINTS` | Outbox → SQS | incident `adminMarkReportDone()` | reward `RewardIntakeWorker` | `{reportId, userId, points}` |
 | `REPORT_VOTE_MILESTONE_GREEN_POINTS` | Outbox → SQS | incident `vote.service.ts` | reward | `{reportId, reportCreatorUserId, voteCount}` |
-| `CAMPAIGN_COMPLETION_GREEN_POINTS` | Outbox → SQS | incident `adminFinalizeCampaignCompletion()` | reward | `{campaignId, credits:[{userId, points}]}` |
+| `CAMPAIGN_COMPLETION_GREEN_POINTS` | Outbox → SQS | incident `campaign_completion/completion.service.ts > approve()` | reward | `{campaignId, credits:[{userId, points}]}` |
 | `CAMPAIGN_FACEBOOK_RECOGNITION` | Outbox → SQS | [CHƯA HOÀN THIỆN] emit bị comment | reward | — |
 | `ORG_OWNER_ONBOARD` | Outbox → handler in-process | incident `organization-application-admin.service.ts > approve()` (một event mỗi owner) | incident → identity `POST /internal/v1/users/:id/activation-token`, rồi notification (`ACCOUNT_ACTIVATION` hoặc `ORG_OWNER_ATTACHED`) | `{applicationId, candidateId, organizationId, organizationName, organizationSlug, userId, email, fullName, isLegalRep}` |
 | `SEND_NOTIFICATION` | SQS job | notification `POST /api/v1/notifications/jobs` | notification `NotificationSendWorker` | `{type, kind, userId?, payload?}` |

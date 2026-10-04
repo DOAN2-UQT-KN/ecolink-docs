@@ -104,8 +104,9 @@ Trạng thái: ✅ đã có · 🟡 đang làm dở / có hạn chế · ❌ ch�
 | Tiến độ các ca | Tab **Tiến độ** (Progress) trên trang chiến dịch, chỉ quản lý và quản trị viên thấy (thay tab Công việc cũ): lưới ngày × điểm tập trung tô màu theo trạng thái ca, cùng số ca đã Kết thúc, số người có mặt / đăng ký và tỉ lệ, tổng khối lượng, số điểm rác đã sạch / làm dở / chưa xử lý. Bấm một ô ca mở khung xem nhanh kết quả của ca: số người đăng ký / có mặt / đủ điều kiện, từng điểm rác (đã sạch / làm dở / chưa xử lý, ảnh trước / sau), ảnh hoạt động đưa vào kết quả, mô tả và khối lượng (túi, kg); các phần thu gọn được, có link sang trang ca; chưa nộp thì ghi "Chưa nộp kết quả" | Quản lý, quản trị viên | ✅ |
 | Xử lý chiến dịch quá ngày kết thúc | Spec 4.4 | Hệ thống | **[CHƯA HOÀN THIỆN]** |
 | Yêu cầu khẩn cấp (SOS) | Gửi yêu cầu khẩn cấp tại chiến dịch đang diễn ra; hiện trên bản đồ | Người dùng; người quản lý chiến dịch và quản trị viên đóng SOS | 🟡 Chưa có thông báo và leo thang (spec 4.3) **[CHƯA HOÀN THIỆN]** |
-| Báo hoàn thành | Khi **mọi ca đang bật đã Kết thúc** (nút bị khoá kèm "Còn N ca chưa Kết thúc"), quản lý báo hoàn thành; người dân quanh khu vực được mời xác nhận khu vực "đã sạch" | Quản lý, người dân | ✅ |
-| Duyệt hoàn thành và trao điểm | Quản trị viên duyệt, người có ít nhất một ca **điểm danh đủ** (có mặt ≥ 60% thời gian ca) nhận điểm theo tỉ lệ số ca đủ / số ca đã đăng ký; hoặc từ chối để chiến dịch tiếp tục | Quản trị viên | ✅ |
+| Báo hoàn thành | Khi **mọi ca đang bật đã Kết thúc** (nút bị khoá kèm "Còn N ca chưa Kết thúc"), quản lý báo hoàn thành: hệ thống tự gom kết quả các ca thành bộ hồ sơ (từng điểm rác: đã sạch / làm dở kèm ảnh trước / sau); điểm rác chưa ca nào xử lý phải ghi lý do. Người dân quanh **từng điểm tập trung** được mời xác nhận khu vực "đã sạch" | Quản lý, người dân | ✅ |
+| Duyệt hoàn thành và trao điểm | Quản trị viên xem bộ hồ sơ (ảnh từng điểm rác, lý do chưa xử lý, số liệu, phiếu xác nhận của người dân; **cờ đỏ** khi ≥ 30% trên ít nhất 5 phiếu nói "chưa sạch") rồi chọn: **Duyệt** (chốt mức độ khó lần cuối; điểm rác đã xử lý thành đã xử lý, điểm rác chưa xử lý trở về danh sách chờ; người có ít nhất một ca **điểm danh đủ** nhận điểm theo tỉ lệ số ca đủ / số ca đã đăng ký), **Từ chối** (lý do + chọn ca cần bổ sung, tối đa 3 lần) hoặc **Huỷ** chiến dịch (không ai nhận điểm). Không có "Duyệt một phần" (quyết định sản phẩm) | Quản trị viên | ✅ |
+| Trang kết quả công khai, đánh giá, chia sẻ (spec 5.4) | Trang công khai kết quả chiến dịch, đánh giá, chia sẻ Facebook | Mọi người | **[CHƯA HOÀN THIỆN]** |
 | Nộp kết quả (submission) | Quản lý nộp bộ kết quả và duyệt nội bộ | Quản lý | 🟡 Chưa gắn với luồng hoàn thành, hiện không có tác dụng |
 | Vinh danh trên Facebook | Tự đăng bài cảm ơn tình nguyện viên lên Facebook | Hệ thống | ❌ Đã viết nhưng đang tắt |
 
@@ -259,12 +260,11 @@ Các trường hợp thường gặp:
 2a. 72 giờ trước mỗi ngày, ca nào còn dưới số tối thiểu thì người quản lý được báo; ca vượt số tối đa dự kiến cũng được báo để chuẩn bị thêm dụng cụ. Người quản lý có thể **mời lại người dân trong 5 km** quanh các điểm tập trung (mỗi 24 giờ một lần) hoặc **tắt một ca** chưa bắt đầu (ngày đó phải còn ca khác): tình nguyện viên của ca bị tắt được báo để chọn ca khác. Ca vẫn thiếu người vào ngày diễn ra thì vẫn chạy.
 4. Ngày diễn ra, từ 30 phút trước giờ tập trung, người phụ trách ca (hoặc quản lý) mở điểm danh cho ca và hiện **mã QR đổi mỗi 10 phút**. Người tham gia quét khi đến và quét lại khi về (sau ít nhất 10 phút). Quét xa điểm tập trung quá **50 m** hoặc vị trí không đủ chính xác vẫn được ghi nhận nhưng bị gắn cờ; người phụ trách / quản lý thấy số người bị gắn cờ cần kiểm tra và có thể loại (kèm lý do) hoặc khôi phục cho tới khi chiến dịch hoàn thành. Người không đăng ký trước vẫn điểm danh được. Người quên điện thoại được thêm tay (có lý do, tối đa 20% số người có mặt). Người phụ trách và người mở điểm danh không tự điểm danh ở ca mình chạy. Cuối ca, "Kết thúc điểm danh" tính mọi người còn lại là đã ra. Một ca **đủ** khi có giờ ra, có mặt ≥ 60% thời gian ca và không bị loại; quên quét ra (và không ai kết thúc điểm danh) thì ca không được tính.
 4a. Từ lúc ca bắt đầu, người phụ trách ca nộp **kết quả ca** (điểm rác đã sạch / làm dở kèm ảnh sau, ảnh trước nếu có, ảnh hoạt động, mô tả, khối lượng); tình nguyện viên đã điểm danh góp ảnh vào kho ảnh của ca để người phụ trách chọn. Ca chỉ **Kết thúc** khi có kết quả; có kết quả rồi thì có thể kết thúc ca sớm. Quá 24 giờ sau giờ kết thúc mà chưa có kết quả thì người phụ trách và quản lý được nhắc mỗi ngày.
-5. Khi mọi ca đang bật đã Kết thúc, người quản lý báo hoàn thành. Quản trị viên được báo; người dân gần đó được mời xác nhận khu vực đã sạch.
-6. Quản trị viên duyệt hoàn thành:
-   - Chiến dịch **hoàn thành**, các điểm rác chuyển sang **đã xử lý**.
-   - Người có ít nhất một ca điểm danh đủ nhận điểm xanh theo mức độ khó, nhân tỉ lệ số ca đủ / số ca đã đăng ký (tối đa 100%; người không đăng ký trước nhận đủ).
-   - Mọi người đang đăng ký ca và mọi người được cộng điểm nhận thông báo "chiến dịch hoàn thành".
-   - Nếu quản trị viên từ chối, chiến dịch tiếp tục hoạt động và các owner của tổ chức nhận lý do.
+5. Khi mọi ca đang bật đã Kết thúc, người quản lý báo hoàn thành: màn báo hoàn thành tóm tắt kết quả các ca và yêu cầu lý do cho từng điểm rác chưa ca nào xử lý. Quản trị viên được báo; người dân quanh từng điểm tập trung được mời xác nhận khu vực đã sạch.
+6. Quản trị viên xem bộ hồ sơ và quyết định:
+   - **Duyệt** (có thể chốt lại mức độ khó): chiến dịch **hoàn thành**, điểm rác đã xử lý chuyển sang **đã xử lý**, điểm rác chưa xử lý trở về danh sách chờ. Người có ít nhất một ca điểm danh đủ nhận điểm xanh theo mức độ khó đã chốt, nhân tỉ lệ số ca đủ / số ca đã đăng ký (tối đa 100%; người không đăng ký trước nhận đủ). Mọi người đang đăng ký ca và mọi người được cộng điểm nhận thông báo "chiến dịch hoàn thành".
+   - **Từ chối** (kèm lý do và các ca cần bổ sung): chiến dịch tiếp tục hoạt động, các ca được chọn quay về "Chờ kết quả" với nhãn "Cần bổ sung"; owner và người quản lý nhận lý do. Lưu lại kết quả các ca đó rồi báo hoàn thành lại. Sau 3 lần từ chối chỉ còn Duyệt hoặc Huỷ.
+   - **Huỷ**: chiến dịch bị huỷ, không ai nhận điểm, điểm rác trở về danh sách chờ; tình nguyện viên và đội tổ chức được báo.
 
 Các trường hợp thường gặp:
 - Bị từ chối tham gia: người xin nhận thông báo và có thể xin lại.
@@ -281,8 +281,9 @@ flowchart LR
   D --> E[Hoàn thành việc]
   E --> F[Quản lý báo hoàn thành]
   F --> G{Quản trị viên duyệt}
-  G -->|Từ chối| C
+  G -->|Từ chối, mở lại ca| D
   G -->|Duyệt| H[Nhận điểm xanh]
+  G -->|Huỷ| I[Chiến dịch bị huỷ]
 ```
 
 ### 4.6 Đổi quà
@@ -435,10 +436,10 @@ Mã BR-xxx dùng để đối chiếu với `docs/03-business-rules.md`.
 - **BR-189:** Khi admin khoá một tổ chức, các chiến dịch còn là nháp, đang chờ duyệt hoặc chờ chỉnh sửa của tổ chức đó bị huỷ và điểm rác được trả lại; người tạo và owner nhận thông báo. Chiến dịch đang chạy vẫn chạy nốt. Tổ chức bị khoá không tạo được chiến dịch mới.
 - **BR-164:** Gửi duyệt cần: tiêu đề 10–120 ký tự, mô tả từ 100 ký tự, ảnh bìa, lịch 1–7 ngày trong vòng 14 ngày (ngày đầu bắt đầu sau ít nhất 48 giờ, mỗi ngày tối đa 12 giờ), người liên hệ và số điện thoại, 1–5 điểm tập kết cách nhau tối đa 5 km, mỗi điểm rác (nếu chọn) thuộc đúng một điểm tập kết và nằm trong bán kính của nó — hiện tạm thời chưa bắt buộc phải có điểm rác; mỗi ca đang bật có người phụ trách và giờ tập trung trong ngày đó; mỗi ngày có ít nhất một ca; ngày nào có tổng tối thiểu thấp hơn mức gợi ý theo mức độ khó thì cần lý do. Sau khi được duyệt chưa sửa được lịch hay số chỗ (chưa làm). Mức độ khó từ 3 trở lên mặc định yêu cầu người tham gia đủ 18 tuổi.
 - **BR-169:** Điểm rác được giữ cho chiến dịch từ lúc gửi duyệt; mỗi điểm rác chỉ thuộc một chiến dịch.
-- **BR-165:** Chỉ báo hoàn thành được khi **mọi ca đang bật đã Kết thúc**; không còn điều kiện về công việc (tính năng Công việc đã bỏ).
-- **BR-166:** Quản trị viên chỉ duyệt hoặc từ chối khi chiến dịch đang chờ duyệt hoàn thành; từ chối phải có lý do.
-- **BR-167:** Điểm thưởng theo mức độ khó, nhân tỉ lệ số ca điểm danh đủ / số ca đã đăng ký; không cần đăng ký trước mới được điểm.
-- **BR-168:** Chiến dịch hoàn thành thì các điểm rác và SOS liên quan cũng hoàn thành; bị từ chối thì chiến dịch tiếp tục hoạt động.
+- **BR-165:** Chỉ báo hoàn thành được khi **mọi ca đang bật đã Kết thúc**; người dân quanh từng điểm tập trung được mời xác nhận.
+- **BR-166:** Quản trị viên chỉ quyết định khi chiến dịch đang chờ duyệt hoàn thành: Duyệt (có thể chốt lại mức độ khó), Từ chối hoặc Huỷ. Không có Duyệt một phần.
+- **BR-167:** Điểm thưởng theo mức độ khó đã chốt khi duyệt, nhân tỉ lệ số ca điểm danh đủ / số ca đã đăng ký; không cần đăng ký trước mới được điểm.
+- **BR-168:** Chiến dịch hoàn thành thì các điểm rác đã xử lý và SOS liên quan cũng hoàn thành; điểm rác chưa xử lý trở về danh sách chờ.
 - **BR-170:** Đăng ký ca có hiệu lực ngay, không cần duyệt, không giới hạn số người; chỉ đăng ký được ca đang bật, chưa bắt đầu, của chiến dịch "Sắp diễn ra" hoặc "Đang diễn ra", và phải xác nhận điều kiện tham gia.
 - **BR-171:** Trùng giờ hay ca đã vượt dự kiến chỉ hiện cảnh báo, không chặn; không ghi nhận vắng mặt hay rời ca.
 - **BR-172:** Người quản lý được báo khi ca còn thiếu người 72 giờ trước ngày diễn ra (mỗi ngày một lần) và khi ca vượt số tối đa dự kiến.
@@ -447,6 +448,10 @@ Mã BR-xxx dùng để đối chiếu với `docs/03-business-rules.md`.
 - **BR-175:** Người quản lý chiến dịch thêm / bớt được người quản lý khác.
 - **BR-359..BR-368:** Điểm danh theo ca: người phụ trách ca hoặc quản lý mở điểm danh (mỗi lần tối đa 60 phút, từ 30 phút trước giờ tập trung tới 30 phút sau khi ca kết thúc); mã QR đổi mỗi 10 phút (lệch spec 15–30 giây, theo quyết định sản phẩm; một mã dùng được tối đa khoảng 20 phút); quét ngoài 50 m quanh điểm tập trung hoặc vị trí kém chính xác hơn 50 m vẫn được ghi nhưng gắn cờ, người phụ trách / quản lý loại (có lý do) hoặc khôi phục, người bị loại không được điểm ca đó; quét lần đầu là vào, quét lại sau ít nhất 10 phút là ra; thêm tay tối đa 20% số người có mặt, có lý do; không tự điểm danh ở ca mình chạy; ca đủ khi có mặt ≥ 60% thời gian ca và không bị loại. Cách điểm danh cũ (một mã cho cả chiến dịch, hiệu lực 1 giờ) đã bỏ.
 - **BR-369..BR-375:** Kết quả và trạng thái ca: trạng thái tính từ giờ ca và việc đã có kết quả (Chưa bắt đầu / Đang diễn ra / Chờ kết quả / Kết thúc / Đã tắt); chỉ người phụ trách ca hoặc quản lý nộp kết quả, khi ca đã bắt đầu và chiến dịch đang diễn ra; mỗi điểm rác khai báo cần ít nhất một ảnh sau (ảnh trước không bắt buộc); kết quả phải có mô tả và ít nhất một điểm rác hoặc một ảnh; kết thúc sớm chỉ khi đã có kết quả; chỉ tình nguyện viên đã điểm danh (chưa bị loại) mới góp ảnh; báo hoàn thành bị chặn khi còn ca chưa Kết thúc; nhắc thiếu kết quả mỗi 24 giờ.
+- **BR-376:** Báo hoàn thành tự gom kết quả các ca thành bộ hồ sơ; điểm rác chưa ca nào xử lý phải có lý do (tối đa 500 ký tự).
+- **BR-377:** Quản trị viên thấy cờ đỏ khi ít nhất 30% phiếu của người dân nói "chưa sạch" và có ít nhất 5 phiếu.
+- **BR-378:** Từ chối hoàn thành phải có lý do và chọn ít nhất một ca cần bổ sung; các ca đó quay về "Chờ kết quả" tới khi lưu lại kết quả. Tối đa 3 lần từ chối, sau đó chỉ còn Duyệt hoặc Huỷ.
+- **BR-379:** Quản trị viên có thể huỷ chiến dịch đang chờ duyệt hoàn thành (kèm lý do): không ai nhận điểm, điểm rác trở về danh sách chờ.
 - **BR-182:** Người dân chỉ xác nhận "đã sạch" hoặc "chưa sạch" sau khi chiến dịch báo hoàn thành.
 - **BR-183:** Chỉ người quản lý nộp và duyệt bộ kết quả.
 - **BR-184:** Danh sách hiển thị tối đa 100 mục mỗi trang.

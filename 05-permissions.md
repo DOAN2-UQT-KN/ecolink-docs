@@ -199,9 +199,10 @@ Cột **Owner tổ chức** là thành viên vai `LEGAL_REPRESENTATIVE` / `OWNER
 | Xoá ảnh của ca (`DELETE /:id/shifts/:shiftId/media/:mediaId`) | ❌ | ✅ | ✅ | ✅ | ⚠️ (ảnh của mình) | ❌ | `removeMedia()`: người đăng, người phụ trách hoặc `canManage()` |
 | Xem kết quả ca (`GET /:id/shifts/:shiftId/result`) | ⚠️ (chỉ trạng thái) | ✅ | ✅ | ✅ | ⚠️ (đã điểm danh ca; người khác chỉ thấy trạng thái) | ✅ | `get()`: kết quả + kho ảnh cho người quản lý, admin, người phụ trách, TNV có dòng điểm danh (BR-373) |
 | Tổng quan các ca (`GET /:id/shift-overview`) | ❌ | ✅ | ✅ | ✅ | ❌ | ✅ | `overview()`: `assertCanManage()` hoặc platform admin (BR-374). Web chỉ hiện tab "Progress" cho đúng nhóm này (`canManageCampaign` hoặc `roleId === ADMIN_ROLE_ID`) |
-| Gửi hoàn thành (mark-done) | ❌ | ✅ | ✅ | ✅ | ❌ | ❌ | `assertCanManage()`; còn ca đang bật chưa Kết thúc → 409 `CAMPAIGN_SHIFTS_NOT_ENDED` (BR-374) |
+| Gửi hoàn thành (mark-done) | ❌ | ✅ | ✅ | ✅ | ❌ | ❌ | `assertCanManage()`; còn ca đang bật chưa Kết thúc → 409 `CAMPAIGN_SHIFTS_NOT_ENDED` (BR-374); thiếu lý do cho điểm rác chưa xử lý → 422 `CAMPAIGN_REPORTS_UNHANDLED` (BR-376) |
+| Xem màn duyệt hoàn thành (`GET /:id/completion-review`) | ❌ | ✅ | ✅ | ✅ | ❌ | ✅ | `completion.service.ts > getForReview()`: platform admin hoặc `assertCanManage()` (BR-376) |
 | Xác nhận sạch (completion-verification) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | `authenticate` |
-| Duyệt hoặc từ chối hoàn thành | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | `adminReviewCampaignCompletion` |
+| Duyệt, từ chối hoặc huỷ khi duyệt hoàn thành (`PUT /:id/completion-review`) | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | `campaign.controller.ts > adminReviewCampaignCompletion` (role `admin`); state machine `approve_completion` / `reject_completion` / `cancel_by_admin` chỉ actor `admin` |
 | Tạo và duyệt submission | ❌ | ✅ | ✅ | ✅ (tự duyệt được) | ❌ | ❌ | `assertCanManage()` |
 | Danh sách "multi-submission review" | ❌ | | | | | ✅ | controller |
 | Gửi SOS, xem SOS | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | `authenticate` |

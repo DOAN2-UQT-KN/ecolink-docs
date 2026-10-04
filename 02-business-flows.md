@@ -901,36 +901,43 @@ sequenceDiagram
 - **File:** `INC/modules/sos/*`.
 
 ### F33 — Gửi hoàn thành chiến dịch và cộng đồng xác nhận
-1. Người quản lý campaign (BR-159): `PUT /campaigns/:id/mark-done`:
+1. Người quản lý campaign (BR-159) bấm "Mark done": client mở `SubmitCompletionDialog`, đọc bản xem trước `GET /campaigns/:id/completion-review` (BR-376) để hiện tổng số và danh sách điểm rác chưa ca nào xử lý, mỗi điểm một ô lý do bắt buộc.
+2. `PUT /campaigns/:id/mark-done {unhandled?: [{reportId, reason}]}`:
    - Campaign phải ở ACTIVE hoặc INREVIEW.
-   - Mọi ca đang bật (`minVolunteers > 0`) đã Kết thúc, tức đã qua giờ kết thúc thực tế và có kết quả (BR-374); còn thì 409 `CAMPAIGN_SHIFTS_NOT_ENDED {shiftIds}`. Tự tổng hợp submission từ kết quả ca (spec 5.1) **[CHƯA HOÀN THIỆN]**.
-   - → **WAITING_CONFIRMED (7)** qua `transitionCampaign(event=submit_completion)`.
-2. Gửi thông báo:
+   - Mọi ca đang bật (`minVolunteers > 0`) đã Kết thúc, tức đã qua giờ kết thúc thực tế và có kết quả chưa bị mở lại (BR-374, BR-378); còn thì 409 `CAMPAIGN_SHIFTS_NOT_ENDED {shiftIds}`.
+   - Submission tự tổng hợp từ kết quả ca (BR-376): mỗi điểm rác lấy trạng thái tốt nhất (cleaned > partial) và mọi ảnh trước / sau; điểm rác không có trong kết quả nào phải có lý do, thiếu → 422 `CAMPAIGN_REPORTS_UNHANDLED {reportIds}`.
+   - Transaction: → **PENDING_COMPLETION (7)** qua `transitionCampaign(event=submit_completion)` kèm `completionSubmittedAt`; ghi đè snapshot `campaign_completion_reports`.
+3. Gửi thông báo:
    - `CAMPAIGN_COMPLETION_PENDING_ADMIN` tới danh sách user id trong env `CAMPAIGN_ADMIN_NOTIFY_USER_IDS` (tên cũ `CAMPAIGN_COMPLETION_ADMIN_NOTIFY_USER_IDS` vẫn được đọc khi chưa đặt tên mới; không lọc preference).
-   - `CAMPAIGN_COMPLETION_VERIFY_INVITE` tới người dân trong bán kính 5 km (trừ người gửi, người tạo, manager, volunteer).
-3. Cộng đồng: `POST /campaigns/:id/completion-verification {value: 1|-1}` (chỉ khi campaign ở 7 hoặc 17; gửi lại cùng giá trị thì huỷ). Kết quả **chỉ để admin tham khảo**, không tự động làm gì.
-- **Lỗi:** status sai → 500 (message không được map); còn ca chưa Kết thúc → 409 `CAMPAIGN_SHIFTS_NOT_ENDED`. Không còn điều kiện về task (tính năng Task đã bỏ).
-- **File:** `campaign.service.ts > submitCampaignCompletionForAdminApproval()`, `campaign_completion_verification.service.ts > submit()`.
+   - `CAMPAIGN_COMPLETION_VERIFY_INVITE` tới người dân trong bán kính 5 km quanh **từng điểm tập trung** (không có điểm thì quanh toạ độ campaign), trừ người gửi, người tạo, manager, volunteer.
+4. Cộng đồng: `POST /campaigns/:id/completion-verification {value: 1|-1}` (chỉ khi campaign ở 7 hoặc 17; gửi lại cùng giá trị thì huỷ). Kết quả để admin tham khảo; ≥ 30% "chưa sạch" trên ≥ 5 phiếu thì bật cờ đỏ ở màn duyệt (BR-377), không tự động làm gì.
+- **Lỗi:** status sai → 500 (message không được map); 409 `CAMPAIGN_SHIFTS_NOT_ENDED`; 422 `CAMPAIGN_REPORTS_UNHANDLED`.
+- **File:** `campaign.service.ts > submitCampaignCompletionForAdminApproval()`, `campaign_completion/completion.service.ts > prepareSubmission(), saveSubmission(), verifyPoints()`, `campaign_completion_verification.service.ts > submit()`.
 
-### F34 — Admin duyệt hoặc từ chối hoàn thành chiến dịch và trao điểm
-- `PUT /campaigns/:id/completion-review {decision: approve|reject, rejectReason?}`.
+### F34 — Admin duyệt, từ chối hoặc huỷ khi duyệt hoàn thành và trao điểm
+- Admin mở `CompletionReviewDialog` (trang `/admin/campaigns`), dữ liệu từ `GET /campaigns/:id/completion-review`: từng điểm rác với trạng thái, ảnh trước / sau hoặc lý do chưa xử lý; tổng số liệu; phiếu xác nhận sạch / chưa sạch và cờ đỏ; số lần đã từ chối.
+- `PUT /campaigns/:id/completion-review {decision: approve|reject|cancel, rejectReason?, difficulty?, shiftIds?}` (BR-166). **Không có Duyệt một phần** (quyết định sản phẩm): tỉ lệ duyệt luôn 100%.
 - **Approve** (campaign phải ở 7):
-  1. Lấy tier difficulty từ reward (không còn kiểm task).
-  2. `shift-attendance.service.ts > completionCredits()`: mỗi người có ≥ 1 ca đủ điều kiện (BR-365) nhận `round(tier.greenPoints × min(1, số ca đủ điều kiện / số ca đăng ký đang hiệu lực))`, 0 ca đăng ký tính là 1 (người không đăng ký trước nhận 100%); hệ số duyệt một phần (spec 5.2) tạm 100% (BR-167).
+  1. `difficulty` tuỳ chọn để chốt mức độ khó lần cuối (đổi thì ghi trong log); lấy tier theo mức đã chốt từ reward.
+  2. `shift-attendance.service.ts > completionCredits()`: mỗi người có ≥ 1 ca đủ điều kiện (BR-365) nhận `round(tier.greenPoints × min(1, số ca đủ điều kiện / số ca đăng ký đang hiệu lực))`, 0 ca đăng ký tính là 1 (BR-167).
   3. Transaction Serializable:
-     - campaign → COMPLETED (17), rejectReason=null.
-     - Mọi report của campaign → 17.
+     - campaign → COMPLETED (17), rejectReason=null, difficulty = mức đã chốt.
+     - Điểm rác `cleaned` / `partial` trong submission → 17; điểm rác còn lại của campaign → TODO, bỏ `campaignId` (BR-168).
      - Mọi SOS → 17.
      - Outbox `CAMPAIGN_COMPLETION_GREEN_POINTS {campaignId, credits[]}` (nếu có người nhận), dedup theo campaignId.
   4. Sau commit:
      - `CAMPAIGN_DONE` tới mọi người đang đăng ký ca **cộng** mọi người được cộng điểm (kể cả người không điểm danh).
      - `CAMPAIGN_COMPLETION_APPROVED_BY_ADMIN` tới mọi owner tổ chức.
   5. Relay đẩy event lên SQS `reward-intake`; reward cộng điểm (F36).
-- **Reject** (campaign phải ở 7, cần lý do):
-  - Campaign về **ACTIVE (1)** kèm rejectReason.
-  - Gửi `CAMPAIGN_COMPLETION_REJECTED_BY_ADMIN` tới mọi owner.
-- **[CHƯA HOÀN THIỆN]:** outbox `CAMPAIGN_FACEBOOK_RECOGNITION` bị comment (F48).
-- **File:** `campaign.service.ts > adminFinalizeCampaignCompletion(), adminRejectCampaign()`, `INC/outbox/*`.
+- **Reject** (BR-378; cần lý do và ≥ 1 ca đã có kết quả; tối đa 3 lần):
+  - Campaign về **ACTIVE (1)** kèm rejectReason, `completionRejectionCount + 1`.
+  - Các ca được chọn: kết quả ghi `reopenedAt`, `reopenReason` → ca về Chờ kết quả, có nhãn "Cần bổ sung" ở trang ca và popover Tiến độ; trang campaign của người quản lý có banner lý do + các ca phải bổ sung.
+  - Người phụ trách lưu lại kết quả → xoá `reopenedAt`, ca Kết thúc; người quản lý báo hoàn thành lại (F33).
+  - Gửi `CAMPAIGN_COMPLETION_REJECTED_BY_ADMIN {rejectReason, shifts}` tới owner, người tạo và người quản lý.
+  - Lần thứ 4 → 409 `CAMPAIGN_COMPLETION_REJECT_LIMIT`: chỉ còn Duyệt hoặc Huỷ.
+- **Cancel** (BR-379; cần lý do): `cancel_by_admin` → CANCELLED (11), nhả mọi điểm rác, không cộng điểm; outbox `CAMPAIGN_CANCELLED` (`byAdmin`) tới TNV và đội.
+- **[CHƯA HOÀN THIỆN]:** spec 5.4 (trang công khai kết quả, đánh giá, chia sẻ Facebook) chưa làm; outbox `CAMPAIGN_FACEBOOK_RECOGNITION` bị comment (F48).
+- **File:** `campaign.service.ts > adminReviewCampaignCompletion()` → `campaign_completion/completion.service.ts > review(), approve(), reject(), cancel()`, `campaign-lifecycle.service.ts > emitCancelledNotices()`, `INC/outbox/*`.
 
 ```mermaid
 sequenceDiagram
@@ -942,7 +949,7 @@ sequenceDiagram
   participant NS as notification
   A->>INC: PUT /campaigns/:id/completion-review approve
   INC->>RW: GET difficulty tier (greenPoints)
-  INC->>INC: TX: campaign/report/sos=17 + outbox CAMPAIGN_COMPLETION_GREEN_POINTS
+  INC->>INC: TX: campaign=17, report handled=17 / unhandled→TODO, sos=17 + outbox CAMPAIGN_COMPLETION_GREEN_POINTS
   INC->>NS: CAMPAIGN_DONE → volunteers, APPROVED_BY_ADMIN → các owner
   INC-->>A: 200
   RL->>Q: publish envelope
@@ -1142,13 +1149,14 @@ sequenceDiagram
 | CAMPAIGN_REVISION_REQUESTED / CAMPAIGN_BLOCKED | website | người tạo + owner | Admin yêu cầu chỉnh sửa / chặn / ban | như trên |
 | CAMPAIGN_EXPIRED | website | người tạo | Job hết hạn duyệt | `campaign-lifecycle.service.ts > expireOverdue() → notifyExpired()` |
 | CAMPAIGN_CANCELLED | website | người tạo + owner | Admin khoá tổ chức, campaign 4 / 12 / 19 bị huỷ (BR-189) | `organization.service.ts > adminVerifyOrganization()` → `campaign-lifecycle.service.ts > notifyCancelledForLockedOrganization()` |
-| CAMPAIGN_CANCELLED (`byOrganizer = 1`) | website (bỏ qua tắt thông báo) | TNV còn đăng ký; đội quản lý trừ người huỷ | Người tạo / owner huỷ campaign (BR-356); payload `reason` | `campaign-lifecycle.service.ts > cancel()` → outbox `WEBSITE_NOTIFICATION` |
+| CAMPAIGN_CANCELLED (`byOrganizer = 1`) | website (bỏ qua tắt thông báo) | TNV còn đăng ký; đội quản lý trừ người huỷ | Người tạo / owner huỷ campaign (BR-356); payload `reason` | `campaign-lifecycle.service.ts > cancel()` → `emitCancelledNotices()` → outbox `WEBSITE_NOTIFICATION` |
+| CAMPAIGN_CANCELLED (`byAdmin = 1`) | website (bỏ qua tắt thông báo) | TNV còn đăng ký; đội quản lý (người tạo, manager, owner) | Admin huỷ khi duyệt hoàn thành (BR-379); payload `reason` | `completion.service.ts > cancel()` → `campaign-lifecycle.service.ts > emitCancelledNotices()` → outbox `WEBSITE_NOTIFICATION` |
 | CAMPAIGN_SHIFT_REMINDER | website (theo `volunteerRequest`) | TNV | 24h / 1h trước giờ tập trung (BR-358); payload `hours`, `soon`, `day`, `gatherTime`, `meetingPoint`, `address`, `safetyNotes` | `shift-reminders.ts > sendShiftReminders()` |
 | CAMPAIGN_VERIFY_INVITE | website | người dân trong 5 km | Admin duyệt campaign | `campaign.service.ts > reviewCampaign() → notifyNearbyCitizensToJoinApprovedCampaign()` |
 | CAMPAIGN_COMPLETION_PENDING_ADMIN | website | user id trong env | Manager gửi hoàn thành | `submitCampaignCompletionForAdminApproval()` |
 | CAMPAIGN_COMPLETION_VERIFY_INVITE | website | người dân trong 5 km | Manager gửi hoàn thành | như trên |
-| CAMPAIGN_DONE | website | người đang đăng ký ca và người được cộng điểm | Admin duyệt hoàn thành | `adminFinalizeCampaignCompletion()` |
-| CAMPAIGN_COMPLETION_APPROVED_BY_ADMIN / REJECTED_BY_ADMIN | website | mọi owner tổ chức | Admin duyệt hoặc từ chối hoàn thành | `adminFinalizeCampaignCompletion()`, `adminRejectCampaign()` |
+| CAMPAIGN_DONE | website | người đang đăng ký ca và người được cộng điểm | Admin duyệt hoàn thành | `completion.service.ts > approve()` |
+| CAMPAIGN_COMPLETION_APPROVED_BY_ADMIN / REJECTED_BY_ADMIN | website | APPROVED: mọi owner tổ chức; REJECTED: owner, người tạo và người quản lý (kèm lý do và các ca phải bổ sung) | Admin duyệt hoặc từ chối hoàn thành | `completion.service.ts > notifyApproved(), notifyRejected()` |
 | REPORT_APPROVED / REPORT_REJECTED | website | người báo cáo | Admin duyệt hoặc ban report | `report.service.ts` |
 | REPORT_STATUS | website | người báo cáo | Admin đánh dấu report đã xử lý | `adminMarkReportDone()` |
 

@@ -31,7 +31,8 @@ stateDiagram-v2
 | bất kỳ (≠ 17) → COMPLETED 17 | Admin | Không kiểm tra trạng thái nguồn | Outbox REPORT_COMPLETION_GREEN_POINTS; thông báo REPORT_STATUS | `adminMarkReportDone()` |
 | TODO 21 → INPROCESS 22 | canManage gửi duyệt campaign, hoặc sửa điểm tập kết khi campaign đang 12 / 19 | Report chưa thuộc campaign nào (compare-and-set; bị lấy mất → 409 `CAMPAIGN_REPORTS_TAKEN`). Bản nháp **không** khoá report | Gán campaignId | `INC/modules/campaign/campaign-lifecycle.service.ts > syncReportLocks()` |
 | INPROCESS 22 → TODO 21 | canDelete (xoá campaign), canManage (bỏ report khỏi điểm tập kết khi 12 / 19), admin (block / ban), system (hết hạn) | — | campaignId = null | `syncReportLocks()`, `releaseAllReports()` (gọi từ `deleteCampaign()`, `review()`, `expireOverdue()`) |
-| INPROCESS 22 → COMPLETED 17 | Admin duyệt hoàn thành campaign | Campaign đang ở 7 | **Không** phát outbox điểm cho report | `adminFinalizeCampaignCompletion()` |
+| INPROCESS 22 → COMPLETED 17 | Admin duyệt hoàn thành campaign | Campaign đang ở 7; report `cleaned` / `partial` trong submission (campaign không có submission: mọi report) | **Không** phát outbox điểm cho report | `completion.service.ts > approve()` |
+| INPROCESS 22 → TODO 21 | Admin duyệt hoàn thành (report `unhandled`) hoặc huỷ khi duyệt hoàn thành | Campaign đang ở 7 | campaignId = null | `completion.service.ts > approve(), cancel()` |
 | bất kỳ (không bị ban) → PENDING 12, aiVerified=false | Chủ report | Report không bị ban | Enqueue ANALYZE_REPORT. Nếu `isVerify` đã true thì report bị kẹt (99) | `addReportImages()` |
 | aiVerified false → true | Worker | Có kết quả predict | aiRecommendation, ai_analysis_logs | `report-ai-analysis.service.ts > analyzeReport()` |
 | → xoá mềm | Chủ report | Report không bị ban | — | `deleteReport()` |
@@ -63,7 +64,8 @@ stateDiagram-v2
   ACTIVE_1 --> PENDING_COMPLETION_7: submit_completion (manager, mọi ca đã Kết thúc)
   LEGACY_IN_REVIEW_9 --> PENDING_COMPLETION_7: submit_completion (manager)
   PENDING_COMPLETION_7 --> COMPLETED_17: approve_completion (admin)
-  PENDING_COMPLETION_7 --> ACTIVE_1: reject_completion (admin, lý do)
+  PENDING_COMPLETION_7 --> ACTIVE_1: reject_completion (admin, lý do + ca mở lại, tối đa 3 lần)
+  PENDING_COMPLETION_7 --> CANCELLED_11: cancel_by_admin (admin, lý do)
   COMPLETED_17 --> [*]
 ```
 
@@ -81,9 +83,10 @@ stateDiagram-v2
 | `cancel_org_locked` | DRAFT 4 / PENDING_REVIEW 12 / NEEDS_REVISION 19 → CANCELLED 11 | admin (qua ban tổ chức) | Lý do = lý do ban tổ chức (BR-189) | Gỡ report; `rejectReason` = lý do; thông báo CAMPAIGN_CANCELLED cho người tạo + owner. Campaign UPCOMING / ACTIVE / 7 không bị đụng (chạy nốt; admin vẫn ban từng campaign). Mở khoá tổ chức không khôi phục | `campaign-lifecycle.service.ts > cancelForLockedOrganization()`, gọi trong `organization.service.ts > adminVerifyOrganization()` |
 | `cancel` | UPCOMING 27 / ACTIVE 1 → CANCELLED 11; PENDING_REVIEW 12 / NEEDS_REVISION 19 chỉ khi đã từng duyệt (`approvedAt`) | Người tạo hoặc LR / OWNER (BR-356) | Lý do bắt buộc | `rejectReason` = lý do; gỡ report; outbox CAMPAIGN_CANCELLED cho TNV còn đăng ký và đội quản lý; không cấp điểm | `campaign-lifecycle.service.ts > cancel()` |
 | `expire` | PENDING_REVIEW 12 / NEEDS_REVISION 19 → EXPIRED 20 | system (job) | Ngày đầu (`campaign_days.startAt`) đã tới, hoặc NEEDS_REVISION quá `revisionDeadline` (BR-186) | Gỡ report; thông báo CAMPAIGN_EXPIRED cho người tạo; `reason` = `start_passed` / `revision_overdue` | `campaign-lifecycle.service.ts > expireOverdue()`, `INC/modules/campaign/campaign-lifecycle.job.ts` |
-| `submit_completion` | ACTIVE 1 / LEGACY_IN_REVIEW 9 → PENDING_COMPLETION 7 | canManage | Mọi ca đang bật đã Kết thúc (mục 3b, BR-374) | Thông báo CAMPAIGN_COMPLETION_PENDING_ADMIN (admin trong env) và COMPLETION_VERIFY_INVITE (người dân gần) | `submitCampaignCompletionForAdminApproval()` |
-| `approve_completion` | PENDING_COMPLETION 7 → COMPLETED 17 | Admin | Có tier | Report và SOS → 17; outbox CAMPAIGN_COMPLETION_GREEN_POINTS; thông báo CAMPAIGN_DONE và APPROVED_BY_ADMIN | `adminFinalizeCampaignCompletion()` |
-| `reject_completion` | PENDING_COMPLETION 7 → ACTIVE 1 | Admin | Có lý do | rejectReason; thông báo REJECTED_BY_ADMIN | `adminRejectCampaign()` |
+| `submit_completion` | ACTIVE 1 / LEGACY_IN_REVIEW 9 → PENDING_COMPLETION 7 | canManage | Mọi ca đang bật đã Kết thúc (mục 3b, BR-374); điểm rác chưa ca nào xử lý có lý do (BR-376) | Ghi `completionSubmittedAt` và snapshot `campaign_completion_reports`; thông báo CAMPAIGN_COMPLETION_PENDING_ADMIN (admin trong env) và COMPLETION_VERIFY_INVITE (người dân quanh từng điểm tập trung) | `submitCampaignCompletionForAdminApproval()`, `completion.service.ts > prepareSubmission(), saveSubmission()` |
+| `approve_completion` | PENDING_COMPLETION 7 → COMPLETED 17 | Admin | Có tier của mức độ khó đã chốt (BR-166) | `difficulty` = mức đã chốt (đổi thì `changes.difficulty`); điểm rác handled → 17, unhandled → TODO 21 bỏ campaignId; SOS → 17; outbox CAMPAIGN_COMPLETION_GREEN_POINTS; thông báo CAMPAIGN_DONE và APPROVED_BY_ADMIN | `completion.service.ts > approve()` |
+| `reject_completion` | PENDING_COMPLETION 7 → ACTIVE 1 | Admin | Có lý do và ≥ 1 ca đã có kết quả; `completionRejectionCount < 3` (BR-378) | rejectReason; `completionRejectionCount + 1`; `changes.shiftIds`; mở lại các ca (mục 3b); thông báo REJECTED_BY_ADMIN cho owner + người tạo + manager | `completion.service.ts > reject()` |
+| `cancel_by_admin` | PENDING_COMPLETION 7 → CANCELLED 11 | Admin | Có lý do (BR-379) | rejectReason; gỡ report; không cấp điểm; outbox CAMPAIGN_CANCELLED (`byAdmin`) cho TNV và đội | `completion.service.ts > cancel()` |
 | (xoá) | DRAFT 4 / PENDING_REVIEW 12 / NEEDS_REVISION 19 / BLOCKED 2 / EXPIRED 20 → xoá mềm | canDelete | Trạng thái khác → 409 `CAMPAIGN_NOT_DELETABLE` | Gỡ report | `deleteCampaign()` |
 | (dọn nháp) | DRAFT 4 → xoá mềm | system (job) | `updatedAt` quá 30 ngày | Không có report nào bị khoá nên không cần gỡ | `deleteStaleDrafts()` |
 
@@ -116,7 +119,7 @@ Ngoài dòng đăng ký, job vòng đời còn đặt hai dấu báo số ngư�
 
 ## 3b. Trạng thái ca (`campaign_shifts`, tính từ dữ liệu)
 
-Spec -8 4.2. **Không có cột status**: trạng thái tính mỗi lần đọc từ giờ hiện tại, `startAt`, giờ kết thúc thực tế `endedAt ?? endAt`, `minVolunteers` và việc ca đã có dòng `campaign_shift_results` hay chưa (`shift-status.ts > shiftStatusOf()`, BR-369), nên không lệch giờ do job.
+Spec -8 4.2. **Không có cột status**: trạng thái tính mỗi lần đọc từ giờ hiện tại, `startAt`, giờ kết thúc thực tế `endedAt ?? endAt`, `minVolunteers` và việc ca đã có dòng `campaign_shift_results` chưa bị mở lại (`reopenedAt = null`) hay chưa (`shift-status.ts > shiftStatusOf(), hasLiveResult()`, BR-369), nên không lệch giờ do job.
 
 ```mermaid
 stateDiagram-v2
@@ -126,6 +129,7 @@ stateDiagram-v2
   running --> ended: kết thúc sớm (đã có kết quả, endedAt = now)
   awaiting_result --> ended: nộp kết quả
   running --> running: nộp / sửa kết quả (vẫn chạy tới end)
+  ended --> awaiting_result: admin từ chối hoàn thành, mở lại ca (reopenedAt)
   upcoming --> off: manager tắt ca (minVolunteers = 0)
 ```
 
@@ -134,10 +138,10 @@ stateDiagram-v2
 | `off` | `minVolunteers = 0` | Không tính vào tổng quan, không chặn Báo hoàn thành |
 | `upcoming` | now < startAt | Chưa nộp kết quả được (409 `SHIFT_NOT_STARTED`) |
 | `running` | startAt ≤ now < `endedAt ?? endAt` | Nộp / sửa kết quả được; đã có kết quả thì kết thúc sớm được (BR-371) |
-| `awaiting_result` | now ≥ end, chưa có kết quả | Sau 24h nhắc mỗi ngày (BR-375); chặn Báo hoàn thành |
+| `awaiting_result` | now ≥ end, chưa có kết quả, hoặc kết quả bị admin mở lại (`reopenedAt`) | Sau 24h nhắc mỗi ngày khi chưa có kết quả (BR-375, ca bị mở lại không được nhắc vì đã có dòng kết quả); chặn Báo hoàn thành; ca mở lại hiện nhãn "Cần bổ sung" kèm `reopenReason` |
 | `ended` | now ≥ end, có kết quả | Kết quả vẫn sửa được tới khi campaign rời ACTIVE |
 
-Kết thúc sớm chỉ đi một chiều (`endedAt` không bị xoá). Admin từ chối hoàn thành để mở lại ca (spec 5.2) **[CHƯA HOÀN THIỆN]**.
+Kết thúc sớm chỉ đi một chiều (`endedAt` không bị xoá). Admin từ chối hoàn thành chọn các ca đã có kết quả để mở lại (BR-378): kết quả ghi `reopenedAt`, `reopenReason`, `reopenedBy`, ca về `awaiting_result`; người phụ trách lưu lại kết quả thì ba cột này bị xoá và ca về `ended` (BR-370).
 
 ## 4. Task của campaign (đã bỏ)
 
@@ -163,7 +167,7 @@ stateDiagram-v2
 |---|---|---|---|
 | (mới) → 1 | User đăng nhập | Campaign ACTIVE, có toạ độ | `INC/modules/sos/sos.service.ts > create()` |
 | 1 → 17 | Platform admin hoặc canManage của campaign (BR-192) | Sai → 403 `SOS_PERMISSION_DENIED` | `solveSos()` |
-| 1 → 17 | Admin, gián tiếp | Duyệt hoàn thành campaign | `adminFinalizeCampaignCompletion()` |
+| 1 → 17 | Admin, gián tiếp | Duyệt hoàn thành campaign | `completion.service.ts > approve()` |
 
 ## 7. Đơn đăng ký tổ chức (`organization_applications.status`) và owner (`organization_application_owners.status`)
 
