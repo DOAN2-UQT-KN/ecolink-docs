@@ -44,7 +44,7 @@
 | F27b | Job vòng đời: bắt đầu chiến dịch sắp diễn ra, hết hạn duyệt, dọn bản nháp, bản tin đăng ký | Chiến dịch |
 | F28 | Tình nguyện viên đăng ký ca của chiến dịch | Chiến dịch |
 | F29 | Quản lý manager của chiến dịch | Chiến dịch |
-| F30 | Quản lý task | Chiến dịch |
+| F30 | Quản lý task (đã bỏ) | Chiến dịch |
 | F31 | Điểm danh theo ca (QR động, GPS) | Chiến dịch |
 | F31b | Kết quả và trạng thái ca, kết thúc ca sớm, kho ảnh, tổng quan | Chiến dịch |
 | F32 | Gửi SOS và giải quyết SOS | Chiến dịch |
@@ -783,7 +783,7 @@ Thay luồng xin tham gia có duyệt (spec 3.1). Đăng ký có hiệu lực ng
 3a. Ca thiếu người (spec 3.2): manager bấm "Mời người dân gần đây" → `POST /api/v1/campaigns/:id/invite-nearby`: tìm người dân trong 5 km quanh mọi điểm tập trung có ca mở (`nearby-users.ts > findNearbyUserIds()`: vị trí đã lưu + người từng báo cáo gần đó), trừ người tạo / manager / người đã đăng ký, gửi `CAMPAIGN_JOIN_INVITE` (payload `shortBy`); tối đa một lần mỗi 24h, giữ chỗ bằng compare-and-set trên `campaigns.last_nearby_invite_at` → `{invited}` (BR-174).
 3b. Manager tắt một ca chưa bắt đầu (ngày đó còn ca bật khác): `POST /api/v1/campaigns/:id/shifts/:shiftId/close` → transaction: ca `minVolunteers = 0`, `maxVolunteers = null`; đăng ký đang hiệu lực của ca → `leftAt`, `closedByShift = true`; log `EDIT / close_shift`, và outbox `WEBSITE_NOTIFICATION` (cùng transaction) → relay của worker gửi `CAMPAIGN_SHIFT_CLOSED` cho các TNV đó, có thử lại nếu notification-service lỗi, mời mở popup chọn ca khác → `{notified}` (BR-174). Gộp ca **[CHƯA HOÀN THIỆN]**.
 4. Không gửi thông báo theo từng lượt. Job vòng đời (F27b) gửi `CAMPAIGN_REGISTRATION_DIGEST` mỗi ngày một lần cho người tạo + manager của mỗi campaign có đăng ký mới, tách số theo ngày của campaign, rồi đánh dấu `managerNotifiedAt` (BR-174).
-- `GET /campaigns/volunteers/approved` giữ đường dẫn, trả mỗi người có ≥ 1 đăng ký ca (BR-158). Giao task yêu cầu đang đăng ký ca (BR-177); điểm danh thì không (người chưa đăng ký vẫn check-in được, F31).
+- `GET /campaigns/volunteers/approved` giữ đường dẫn, trả mỗi người có ≥ 1 đăng ký ca (BR-158). Điểm danh không yêu cầu đăng ký ca (người chưa đăng ký vẫn check-in được, F31).
 - **File:** `INC/modules/campaign/campaign_registration/campaign_registration.service.ts > getOptions(), setMyShifts(), listByShift(), inviteNearby(), closeShift()`, `campaign_registration.repository.ts`, `registration-digest.ts`, `staffing-alerts.ts`, `staffing-shared.ts`, `INC/modules/campaign/nearby-users.ts`.
 
 ```mermaid
@@ -818,16 +818,8 @@ sequenceDiagram
 - **Client:** tab Managers của `/campaigns/:id` có nút "Add manager" (dialog `AutoCompleteUser` theo tổ chức của campaign, chỉ chọn được thành viên chưa là manager) và icon gỡ trên từng manager trừ người tạo, chỉ khi `can_manage_campaign`; manager đang phụ trách ca sắp tới thì dialog gỡ liệt kê ca (link sang trang ca) và khoá nút gỡ. Trang ca có nút đổi người phụ trách; ca thiếu người phụ trách hiện nhãn đỏ "Cần gán người phụ trách".
 - **File:** `INC/modules/campaign/campaign_manager/campaign_manager.service.ts > removeManager(), assertLeadsNoShifts(), setShiftLeader()`, `campaign_manager/campaign-team.ts`, `campaign_manager/campaign-team-cleanup.ts > onMemberGone(), onRightsReduced()`.
 
-### F30 — Quản lý task
-1. `POST /campaigns/:id/tasks` (canManage) → task TODO (21), priority 1..3.
-2. `POST /campaigns/tasks/:taskId/assign {volunteerId}`: volunteer phải APPROVED. Nếu task đang ở TODO thì chuyển sang INPROCESS (22).
-3. `PUT /campaigns/tasks/:taskId`:
-   - Field của task: chỉ canManage được sửa.
-   - `result {description, file[]}`: volunteer được giao hoặc canManage. File được **thay toàn bộ**, tạo Media `CAMPAIGN_TASK_RESULT`.
-4. `PUT /campaigns/tasks/:taskId/status {status}` (volunteer được giao) nhận số tuỳ ý. UI yêu cầu phải có kết quả khi chọn COMPLETED.
-5. `POST /tasks/:taskId/unassign`, `DELETE /tasks/:taskId` (xoá mềm). `GET /tasks/my-assigned` lấy task của mình.
-- Điều kiện để gửi hoàn thành campaign: **mọi task phải ở COMPLETED (17)** (F33).
-- **File:** `INC/modules/campaign/campaign_task/campaign_task.service.ts`, `FE/components/client/shared/PopoverCreateUpdateTask.tsx`.
+### F30 — Quản lý task (đã bỏ)
+Tính năng Task đã bị gỡ: không còn endpoint `/campaigns/:id/tasks`, `/campaigns/tasks/*` (gọi vào trả 404; riêng `GET /campaigns/tasks/my-assigned` rơi vào `GET /campaigns/:id` nên trả 400 vì id không phải UUID), bốn bảng task bị xoá ở migration `20261006100000_drop_campaign_tasks`. Kết quả công việc ghi theo ca (F31b); Báo hoàn thành và admin duyệt không còn kiểm task (F33, F34).
 
 ### F31 — Điểm danh theo ca (QR động, GPS)
 Spec -8 4.1. Điểm danh theo **từng ca**, check-in và check-out; thay QR theo campaign cũ (hai endpoint cũ `POST /campaigns/:id/attendance-qr`, `POST /campaigns/:id/attendance-check-in` luôn trả 410 `ATTENDANCE_LEGACY_GONE`, bảng `campaign_attendance_check_ins` chỉ còn là lịch sử — BR-367).
@@ -875,7 +867,7 @@ Spec -8 4.2 (và 5.1 cho Báo hoàn thành).
 3. Người phụ trách nộp / sửa kết quả: `PUT /campaigns/:id/shifts/:shiftId/result {description, wasteBags?, wasteKg?, reports[{reportId, status: cleaned|partial, beforeUrls[], afterUrls[]}], mediaIds[]}` → kiểm điểm rác thuộc điểm tập trung, có ≥ 1 ảnh sau (ảnh trước không bắt buộc), có mô tả và có ≥ 1 điểm rác hoặc ≥ 1 ảnh; upsert kết quả, thay danh sách điểm rác, đánh dấu ảnh được chọn `includedInResult`; log `EDIT / shift_result` (BR-370). Sửa được tới khi campaign rời ACTIVE (Báo hoàn thành).
 4. Ca đang chạy đã có kết quả có thể kết thúc sớm: `POST /campaigns/:id/shifts/:shiftId/end` → transaction: `endedAt = now`, đóng phiên điểm danh và check-out mọi người tại now, log `EDIT / shift_ended_early`; ca thành `ended`, điều kiện 60% tính trên độ dài thực tế (BR-371, BR-365).
 5. Ca qua giờ kết thúc mà chưa có kết quả ở `awaiting_result`; sau 24h job vòng đời nhắc người phụ trách và đội quản lý mỗi ngày (`CAMPAIGN_SHIFT_RESULT_MISSING`, BR-375).
-6. Người quản lý / platform admin xem tổng quan: `GET /campaigns/:id/shift-overview` → từng ca (trạng thái, đăng ký, có mặt, đủ điều kiện, khối lượng) và tổng (ca Kết thúc / ca bật, có mặt / đăng ký, tỉ lệ, túi, kg, điểm rác sạch / làm dở / chưa xử lý) (BR-374). Web vẽ lưới ngày × điểm tập trung trong card "Tiến độ các ca".
+6. Người quản lý / platform admin xem tổng quan: `GET /campaigns/:id/shift-overview` → từng ca (trạng thái, đăng ký, có mặt, đủ điều kiện, khối lượng) và tổng (ca Kết thúc / ca bật, có mặt / đăng ký, tỉ lệ, túi, kg, điểm rác sạch / làm dở / chưa xử lý) (BR-374). Web vẽ lưới ngày × điểm tập trung ở tab "Progress" (Tiến độ) của trang chiến dịch; bấm một ô ca mở popover kết quả của ca đó (gọi `GET …/shifts/:shiftId/result` khi mở).
 7. Báo hoàn thành (F33) chỉ qua khi mọi ca đang bật đã `ended` (409 `CAMPAIGN_SHIFTS_NOT_ENDED {shiftIds}`).
 - **[CHƯA HOÀN THIỆN]:** chưa kiểm GPS hay thời điểm chụp của ảnh (chỉ lưu URL); admin từ chối để mở lại ca (spec 5.2) chưa có; bản đồ điểm rác (sạch / làm dở / chưa xử lý) chưa có; Báo hoàn thành chưa tự tổng hợp submission từ kết quả ca (spec 5.1).
 - **File:** `INC/modules/campaign/campaign_shift_result/shift-status.ts > shiftStatusOf(), effectiveEnd()`, `shift-result.service.ts > get(), save(), endEarly(), addMedia(), removeMedia(), overview(), assertAllShiftsEnded()`, `shift-result-reminders.ts > sendShiftResultReminders()`, `shift-attendance.service.ts > closeAllInTx()`, `FE/app/(pages)/(main)/campaigns/[id]/_components/ShiftResultPanel.tsx`, `ShiftProgressCard.tsx`.
@@ -911,20 +903,19 @@ sequenceDiagram
 ### F33 — Gửi hoàn thành chiến dịch và cộng đồng xác nhận
 1. Người quản lý campaign (BR-159): `PUT /campaigns/:id/mark-done`:
    - Campaign phải ở ACTIVE hoặc INREVIEW.
-   - Mọi task đã COMPLETED (campaign 0 task vẫn qua).
    - Mọi ca đang bật (`minVolunteers > 0`) đã Kết thúc, tức đã qua giờ kết thúc thực tế và có kết quả (BR-374); còn thì 409 `CAMPAIGN_SHIFTS_NOT_ENDED {shiftIds}`. Tự tổng hợp submission từ kết quả ca (spec 5.1) **[CHƯA HOÀN THIỆN]**.
    - → **WAITING_CONFIRMED (7)** qua `transitionCampaign(event=submit_completion)`.
 2. Gửi thông báo:
    - `CAMPAIGN_COMPLETION_PENDING_ADMIN` tới danh sách user id trong env `CAMPAIGN_ADMIN_NOTIFY_USER_IDS` (tên cũ `CAMPAIGN_COMPLETION_ADMIN_NOTIFY_USER_IDS` vẫn được đọc khi chưa đặt tên mới; không lọc preference).
    - `CAMPAIGN_COMPLETION_VERIFY_INVITE` tới người dân trong bán kính 5 km (trừ người gửi, người tạo, manager, volunteer).
 3. Cộng đồng: `POST /campaigns/:id/completion-verification {value: 1|-1}` (chỉ khi campaign ở 7 hoặc 17; gửi lại cùng giá trị thì huỷ). Kết quả **chỉ để admin tham khảo**, không tự động làm gì.
-- **Lỗi:** status sai → 500 (message không được map); còn task chưa xong → 400; còn ca chưa Kết thúc → 409 `CAMPAIGN_SHIFTS_NOT_ENDED`.
+- **Lỗi:** status sai → 500 (message không được map); còn ca chưa Kết thúc → 409 `CAMPAIGN_SHIFTS_NOT_ENDED`. Không còn điều kiện về task (tính năng Task đã bỏ).
 - **File:** `campaign.service.ts > submitCampaignCompletionForAdminApproval()`, `campaign_completion_verification.service.ts > submit()`.
 
 ### F34 — Admin duyệt hoặc từ chối hoàn thành chiến dịch và trao điểm
 - `PUT /campaigns/:id/completion-review {decision: approve|reject, rejectReason?}`.
 - **Approve** (campaign phải ở 7):
-  1. Kiểm tra lại mọi task đã COMPLETED; lấy tier difficulty từ reward.
+  1. Lấy tier difficulty từ reward (không còn kiểm task).
   2. `shift-attendance.service.ts > completionCredits()`: mỗi người có ≥ 1 ca đủ điều kiện (BR-365) nhận `round(tier.greenPoints × min(1, số ca đủ điều kiện / số ca đăng ký đang hiệu lực))`, 0 ca đăng ký tính là 1 (người không đăng ký trước nhận 100%); hệ số duyệt một phần (spec 5.2) tạm 100% (BR-167).
   3. Transaction Serializable:
      - campaign → COMPLETED (17), rejectReason=null.

@@ -120,11 +120,6 @@ erDiagram
   Campaign ||--o{ CampaignAttendanceCheckIn : "(lịch sử, không còn ghi)"
   CampaignShift ||--o{ CampaignShiftAttendanceSession : "cascade"
   CampaignShift ||--o{ CampaignShiftAttendance : "cascade"
-  Campaign ||--o{ CampaignTask : ""
-  CampaignTask ||--o{ CampaignTaskAssignment : ""
-  CampaignTask ||--o| CampaignTaskResult : "1-1"
-  CampaignTaskResult ||--o{ CampaignTaskResultFile : ""
-  Media ||--o{ CampaignTaskResultFile : "mediaId"
   Campaign ||--o{ CampaignSubmission : ""
   CampaignSubmission ||--o{ CampaignResult : ""
   Campaign ||--o{ CampaignResult : ""
@@ -297,7 +292,7 @@ erDiagram
 
 **ReportMediaFile (`report_media_files`)**: gồm reportId (FK), mediaId (uuid, không có FK), uploadedBy, deletedAt.
 
-**Media (`media`)**: gồm url (text), type varchar(50) (`REPORT`, `USER`, `REPORT_RESULT`, `AI_PREDICT`, `OTHER`, `CAMPAIGN_TASK_RESULT`, `CAMPAIGN_RESULT`).
+**Media (`media`)**: gồm url (text), type varchar(50) (`REPORT`, `USER`, `REPORT_RESULT`, `AI_PREDICT`, `OTHER`, `CAMPAIGN_RESULT`). Loại `CAMPAIGN_TASK_RESULT` đã bị xoá cùng tính năng Task (migration `20261006100000_drop_campaign_tasks`).
 
 **AiAnalysisLog (`ai_analysis_logs`)**: gồm reportId (FK), reportMediaFileId?, mediaId? (ảnh kết quả AI), detections int?, processedAt.
 
@@ -345,14 +340,12 @@ erDiagram
 | CampaignShiftResult (`campaign_shift_results`) | id, campaignId (cascade), shiftId (cascade, **unique**), description, wasteBags? (`waste_bags`), wasteKg? (`waste_kg`), submittedBy, submittedAt, updatedAt | index campaignId. Kết quả của một ca (spec 4.2, BR-370), migration `20261005100000_shift_results`; sửa được tới khi campaign rời ACTIVE |
 | CampaignShiftResultReport (`campaign_shift_result_reports`) | id, resultId (cascade), reportId (không FK), status (`cleaned` \| `partial`), beforeUrls `text[]`, afterUrls `text[]` | **unique (resultId, reportId)**, index reportId. Điểm rác đã xử lý trong ca; điểm rác của điểm tập trung không có dòng = chưa xử lý |
 | CampaignShiftMedia (`campaign_shift_media`) | id, campaignId (cascade), shiftId (cascade), url, kind (`image` \| `video`), uploadedBy, includedInResult (`included_in_result`, default false), createdAt, deletedAt? | index (shiftId, createdAt), campaignId. Kho ảnh / video hoạt động của ca (BR-372); người phụ trách chọn ảnh vào kết quả. Chưa lưu GPS / thời điểm chụp |
-| CampaignTask (`campaign_tasks`) | campaignId?, title/titleVi/titleEn, description*, priority (default 2; DTO 1..3), status (default 12), scheduledDate, scheduledTime varchar(50) | |
-| CampaignTaskAssignment (`campaign_task_assignments`) | campaignTaskId?, volunteerId?, deletedAt | Không có unique |
-| CampaignTaskResult (`campaign_task_results`) | campaignTaskId **unique** (cascade), description* | 1-1 với task |
-| CampaignTaskResultFile (`campaign_task_result_files`) | campaignTaskResultId (cascade), mediaId (FK → media) | |
 | CampaignSubmission (`campaign_submissions`) | campaignId, submittedBy, title*, description*, status (default 12) | |
 | CampaignResult (`campaign_results`) | campaignId, campaignSubmissionId? (null = nháp), title NOT NULL | Không có API tạo bản nháp |
 | CampaignResultFile (`campaign_result_files`) | campaignResultId, mediaId (không có FK) | |
 | CampaignCompletionVerification (`campaign_completion_verifications`) | campaignId, userId, value (1 sạch / -1 chưa sạch / 0 huỷ) | **unique (userId, campaignId)** |
+
+Tính năng Task đã bỏ: migration `20261006100000_drop_campaign_tasks` xoá 4 bảng `campaign_task_result_files`, `campaign_task_results`, `campaign_task_assignments`, `campaign_tasks` và các dòng `media` loại `CAMPAIGN_TASK_RESULT`. Kết quả công việc giờ ghi theo ca (`campaign_shift_results`).
 
 **Sos (`sos`)**
 | Field | Kiểu | Ràng buộc | Ý nghĩa |
@@ -610,10 +603,10 @@ Mọi cột `status` kiểu Int ở incident, notification và reward (job) đ�
 | 11 | `_STATUS_CANCELED` | BackgroundJob bị huỷ |
 | 12 | `_STATUS_PENDING` | Mặc định: Report mới, Organization join request, Job, Outbox; Campaign chờ duyệt (PENDING_REVIEW) |
 | 14 | `_STATUS_APPROVED` | Organization join request được duyệt, Submission được duyệt; `requestStatus` của campaign khi viewer đang đăng ký ca |
-| 17 | `_STATUS_COMPLETED` | Report, Campaign, Task, SOS, Job hoàn tất |
+| 17 | `_STATUS_COMPLETED` | Report, Campaign, SOS, Job hoàn tất |
 | 18 | `_STATUS_REJECTED` | Organization join request bị từ chối, Submission bị từ chối |
-| 21 | `_STATUS_TODO` | Report đã được duyệt, chờ gán vào campaign; Task mới |
-| 22 | `_STATUS_INPROCESS` | Report đang nằm trong campaign; Task đã được giao; Job đang chạy |
+| 21 | `_STATUS_TODO` | Report đã được duyệt, chờ gán vào campaign |
+| 22 | `_STATUS_INPROCESS` | Report đang nằm trong campaign; Job đang chạy |
 | 23 | `_STATUS_FAILED` | Job hoặc outbox thất bại |
 | 19 | `_STATUS_RETURNED` | Campaign cần chỉnh sửa (NEEDS_REVISION) |
 | 20 | `_STATUS_OBSOLETE` | Campaign hết hạn duyệt (EXPIRED) |
@@ -660,7 +653,7 @@ Vòng đời campaign dùng tên riêng trong `DC/campaign-lifecycle.ts > Campai
 | VOLUNTEER_REQUEST, VOLUNTEER_APPROVED, VOLUNTEER_REJECTED | volunteerRequest | Có |
 | REPORT_STATUS | reportStatus | Có |
 | REPORT_READY | reportStatus | Không |
-| CAMPAIGN_SUBMISSION_PENDING_REVIEW, CAMPAIGN_SUBMISSION_APPROVED, TASK_ASSIGNED | campaignNew | Không |
+| CAMPAIGN_SUBMISSION_PENDING_REVIEW, CAMPAIGN_SUBMISSION_APPROVED | campaignNew | Không |
 | CAMPAIGN_COMPLETION_PENDING_ADMIN | (luôn gửi) | Có |
 | ORGANIZATION_CONTACT_VERIFY, ORGANIZATION_APPROVED, ORGANIZATION_REJECTED | (luôn gửi) | Có |
 | ORG_APPLICATION_OTP, ORG_APPLICATION_DRAFT_STARTED, ORG_APPLICATION_DRAFT_UPDATED, ORG_APPLICATION_RECEIVED, ORG_APPLICATION_NEEDS_INFO, ORG_APPLICATION_REJECTED, ORG_OWNER_CONFIRMATION_REQUEST, ORG_OWNER_DECLINED, ORG_OWNER_CONFIRMATION_EXPIRED, ORG_APPLICATION_WITHDRAWN_NOTICE, ORG_OWNER_ATTACHED, ACCOUNT_ACTIVATION (đổi tên từ ORG_ACCOUNT_ACTIVATION), ORG_INVITATION | (luôn gửi) | Có |
@@ -672,7 +665,7 @@ Vòng đời campaign dùng tên riêng trong `DC/campaign-lifecycle.ts > Campai
 | CAMPAIGN_SHIFT_CLOSED (migration `20261002120000_staffing_kinds`); CAMPAIGN_CREATOR_TRANSFERRED, CAMPAIGN_SHIFT_LEADER_REMOVED (migration `20261002140000_campaign_team_kinds`); CAMPAIGN_UPDATED_NEEDS_REVIEW, CAMPAIGN_REREVIEW_EXPIRED (migration `20261002160000_campaign_update_kinds`) | (luôn gửi) | Có |
 | CAMPAIGN_SHIFT_REMINDER (migration `20261003100000_campaign_reminder_kind`) | volunteerRequest | Có |
 | CAMPAIGN_SHIFT_RESULT_MISSING (migration `20261005100000_shift_result_missing_kind`) | (luôn gửi) | Có |
-| RESET_PASSWORD, GENERIC | (luôn gửi) | Không |
+| RESET_PASSWORD, GENERIC, TASK_ASSIGNED (giá trị enum còn giữ; tính năng Task đã bỏ, DC không còn ánh xạ) | (luôn gửi) | Không |
 
 Các key preference (tất cả mặc định `true`): `campaignNew`, `campaignNearbyVerify`, `campaignDone`, `campaignCompletionRejected`, `volunteerRequest`, `reportStatus`.
 

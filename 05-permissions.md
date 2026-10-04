@@ -55,7 +55,7 @@
 
 - **Role ở identity:** `ADMIN`, `USER` (role `ORG_OWNER` và tài khoản `accountType = ORG` đã bị xoá bởi migration `20260926100000_drop_org_accounts`). Hệ thống permission set tồn tại nhưng **không được dùng để phân quyền** (`ID/middleware/authorize.middleware.ts` không được route nào gọi).
 - **Kiểm tra admin:** tất cả đều là `req.user.role.toLowerCase() === "admin"`, viết lặp lại ở từng controller hoặc middleware (identity `requireAdmin`, reward `requireAdmin`, incident inline trong từng controller).
-- **Quyền theo ngữ cảnh** (lưu ở incident): vai trong tổ chức (`organization_members.role`: `LEGAL_REPRESENTATIVE` và `OWNER` là **owner**, ngoài ra `ADMIN`, `CAMPAIGN_MANAGER`, `MEMBER` — gán bằng "đổi vai", xem §2.3). Quyền quản lý tổ chức suy ra từ vai theo **ma trận duy nhất** `DC/org-permissions.ts` và được kiểm tra qua `INC/modules/organization/org-access.service.ts > assertOrgPermission()` (đọc DB mỗi request, không có ngữ cảnh tổ chức trong JWT). Quyền campaign theo `INC/modules/campaign/campaign-access.service.ts`: người tạo, manager (`campaign_managers`) hoặc LR / OWNER của tổ chức, với điều kiện còn là thành viên active; tạo campaign cần `CAMPAIGN_CREATE` (§2.5). Ngoài ra: volunteer APPROVED, chủ report, người được giao task.
+- **Quyền theo ngữ cảnh** (lưu ở incident): vai trong tổ chức (`organization_members.role`: `LEGAL_REPRESENTATIVE` và `OWNER` là **owner**, ngoài ra `ADMIN`, `CAMPAIGN_MANAGER`, `MEMBER` — gán bằng "đổi vai", xem §2.3). Quyền quản lý tổ chức suy ra từ vai theo **ma trận duy nhất** `DC/org-permissions.ts` và được kiểm tra qua `INC/modules/organization/org-access.service.ts > assertOrgPermission()` (đọc DB mỗi request, không có ngữ cảnh tổ chức trong JWT). Quyền campaign theo `INC/modules/campaign/campaign-access.service.ts`: người tạo, manager (`campaign_managers`) hoặc LR / OWNER của tổ chức, với điều kiện còn là thành viên active; tạo campaign cần `CAMPAIGN_CREATE` (§2.5). Ngoài ra: volunteer APPROVED, chủ report, người phụ trách ca.
 - **Phía client:** link Admin chỉ hiện khi `user.roleId === ADMIN_ROLE_ID` (UUID cứng trong `FE/constants/roles.ts`). Guard trong `AdminLayout` **bị comment out**, nên mọi user đăng nhập đều vào được `/admin/*`. Việc chặn thực sự nằm ở API.
 
 ## 2. Ma trận phân quyền
@@ -175,15 +175,12 @@ Cột **Owner tổ chức** là thành viên vai `LEGAL_REPRESENTATIVE` / `OWNER
 | Gửi duyệt / nộp lại (`POST /:id/submit`) | ❌ | ✅ | ✅ | ✅ | ❌ | ❌ | `campaign-lifecycle.service.ts > submit()` → `assertCanManage()` + `assertCanSubmit()` (BR-163) |
 | Xem danh sách (`GET /campaigns`) | ⚠️ chỉ 1 / 7 / 9 / 17 | ⚠️ như User | ⚠️ như User | ⚠️ như User | ⚠️ như User | ⚠️ mọi status trừ DRAFT | `campaign.service.ts > listCampaigns()` (`publicOnly`, `excludeDrafts`); campaign của mình ở `GET /campaigns/my`. LR / OWNER lọc `organizationId` của tổ chức mình: ✅ mọi status, kể cả DRAFT (BR-187) |
 | Xem chi tiết | ⚠️ chỉ 1 / 7 / 9 / 17 | ✅ | ✅ | ✅ | ⚠️ như User | ⚠️ mọi status trừ DRAFT | `getCampaignById()`: DRAFT chỉ người quản lý, 12 / 19 / 2 / 20 người quản lý hoặc admin, còn lại 404. `contactPhone` chỉ người quản lý, admin, volunteer |
-| Xem task, manager, submission | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | `authenticate` |
+| Xem manager, submission | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | `authenticate` |
 | Sửa campaign (nội dung, điểm tập kết, manager; không đổi được `status`) | ❌ | ✅ | ✅ | ✅ | ❌ | ❌ | `campaignAccessService.assertCanManage()`; sau khi duyệt chỉ trường tự do (409 `CAMPAIGN_NOT_EDITABLE`, BR-154) |
 | Xoá campaign | ❌ | ✅ | ✅ | ❌ | ❌ | ❌ | `assertCanDelete()`; chỉ 4 / 12 / 19 / 2 / 20 (409 `CAMPAIGN_NOT_DELETABLE`) |
 | Xem lịch sử (`GET /:id/history`) | ❌ | ✅ | ✅ | ✅ | ❌ | ✅ | `campaign-lifecycle.service.ts > getHistory()` |
 | Duyệt, yêu cầu chỉnh sửa, chặn hoặc ban (`PUT /:id/review`, alias `/verify`) | ❌ | ❌ | ❌ | ❌ | ❌ | ⚠️ trừ campaign của tổ chức mà admin là thành viên (403 `CAMPAIGN_REVIEW_CONFLICT_OF_INTEREST`) | `campaign.controller.ts > reviewCampaign` (JWT role admin), `campaign-lifecycle.service.ts > review()` |
 | Thêm hoặc gỡ manager | ❌ | ✅ | ✅ | ✅ | ❌ | ❌ | `assertCanManage()`; người được thêm phải là thành viên (422 `CAMPAIGN_MANAGER_NOT_MEMBER`); không gỡ được người tạo (422 `CANNOT_REMOVE_CAMPAIGN_CREATOR`); không gỡ được manager đang phụ trách ca chưa kết thúc, trừ LR / OWNER (409 `CAMPAIGN_MANAGER_LEADS_SHIFTS`, BR-156) |
-| Tạo, sửa, xoá, giao task | ❌ | ✅ | ✅ | ✅ | ❌ | ❌ | `canManageCampaign()` → `campaignAccessService.canManage()` |
-| Cập nhật kết quả task | ❌ | ✅ | ✅ | ✅ | ⚠️ (task được giao) | ❌ | `updateTaskResult()` |
-| Đổi status task qua `/status` | ❌ | | | | ⚠️ (task được giao) | ❌ | `updateTaskStatusByVolunteer()` |
 | Đăng ký / sửa / rời ca (`registration-options`, `PUT /:id/registrations/me`) | ✅ | ✅ | ✅ (tự đăng ký được) | ✅ | ✅ | ✅ | `authenticate`; điều kiện ở BR-170, không cần duyệt |
 | Xem đăng ký theo ca (`GET /:id/registrations`, chỉ xem) | ❌ | ✅ | ✅ | ✅ | ✅ (đang đăng ký ca) | ❌ | `campaign_registration.service.ts > listByShift()` → `assertCanViewVolunteers()` |
 | Mời lại người dân gần đây (`POST /:id/invite-nearby`) | ❌ | ✅ | ✅ | ✅ | ❌ | ❌ | `inviteNearby()` → `assertCanManage()`; 24h một lần (BR-174) |
@@ -201,7 +198,7 @@ Cột **Owner tổ chức** là thành viên vai `LEGAL_REPRESENTATIVE` / `OWNER
 | Thêm ảnh vào kho ảnh của ca (`POST /:id/shifts/:shiftId/media`) | ❌ | ✅ | ✅ | ✅ | ⚠️ (đã điểm danh ca, chưa bị loại) | ❌ | `addMedia()`: TNV có dòng điểm danh chưa bị loại, người phụ trách hoặc `canManage()` (BR-372) |
 | Xoá ảnh của ca (`DELETE /:id/shifts/:shiftId/media/:mediaId`) | ❌ | ✅ | ✅ | ✅ | ⚠️ (ảnh của mình) | ❌ | `removeMedia()`: người đăng, người phụ trách hoặc `canManage()` |
 | Xem kết quả ca (`GET /:id/shifts/:shiftId/result`) | ⚠️ (chỉ trạng thái) | ✅ | ✅ | ✅ | ⚠️ (đã điểm danh ca; người khác chỉ thấy trạng thái) | ✅ | `get()`: kết quả + kho ảnh cho người quản lý, admin, người phụ trách, TNV có dòng điểm danh (BR-373) |
-| Tổng quan các ca (`GET /:id/shift-overview`) | ❌ | ✅ | ✅ | ✅ | ❌ | ✅ | `overview()`: `assertCanManage()` hoặc platform admin (BR-374) |
+| Tổng quan các ca (`GET /:id/shift-overview`) | ❌ | ✅ | ✅ | ✅ | ❌ | ✅ | `overview()`: `assertCanManage()` hoặc platform admin (BR-374). Web chỉ hiện tab "Progress" cho đúng nhóm này (`canManageCampaign` hoặc `roleId === ADMIN_ROLE_ID`) |
 | Gửi hoàn thành (mark-done) | ❌ | ✅ | ✅ | ✅ | ❌ | ❌ | `assertCanManage()`; còn ca đang bật chưa Kết thúc → 409 `CAMPAIGN_SHIFTS_NOT_ENDED` (BR-374) |
 | Xác nhận sạch (completion-verification) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | `authenticate` |
 | Duyệt hoặc từ chối hoàn thành | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | `adminReviewCampaignCompletion` |

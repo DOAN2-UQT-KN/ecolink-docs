@@ -60,7 +60,7 @@ stateDiagram-v2
   NEEDS_REVISION_19 --> CANCELLED_11: cancel_org_locked
   UPCOMING_27 --> CANCELLED_11: cancel (người tạo / owner)
   ACTIVE_1 --> CANCELLED_11: cancel
-  ACTIVE_1 --> PENDING_COMPLETION_7: submit_completion (manager, mọi task xong)
+  ACTIVE_1 --> PENDING_COMPLETION_7: submit_completion (manager, mọi ca đã Kết thúc)
   LEGACY_IN_REVIEW_9 --> PENDING_COMPLETION_7: submit_completion (manager)
   PENDING_COMPLETION_7 --> COMPLETED_17: approve_completion (admin)
   PENDING_COMPLETION_7 --> ACTIVE_1: reject_completion (admin, lý do)
@@ -81,8 +81,8 @@ stateDiagram-v2
 | `cancel_org_locked` | DRAFT 4 / PENDING_REVIEW 12 / NEEDS_REVISION 19 → CANCELLED 11 | admin (qua ban tổ chức) | Lý do = lý do ban tổ chức (BR-189) | Gỡ report; `rejectReason` = lý do; thông báo CAMPAIGN_CANCELLED cho người tạo + owner. Campaign UPCOMING / ACTIVE / 7 không bị đụng (chạy nốt; admin vẫn ban từng campaign). Mở khoá tổ chức không khôi phục | `campaign-lifecycle.service.ts > cancelForLockedOrganization()`, gọi trong `organization.service.ts > adminVerifyOrganization()` |
 | `cancel` | UPCOMING 27 / ACTIVE 1 → CANCELLED 11; PENDING_REVIEW 12 / NEEDS_REVISION 19 chỉ khi đã từng duyệt (`approvedAt`) | Người tạo hoặc LR / OWNER (BR-356) | Lý do bắt buộc | `rejectReason` = lý do; gỡ report; outbox CAMPAIGN_CANCELLED cho TNV còn đăng ký và đội quản lý; không cấp điểm | `campaign-lifecycle.service.ts > cancel()` |
 | `expire` | PENDING_REVIEW 12 / NEEDS_REVISION 19 → EXPIRED 20 | system (job) | Ngày đầu (`campaign_days.startAt`) đã tới, hoặc NEEDS_REVISION quá `revisionDeadline` (BR-186) | Gỡ report; thông báo CAMPAIGN_EXPIRED cho người tạo; `reason` = `start_passed` / `revision_overdue` | `campaign-lifecycle.service.ts > expireOverdue()`, `INC/modules/campaign/campaign-lifecycle.job.ts` |
-| `submit_completion` | ACTIVE 1 / LEGACY_IN_REVIEW 9 → PENDING_COMPLETION 7 | canManage | Mọi task đều 17; mọi ca đang bật đã Kết thúc (mục 3b, BR-374) | Thông báo CAMPAIGN_COMPLETION_PENDING_ADMIN (admin trong env) và COMPLETION_VERIFY_INVITE (người dân gần) | `submitCampaignCompletionForAdminApproval()` |
-| `approve_completion` | PENDING_COMPLETION 7 → COMPLETED 17 | Admin | Mọi task 17; có tier | Report và SOS → 17; outbox CAMPAIGN_COMPLETION_GREEN_POINTS; thông báo CAMPAIGN_DONE và APPROVED_BY_ADMIN | `adminFinalizeCampaignCompletion()` |
+| `submit_completion` | ACTIVE 1 / LEGACY_IN_REVIEW 9 → PENDING_COMPLETION 7 | canManage | Mọi ca đang bật đã Kết thúc (mục 3b, BR-374) | Thông báo CAMPAIGN_COMPLETION_PENDING_ADMIN (admin trong env) và COMPLETION_VERIFY_INVITE (người dân gần) | `submitCampaignCompletionForAdminApproval()` |
+| `approve_completion` | PENDING_COMPLETION 7 → COMPLETED 17 | Admin | Có tier | Report và SOS → 17; outbox CAMPAIGN_COMPLETION_GREEN_POINTS; thông báo CAMPAIGN_DONE và APPROVED_BY_ADMIN | `adminFinalizeCampaignCompletion()` |
 | `reject_completion` | PENDING_COMPLETION 7 → ACTIVE 1 | Admin | Có lý do | rejectReason; thông báo REJECTED_BY_ADMIN | `adminRejectCampaign()` |
 | (xoá) | DRAFT 4 / PENDING_REVIEW 12 / NEEDS_REVISION 19 / BLOCKED 2 / EXPIRED 20 → xoá mềm | canDelete | Trạng thái khác → 409 `CAMPAIGN_NOT_DELETABLE` | Gỡ report | `deleteCampaign()` |
 | (dọn nháp) | DRAFT 4 → xoá mềm | system (job) | `updatedAt` quá 30 ngày | Không có report nào bị khoá nên không cần gỡ | `deleteStaleDrafts()` |
@@ -139,23 +139,9 @@ stateDiagram-v2
 
 Kết thúc sớm chỉ đi một chiều (`endedAt` không bị xoá). Admin từ chối hoàn thành để mở lại ca (spec 5.2) **[CHƯA HOÀN THIỆN]**.
 
-## 4. Task của campaign (`campaign_tasks.status`)
+## 4. Task của campaign (đã bỏ)
 
-```mermaid
-stateDiagram-v2
-  [*] --> TODO_21: manager tạo
-  TODO_21 --> INPROCESS_22: giao lần đầu
-  INPROCESS_22 --> COMPLETED_17: volunteer/manager cập nhật
-  TODO_21 --> COMPLETED_17: cập nhật trực tiếp
-  COMPLETED_17 --> INPROCESS_22: cập nhật (không chặn)
-```
-
-| Từ → sang | Ai | Điều kiện | File |
-|---|---|---|---|
-| (mới) → 21 | canManage | — | `campaign_task.service.ts > createTask()` |
-| 21 → 22 | Tự động khi assign | Task đang 21 | `assignTask()` |
-| bất kỳ → số nguyên bất kỳ | canManage (`PUT /tasks/:id`) hoặc volunteer được giao (`PUT /tasks/:id/status`) | **Không validate giá trị** | `updateTask()`, `updateTaskStatusByVolunteer()` |
-| → xoá mềm | canManage | — | `deleteTask()` |
+Tính năng Task đã bị gỡ; bảng `campaign_tasks` bị xoá ở migration `20261006100000_drop_campaign_tasks`. Báo hoàn thành và duyệt hoàn thành không còn kiểm task.
 
 ## 5. Submission (`campaign_submissions.status`)
 
