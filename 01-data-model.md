@@ -124,7 +124,9 @@ erDiagram
   CampaignSubmission ||--o{ CampaignResult : ""
   Campaign ||--o{ CampaignResult : ""
   CampaignResult ||--o{ CampaignResultFile : ""
-  Campaign ||--o{ CampaignCompletionVerification : ""
+  Campaign ||--o{ ResultPhotoCheck : "cascade, Layer 1"
+  Campaign ||--o{ TrashPointVerification : "cascade, mỗi điểm rác mỗi vòng"
+  TrashPointVerification ||--o{ TrashPointVote : "cascade"
   Campaign ||--o{ CampaignCompletionReport : "cascade, submission hoàn thành"
   Campaign ||--o{ Sos : ""
   Campaign ||--o{ CampaignMeetingPoint : "1–5 điểm tập kết"
@@ -318,7 +320,8 @@ erDiagram
 | minVolunteersReason | text? | | Lý do khi tổng TNV tối thiểu của một ngày thấp hơn mức gợi ý của độ khó; bắt buộc khi đó lúc gửi duyệt (BR-164) |
 | lastNearbyInviteAt | timestamp? | | Lần cuối manager mời lại người dân gần đó (`POST /:id/invite-nearby`); mời lại cách nhau ≥ 24h (spec 3.2) |
 | completionSubmittedAt | datetime? (`completion_submitted_at`) | | Lần cuối manager báo hoàn thành (BR-165), migration `20261007100000_completion_review` |
-| completionRejectionCount | int (`completion_rejection_count`) | default 0 | Số lần admin từ chối hoàn thành; đủ 3 thì chỉ còn duyệt hoặc huỷ (BR-378) |
+| completionRejectionCount | int (`completion_rejection_count`) | default 0 | Số lần hoàn thành bị từ chối (do xác thực kết quả, hoặc admin trước khi có xác thực); đủ 3 thì lần sau campaign chuyển admin quyết định (BR-394) |
+| completionAwaitingAdmin | boolean (`completion_awaiting_admin`) | default false | Xác thực kết quả đã chuyển campaign cho admin (Duyệt hoặc Huỷ): đã bị từ chối 3 lần, hoặc không có điểm rác nào "Đã sạch" (BR-384, BR-394). Báo hoàn thành lại thì đặt về false. Migration `20261008100000_result_verification`; `20261008100100_result_verification_legacy_pending` đặt true cho campaign đã ở PENDING_COMPLETION mà chưa có vòng xác thực |
 | revisionDeadline | datetime? | | Hạn nộp lại khi NEEDS_REVISION (19) = lúc yêu cầu chỉnh sửa + 7 ngày |
 | submittedAt | datetime? | | Lần gửi duyệt gần nhất |
 | approvedAt | datetime? (`approved_at`) | | Lần admin duyệt đầu tiên (migration `20261002160000_campaign_approved_at`, backfill theo log `approve` hoặc `updated_at` của campaign đã qua duyệt). Có giá trị thì sửa sau này đi theo id và có thể đưa campaign về duyệt lại (BR-352). Migration `20261002180000_campaign_upcoming_backfill` chuyển các campaign ACTIVE 1 chưa tới ngày đầu (duyệt trước khi có UPCOMING) sang 27, log `backfill_upcoming` |
@@ -340,14 +343,18 @@ erDiagram
 | CampaignAttendanceCheckIn (`campaign_attendance_check_ins`) | campaignId (cascade), userId, checkedInAt | **unique (campaignId, userId)**. Điểm danh cũ theo campaign; chỉ còn là dữ liệu lịch sử, **không còn chỗ nào ghi** (thay bằng hai bảng dưới) |
 | CampaignShiftAttendanceSession (`campaign_shift_attendance_sessions`) | id, campaignId (cascade), shiftId (cascade), openedBy, openedAt, expiresAt (≤ 60 phút, không quá giờ kết thúc ca + 30 phút), closedAt?, closedBy? | index (shiftId, openedAt). Phiên QR điểm danh của một ca (BR-359), migration `20261004100000_shift_attendance` |
 | CampaignShiftAttendance (`campaign_shift_attendances`) | id, campaignId (cascade), shiftId (cascade), userId, checkInAt, checkOutAt?, checkInLatitude / checkInLongitude / checkInAccuracy?, checkOutLatitude / checkOutLongitude / checkOutAccuracy?, checkOutMethod? (`scan` \| `session_close`), manual (bool), manualReason?, recordedBy?, preRegistered (bool: lúc check-in có đăng ký ca này đang hiệu lực), offline (bool: request tới server trễ hơn một chu kỳ QR (10 phút) so với lúc quét), sessionId?, checkInDistanceM? / checkOutDistanceM? (Float, mét tới điểm tập trung lúc vào / ra), outOfArea (bool: có lần quét > 50 m từ điểm tập trung), lowAccuracy (bool: có lần quét GPS kém hơn 50 m), excludedAt?, excludedBy? (uuid), excludeReason?, createdAt, updatedAt | **unique (shiftId, userId)**; index (campaignId, userId). Mỗi người một dòng mỗi ca (BR-360..BR-364), cùng migration. Các cột khoảng cách, `outOfArea`, `lowAccuracy`, `excluded*` thêm ở migration `20261004120000_attendance_location_flags`; hai cờ chỉ bật, không tự tắt; `excludedAt` khác null = bị loại khỏi tính điểm (BR-368) |
-| CampaignShiftResult (`campaign_shift_results`) | id, campaignId (cascade), shiftId (cascade, **unique**), description, wasteBags? (`waste_bags`), wasteKg? (`waste_kg`), submittedBy, submittedAt, updatedAt, reopenedAt? / reopenReason? / reopenedBy? (`reopened_at` / `reopen_reason` / `reopened_by`; admin mở lại ca khi từ chối hoàn thành, BR-378; lưu lại kết quả thì xoá) | index campaignId. Kết quả của một ca (spec 4.2, BR-370), migration `20261005100000_shift_results` (cột mở lại: `20261007100000_completion_review`); sửa được tới khi campaign rời ACTIVE |
+| CampaignShiftResult (`campaign_shift_results`) | id, campaignId (cascade), shiftId (cascade, **unique**), description, wasteBags? (`waste_bags`), wasteKg? (`waste_kg`), submittedBy, submittedAt, updatedAt, reopenedAt? / reopenReason? / reopenedBy? (`reopened_at` / `reopen_reason` / `reopened_by`; xác thực kết quả mở lại ca chứa điểm rác bị từ chối, `reopenedBy` null = hệ thống, BR-394; lưu lại kết quả thì xoá) | index campaignId. Kết quả của một ca (spec 4.2, BR-370), migration `20261005100000_shift_results` (cột mở lại: `20261007100000_completion_review`); sửa được tới khi campaign rời ACTIVE |
 | CampaignShiftResultReport (`campaign_shift_result_reports`) | id, resultId (cascade), reportId (không FK), status (`cleaned` \| `partial`), beforeUrls `text[]`, afterUrls `text[]` | **unique (resultId, reportId)**, index reportId. Điểm rác đã xử lý trong ca; điểm rác của điểm tập trung không có dòng = chưa xử lý |
 | CampaignShiftMedia (`campaign_shift_media`) | id, campaignId (cascade), shiftId (cascade), url, kind (`image` \| `video`), uploadedBy, includedInResult (`included_in_result`, default false), createdAt, deletedAt? | index (shiftId, createdAt), campaignId. Kho ảnh / video hoạt động của ca (BR-372); người phụ trách chọn ảnh vào kết quả. Chưa lưu GPS / thời điểm chụp |
 | CampaignSubmission (`campaign_submissions`) | campaignId, submittedBy, title*, description*, status (default 12) | |
 | CampaignResult (`campaign_results`) | campaignId, campaignSubmissionId? (null = nháp), title NOT NULL | Không có API tạo bản nháp |
 | CampaignResultFile (`campaign_result_files`) | campaignResultId, mediaId (không có FK) | |
-| CampaignCompletionVerification (`campaign_completion_verifications`) | campaignId, userId, value (1 sạch / -1 chưa sạch / 0 huỷ) | **unique (userId, campaignId)**. Cờ đỏ ≥ 30% chưa sạch trên ≥ 5 phiếu tính khi đọc, không lưu (BR-377) |
+| ResultPhotoCheck (`result_photo_checks`) | id, campaignId (cascade), shiftId, reportId, side (`before` \| `after`), url, uploadedBy, uploadedAt, sha256 (hex của file gốc), exifTakenAt?, exifLat?, exifLng?, cameraModel? (≤120), pinLat, pinLng, timeCheck / exifLocationCheck / pinCheck / level (`pass` \| `warn` \| `fail`), pinDistanceM?, exifDistanceM? | index sha256, url, (campaignId, reportId). Mỗi ảnh trước / sau upload qua `result-photos` một dòng (Layer 1, BR-380, BR-381) |
+| TrashPointVerification (`trash_point_verifications`) | id, campaignId (cascade), reportId, round, status (`voting` \| `verified` \| `flagged` \| `rejected`), reporterId? (người báo cáo ban đầu, Layer 2), beforeUrls / afterUrls `text[]`, layer1Level, layer1Issues (jsonb `[{code, side?, url?}]`), score (default 0), windowEndsAt, flaggedAt?, flagDeadline?, decidedAt?, decidedBy? (admin; null = hệ thống), decisionCode? (`score` \| `layer1_pass` \| `layer1_fail` \| `flag_timeout` \| `admin`), decisionReason?, reporterRemindedAt?, createdAt, updatedAt | **unique (campaignId, reportId, round)**, index (status, windowEndsAt), reportId. Một vòng xác thực của một điểm rác "Đã sạch" mỗi lần Báo hoàn thành; điểm đã Verified giữ vòng cũ (BR-384..BR-394) |
+| TrashPointVote (`trash_point_votes`) | id, verificationId (cascade), userId, value (+1 sạch / -1 chưa sạch), weight, weightReason (`reporter` \| `on_site` \| `nearby` \| `zero_new_account` \| `zero_unverified` \| `zero_far`), latitude?, longitude?, accuracy?, distanceM?, note?, photoUrl?, createdAt, updatedAt | **unique (verificationId, userId)**, index (userId, createdAt) cho giới hạn 20 phiếu / 24 h. Đổi phiếu thì sửa tại chỗ (BR-387, BR-388) |
 | CampaignCompletionReport (`campaign_completion_reports`) | id, campaignId (cascade), reportId (không FK), status (`cleaned` \| `partial` \| `unhandled`), reason? (lý do chưa xử lý), beforeUrls `text[]`, afterUrls `text[]`, submittedAt | **unique (campaignId, reportId)**, index reportId. Submission hoàn thành (spec 5.1, BR-376): mỗi lần báo hoàn thành xoá và ghi lại; migration `20261007100000_completion_review` |
+
+Phiếu "sạch / chưa sạch" cấp chiến dịch đã bỏ: migration `20261008100000_result_verification` drop bảng `campaign_completion_verifications` (thay bằng `trash_point_votes` theo từng điểm rác).
 
 Tính năng Task đã bỏ: migration `20261006100000_drop_campaign_tasks` xoá 4 bảng `campaign_task_result_files`, `campaign_task_results`, `campaign_task_assignments`, `campaign_tasks` và các dòng `media` loại `CAMPAIGN_TASK_RESULT`. Kết quả công việc giờ ghi theo ca (`campaign_shift_results`).
 
@@ -645,15 +652,18 @@ Vòng đời campaign dùng tên riêng trong `DC/campaign-lifecycle.ts > Campai
 ### 6.3 Notification (`notification-service/prisma/schema.prisma`, `ecolink-server/shared/da2-constants/src/notification-preferences.ts`)
 
 - `NotificationType`: `EMAIL`, `WEBSITE` (in-app).
-- `NotificationKind` (58 giá trị). Bảng dưới liệt kê từng kind, key preference tương ứng và nơi phát:
+- `NotificationKind` (64 giá trị). Bảng dưới liệt kê từng kind, key preference tương ứng và nơi phát:
 
 | Kind | Preference key | Có nơi phát? |
 |---|---|---|
 | CAMPAIGN_CREATED, CAMPAIGN_APPROVED | campaignNew | Có |
 | CAMPAIGN_PENDING_REVIEW, CAMPAIGN_REVISION_REQUESTED, CAMPAIGN_BLOCKED, CAMPAIGN_EXPIRED (migration `20260930100000_campaign_review_kinds`) | (luôn gửi) | Có |
 | CAMPAIGN_VERIFY_INVITE, CAMPAIGN_COMPLETION_VERIFY_INVITE | campaignNearbyVerify | Có |
-| CAMPAIGN_DONE, CAMPAIGN_COMPLETION_APPROVED_BY_ADMIN | campaignDone | Có |
-| CAMPAIGN_COMPLETION_REJECTED_BY_ADMIN | campaignCompletionRejected | Có |
+| CAMPAIGN_DONE, CAMPAIGN_COMPLETION_APPROVED_BY_ADMIN | campaignDone | Có (APPROVED_BY_ADMIN khi admin Duyệt campaign đã chuyển admin) |
+| CAMPAIGN_RESULT_VERIFIED (migration `20261008100000_result_verification_kinds`) | campaignDone | Có |
+| CAMPAIGN_COMPLETION_REJECTED_BY_ADMIN | campaignCompletionRejected | Không (admin không còn từ chối theo ca; hàm `enqueueCampaignCompletionRejectedByAdminWebsiteNotification` còn nhưng không ai gọi) |
+| CAMPAIGN_RESULT_REJECTED, CAMPAIGN_TRASH_POINT_REJECTED (migration `20261008100000_result_verification_kinds`) | campaignCompletionRejected | Có |
+| CAMPAIGN_TRASH_POINT_CONFIRM_REQUEST, CAMPAIGN_TRASH_POINT_CONFIRM_REMINDER, CAMPAIGN_TRASH_POINT_FLAGGED (migration `20261008100000_result_verification_kinds`) | (luôn gửi) | Có |
 | VOLUNTEER_REQUEST, VOLUNTEER_APPROVED, VOLUNTEER_REJECTED | volunteerRequest | Có |
 | REPORT_STATUS | reportStatus | Có |
 | REPORT_READY | reportStatus | Không |

@@ -63,8 +63,8 @@ stateDiagram-v2
   ACTIVE_1 --> CANCELLED_11: cancel
   ACTIVE_1 --> PENDING_COMPLETION_7: submit_completion (manager, mọi ca đã Kết thúc)
   LEGACY_IN_REVIEW_9 --> PENDING_COMPLETION_7: submit_completion (manager)
-  PENDING_COMPLETION_7 --> COMPLETED_17: approve_completion (admin)
-  PENDING_COMPLETION_7 --> ACTIVE_1: reject_completion (admin, lý do + ca mở lại, tối đa 3 lần)
+  PENDING_COMPLETION_7 --> COMPLETED_17: approve_completion (system khi mọi điểm rác Verified; admin khi đã chuyển admin)
+  PENDING_COMPLETION_7 --> ACTIVE_1: reject_completion (system, có điểm rác Rejected, tối đa 3 lần)
   PENDING_COMPLETION_7 --> CANCELLED_11: cancel_by_admin (admin, lý do)
   COMPLETED_17 --> [*]
 ```
@@ -83,9 +83,9 @@ stateDiagram-v2
 | `cancel_org_locked` | DRAFT 4 / PENDING_REVIEW 12 / NEEDS_REVISION 19 → CANCELLED 11 | admin (qua ban tổ chức) | Lý do = lý do ban tổ chức (BR-189) | Gỡ report; `rejectReason` = lý do; thông báo CAMPAIGN_CANCELLED cho người tạo + owner. Campaign UPCOMING / ACTIVE / 7 không bị đụng (chạy nốt; admin vẫn ban từng campaign). Mở khoá tổ chức không khôi phục | `campaign-lifecycle.service.ts > cancelForLockedOrganization()`, gọi trong `organization.service.ts > adminVerifyOrganization()` |
 | `cancel` | UPCOMING 27 / ACTIVE 1 → CANCELLED 11; PENDING_REVIEW 12 / NEEDS_REVISION 19 chỉ khi đã từng duyệt (`approvedAt`) | Người tạo hoặc LR / OWNER (BR-356) | Lý do bắt buộc | `rejectReason` = lý do; gỡ report; outbox CAMPAIGN_CANCELLED cho TNV còn đăng ký và đội quản lý; không cấp điểm | `campaign-lifecycle.service.ts > cancel()` |
 | `expire` | PENDING_REVIEW 12 / NEEDS_REVISION 19 → EXPIRED 20 | system (job) | Ngày đầu (`campaign_days.startAt`) đã tới, hoặc NEEDS_REVISION quá `revisionDeadline` (BR-186) | Gỡ report; thông báo CAMPAIGN_EXPIRED cho người tạo; `reason` = `start_passed` / `revision_overdue` | `campaign-lifecycle.service.ts > expireOverdue()`, `INC/modules/campaign/campaign-lifecycle.job.ts` |
-| `submit_completion` | ACTIVE 1 / LEGACY_IN_REVIEW 9 → PENDING_COMPLETION 7 | canManage | Mọi ca đang bật đã Kết thúc (mục 3b, BR-374); điểm rác chưa ca nào xử lý có lý do (BR-376) | Ghi `completionSubmittedAt` và snapshot `campaign_completion_reports`; thông báo CAMPAIGN_COMPLETION_PENDING_ADMIN (admin trong env) và COMPLETION_VERIFY_INVITE (người dân quanh từng điểm tập trung) | `submitCampaignCompletionForAdminApproval()`, `completion.service.ts > prepareSubmission(), saveSubmission()` |
-| `approve_completion` | PENDING_COMPLETION 7 → COMPLETED 17 | Admin | Có tier của mức độ khó đã chốt (BR-166) | `difficulty` = mức đã chốt (đổi thì `changes.difficulty`); điểm rác handled → 17, unhandled → TODO 21 bỏ campaignId; SOS → 17; outbox CAMPAIGN_COMPLETION_GREEN_POINTS; thông báo CAMPAIGN_DONE và APPROVED_BY_ADMIN | `completion.service.ts > approve()` |
-| `reject_completion` | PENDING_COMPLETION 7 → ACTIVE 1 | Admin | Có lý do và ≥ 1 ca đã có kết quả; `completionRejectionCount < 3` (BR-378) | rejectReason; `completionRejectionCount + 1`; `changes.shiftIds`; mở lại các ca (mục 3b); thông báo REJECTED_BY_ADMIN cho owner + người tạo + manager | `completion.service.ts > reject()` |
+| `submit_completion` | ACTIVE 1 / LEGACY_IN_REVIEW 9 → PENDING_COMPLETION 7 | canManage | Mọi ca đang bật đã Kết thúc (mục 3b, BR-374); điểm rác chưa ca nào xử lý có lý do (BR-376) | Ghi `completionSubmittedAt`, `completionAwaitingAdmin = false` và snapshot `campaign_completion_reports`; mở vòng xác thực cho từng điểm rác "Đã sạch" chưa Verified (mục 3c, BR-384), báo người báo cáo (CAMPAIGN_TRASH_POINT_CONFIRM_REQUEST) và mời người dân quanh từng điểm tập trung (COMPLETION_VERIFY_INVITE); không có điểm "Đã sạch" thì chuyển admin (CAMPAIGN_COMPLETION_PENDING_ADMIN) | `campaign.service.ts > submitCampaignCompletion()`, `campaign_verification/verification.service.ts > openRounds()` |
+| `approve_completion` | PENDING_COMPLETION 7 → COMPLETED 17 | system (mọi điểm rác Verified, BR-393) hoặc Admin (chỉ khi `completionAwaitingAdmin`, BR-166) | Có tier của mức độ khó (đã chốt nếu admin duyệt) | `difficulty` = mức đã chốt (đổi thì `changes.difficulty`); `completionAwaitingAdmin = false`; điểm rác `cleaned` → 17, `partial` / `unhandled` → TODO 21 bỏ campaignId (BR-168); SOS → 17; outbox CAMPAIGN_COMPLETION_GREEN_POINTS; thông báo CAMPAIGN_DONE và RESULT_VERIFIED (system) hoặc APPROVED_BY_ADMIN (admin) | `campaign_verification/verification-decision.service.ts > completeCampaign(), decideCampaign()`, `completion.service.ts > approve()` |
+| `reject_completion` | PENDING_COMPLETION 7 → ACTIVE 1 | system | Vòng mới nhất của mọi điểm rác đã quyết định, có ≥ 1 điểm Rejected; `completionRejectionCount < 3` (BR-394). Đủ 3 thì không chuyển, chỉ đặt `completionAwaitingAdmin` (log EDIT `completion_awaiting_admin`) | rejectReason = lý do từng điểm; `completionRejectionCount + 1`; `changes {shiftIds, reportIds}`; mở lại các ca chứa điểm bị Rejected (mục 3b); thông báo CAMPAIGN_RESULT_REJECTED cho owner + người tạo + manager | `verification-decision.service.ts > reject()` |
 | `cancel_by_admin` | PENDING_COMPLETION 7 → CANCELLED 11 | Admin | Có lý do (BR-379) | rejectReason; gỡ report; không cấp điểm; outbox CAMPAIGN_CANCELLED (`byAdmin`) cho TNV và đội | `completion.service.ts > cancel()` |
 | (xoá) | DRAFT 4 / PENDING_REVIEW 12 / NEEDS_REVISION 19 / BLOCKED 2 / EXPIRED 20 → xoá mềm | canDelete | Trạng thái khác → 409 `CAMPAIGN_NOT_DELETABLE` | Gỡ report | `deleteCampaign()` |
 | (dọn nháp) | DRAFT 4 → xoá mềm | system (job) | `updatedAt` quá 30 ngày | Không có report nào bị khoá nên không cần gỡ | `deleteStaleDrafts()` |
@@ -138,10 +138,39 @@ stateDiagram-v2
 | `off` | `minVolunteers = 0` | Không tính vào tổng quan, không chặn Báo hoàn thành |
 | `upcoming` | now < startAt | Chưa nộp kết quả được (409 `SHIFT_NOT_STARTED`) |
 | `running` | startAt ≤ now < `endedAt ?? endAt` | Nộp / sửa kết quả được; đã có kết quả thì kết thúc sớm được (BR-371) |
-| `awaiting_result` | now ≥ end, chưa có kết quả, hoặc kết quả bị admin mở lại (`reopenedAt`) | Sau 24h nhắc mỗi ngày khi chưa có kết quả (BR-375, ca bị mở lại không được nhắc vì đã có dòng kết quả); chặn Báo hoàn thành; ca mở lại hiện nhãn "Cần bổ sung" kèm `reopenReason` |
+| `awaiting_result` | now ≥ end, chưa có kết quả, hoặc kết quả bị mở lại (`reopenedAt`) | Sau 24h nhắc mỗi ngày khi chưa có kết quả (BR-375, ca bị mở lại không được nhắc vì đã có dòng kết quả); chặn Báo hoàn thành; ca mở lại hiện nhãn "Cần bổ sung" kèm `reopenReason` |
 | `ended` | now ≥ end, có kết quả | Kết quả vẫn sửa được tới khi campaign rời ACTIVE |
 
-Kết thúc sớm chỉ đi một chiều (`endedAt` không bị xoá). Admin từ chối hoàn thành chọn các ca đã có kết quả để mở lại (BR-378): kết quả ghi `reopenedAt`, `reopenReason`, `reopenedBy`, ca về `awaiting_result`; người phụ trách lưu lại kết quả thì ba cột này bị xoá và ca về `ended` (BR-370).
+Kết thúc sớm chỉ đi một chiều (`endedAt` không bị xoá). Xác thực kết quả từ chối hoàn thành thì mở lại các ca có kết quả chứa điểm rác bị Rejected (BR-394): kết quả ghi `reopenedAt`, `reopenReason` (lý do từng điểm), `reopenedBy = null` (hệ thống), ca về `awaiting_result`; người phụ trách lưu lại kết quả thì ba cột này bị xoá và ca về `ended` (BR-370).
+
+## 3c. Xác thực kết quả theo điểm rác (`trash_point_verifications.status`)
+
+Mỗi điểm rác khai "Đã sạch" có một **vòng** mỗi lần Báo hoàn thành (`round` tăng dần); điểm đã Verified giữ vòng cũ, không mở vòng mới (BR-384). Mọi chuyển trạng thái là compare-and-set theo status (`verification.service.ts > transitionPoint()`). Hằng số ở `DC/result-verification.ts`.
+
+```mermaid
+stateDiagram-v2
+  [*] --> voting: Báo hoàn thành (khung 72 h)
+  voting --> verified: score ≥ 15 (decision_code score)
+  voting --> flagged: có downvote và score ≤ 3
+  voting --> verified: hết khung, không downvote, Layer 1 pass (layer1_pass)
+  voting --> flagged: hết khung, có downvote hoặc Layer 1 warn
+  voting --> rejected: hết khung, không downvote, Layer 1 fail (layer1_fail)
+  flagged --> verified: admin verify (admin) hoặc score ≥ 15 trong khung
+  flagged --> rejected: admin reject có lý do (admin)
+  flagged --> rejected: quá 48 h không xử lý (flag_timeout)
+  verified --> [*]
+  rejected --> [*]: nộp lại thì mở vòng mới
+```
+
+| Chuyển | Ai | Side effect | File |
+|---|---|---|---|
+| (mở) → voting | manager Báo hoàn thành | `windowEndsAt = now + 72h`, Layer 1; CAMPAIGN_TRASH_POINT_CONFIRM_REQUEST cho người báo cáo | `verification.service.ts > openRounds()` |
+| voting / flagged → verified, voting → flagged | phiếu (BR-389) | tính lại `score`; flagged ghi `flaggedAt`, `flagDeadline = now + 48h`, báo admin CAMPAIGN_TRASH_POINT_FLAGGED | `verification.service.ts > vote()`, `verification-rules.ts > pointAfterVote()` |
+| voting → verified / flagged / rejected khi hết khung | system (job, BR-390) | như trên; rejected báo CAMPAIGN_TRASH_POINT_REJECTED | `verification-jobs.ts`, `verification-rules.ts > pointAtWindowEnd()` |
+| flagged → verified / rejected | admin (BR-392) | `decidedBy`, `decisionReason` | `verification.service.ts > decide()` |
+| flagged → rejected khi quá hạn | system (job, BR-391) | lý do "Admin không xử lý kịp trong 48 giờ" | `verification-jobs.ts` |
+
+Sau mỗi chuyển, chiến dịch được quyết định từ vòng mới nhất của mọi điểm (BR-393, BR-394): còn `voting` / `flagged` → chờ; tất cả `verified` → `approve_completion`; có `rejected` → `reject_completion` hoặc chuyển admin (`completionAwaitingAdmin`) khi đã bị từ chối 3 lần.
 
 ## 4. Task của campaign (đã bỏ)
 
@@ -397,7 +426,8 @@ stateDiagram-v2
 |---|---|---|---|
 | Vote.value | 0 / 1 / -1 | Toggle (BR-130) | `INC/modules/vote/vote.service.ts` |
 | SavedResource | active / deleted | Toggle (BR-133) | `saved_resource.service.ts` |
-| CampaignCompletionVerification.value | 0 / 1 / -1 | Gửi lại cùng giá trị thì thành 0 | `campaign_completion_verification.service.ts` |
+| TrashPointVote.value | 1 / -1 | Đổi phiếu tại chỗ khi khung còn mở (BR-387); không có giá trị huỷ. Bảng `campaign_completion_verifications` (0 / 1 / -1 cấp chiến dịch) đã drop | `campaign_verification/verification.service.ts > vote()` |
+| Campaign.completionAwaitingAdmin | false ↔ true | true khi không có điểm "Đã sạch" hoặc bị từ chối lần thứ 4 (BR-394); về false khi Báo hoàn thành lại hoặc hoàn thành | `verification-decision.service.ts > markAwaitingAdmin(), completeCampaign()` |
 | CampaignShiftAttendance (mỗi người, mỗi ca) | chưa có → đã check-in (`checkOutAt = null`) → đã check-out | Quét QR lần đầu = check-in, hoặc điểm danh tay (`manual = true`); quét lại ≥ 10 phút sau check-in → check-out (`checkOutMethod = scan`); kết thúc điểm danh → check-out mọi người còn trong ca (`session_close`). Đã check-out thì không đổi nữa (`already_checked_out`). Không check-out = ca không đủ điều kiện (BR-361..BR-365) | `INC/modules/campaign/campaign_attendance/shift-attendance.service.ts > scan(), addManual(), closeSession()` |
 | CampaignShiftAttendance — cờ vị trí (`outOfArea`, `lowAccuracy`) | false → true | Quét > 50 m từ điểm tập trung hoặc GPS > 50 m thì bật cờ (vẫn ghi vào / ra); chỉ bật, không tắt (BR-361) | `shift-attendance.service.ts > scan()` |
 | CampaignShiftAttendance — loại khỏi tính điểm | tính (`excludedAt = null`) ↔ bị loại (`excludedAt`, `excludedBy`, `excludeReason`) | Người phụ trách ca hoặc người quản lý loại (có lý do) / khôi phục, bao nhiêu lần cũng được tới khi campaign COMPLETED (409 `CAMPAIGN_NOT_EDITABLE`); bị loại = không đủ điều kiện (BR-365, BR-368) | `shift-attendance.service.ts > setExcluded()` |
