@@ -125,8 +125,9 @@ erDiagram
   Campaign ||--o{ CampaignResult : ""
   CampaignResult ||--o{ CampaignResultFile : ""
   Campaign ||--o{ ResultPhotoCheck : "cascade, Layer 1"
-  Campaign ||--o{ TrashPointVerification : "cascade, mỗi điểm rác mỗi vòng"
-  TrashPointVerification ||--o{ TrashPointVote : "cascade"
+  Campaign ||--o{ MeetingPointVerification : "cascade, mỗi điểm tập trung mỗi vòng"
+  CampaignMeetingPoint ||--o{ MeetingPointVerification : "cascade"
+  MeetingPointVerification ||--o{ MeetingPointVote : "cascade"
   Campaign ||--o{ CampaignCompletionReport : "cascade, submission hoàn thành"
   Campaign ||--o{ Sos : ""
   Campaign ||--o{ CampaignMeetingPoint : "1–5 điểm tập kết"
@@ -350,11 +351,11 @@ erDiagram
 | CampaignResult (`campaign_results`) | campaignId, campaignSubmissionId? (null = nháp), title NOT NULL | Không có API tạo bản nháp |
 | CampaignResultFile (`campaign_result_files`) | campaignResultId, mediaId (không có FK) | |
 | ResultPhotoCheck (`result_photo_checks`) | id, campaignId (cascade), shiftId, reportId, side (`before` \| `after`), url, uploadedBy, uploadedAt, sha256 (hex của file gốc), exifTakenAt?, exifLat?, exifLng?, cameraModel? (≤120), pinLat, pinLng, timeCheck / exifLocationCheck / pinCheck / level (`pass` \| `warn` \| `fail`), pinDistanceM?, exifDistanceM? | index sha256, url, (campaignId, reportId). Mỗi ảnh trước / sau upload qua `result-photos` một dòng (Layer 1, BR-380, BR-381) |
-| TrashPointVerification (`trash_point_verifications`) | id, campaignId (cascade), reportId, round, status (`voting` \| `verified` \| `flagged` \| `rejected`), reporterId? (người báo cáo ban đầu, Layer 2), beforeUrls / afterUrls `text[]`, layer1Level, layer1Issues (jsonb `[{code, side?, url?}]`), score (default 0), windowEndsAt, flaggedAt?, flagDeadline?, decidedAt?, decidedBy? (admin; null = hệ thống), decisionCode? (`score` \| `layer1_pass` \| `layer1_fail` \| `flag_timeout` \| `admin`), decisionReason?, reporterRemindedAt?, createdAt, updatedAt | **unique (campaignId, reportId, round)**, index (status, windowEndsAt), reportId. Một vòng xác thực của một điểm rác "Đã sạch" mỗi lần Báo hoàn thành; điểm đã Verified giữ vòng cũ (BR-384..BR-394) |
-| TrashPointVote (`trash_point_votes`) | id, verificationId (cascade), userId, value (+1 sạch / -1 chưa sạch), weight, weightReason (`reporter` \| `on_site` \| `nearby` \| `zero_new_account` \| `zero_unverified` \| `zero_far`), latitude?, longitude?, accuracy?, distanceM?, note?, photoUrl?, createdAt, updatedAt | **unique (verificationId, userId)**, index (userId, createdAt) cho giới hạn 20 phiếu / 24 h. Đổi phiếu thì sửa tại chỗ (BR-387, BR-388) |
+| MeetingPointVerification (`meeting_point_verifications`) | id, campaignId (cascade), meetingPointId (FK `campaign_meeting_points`, cascade), round, status (`voting` \| `verified` \| `flagged` \| `rejected`), reportIds `uuid[]` (các điểm rác "Đã sạch" của điểm tập trung trong vòng này), reporterIds `uuid[]` (người báo cáo ban đầu của các điểm rác đó, khác nhau; Layer 2), layer1Level (mức thấp nhất của các điểm rác đó), layer1 (jsonb `[{reportId, level, issues: [{code, side?, url?}], beforeUrls, afterUrls}]`, snapshot Layer 1 và ảnh từng điểm rác lúc mở vòng), score (default 0), windowEndsAt, flaggedAt?, flagDeadline?, decidedAt?, decidedBy? (admin; null = hệ thống), decisionCode? (`score` \| `layer1_pass` \| `layer1_fail` \| `flag_timeout` \| `admin`), decisionReason?, failedReportIds `uuid[]` (điểm rác chưa đạt khi Rejected, BR-397), reporterRemindedAt?, createdAt, updatedAt | **unique (campaignId, meetingPointId, round)**, index (status, windowEndsAt), meetingPointId. Một vòng xác thực của một điểm tập trung có ≥ 1 điểm rác "Đã sạch" mỗi lần Báo hoàn thành; điểm đã Verified giữ vòng cũ (BR-384..BR-397) |
+| MeetingPointVote (`meeting_point_votes`) | id, verificationId (cascade), userId, value (+1 sạch / -1 chưa sạch), weight, weightReason (`reporter` \| `on_site` \| `nearby` \| `zero_new_account` \| `zero_unverified` \| `zero_far`), latitude?, longitude?, accuracy?, distanceM? (tới điểm gần nhất trong điểm tập trung và các điểm rác của vòng), note?, photoUrl?, flaggedReportIds `uuid[]` (downvote: các điểm rác chưa sạch, ≥ 1, thuộc `reportIds` của vòng; upvote `[]`), createdAt, updatedAt | **unique (verificationId, userId)**, index (userId, createdAt) cho giới hạn 20 phiếu / 24 h. Đổi phiếu thì sửa tại chỗ (BR-387, BR-388) |
 | CampaignCompletionReport (`campaign_completion_reports`) | id, campaignId (cascade), reportId (không FK), status (`cleaned` \| `partial` \| `unhandled`), reason? (lý do chưa xử lý), beforeUrls `text[]`, afterUrls `text[]`, submittedAt | **unique (campaignId, reportId)**, index reportId. Submission hoàn thành (spec 5.1, BR-376): mỗi lần báo hoàn thành xoá và ghi lại; migration `20261007100000_completion_review` |
 
-Phiếu "sạch / chưa sạch" cấp chiến dịch đã bỏ: migration `20261008100000_result_verification` drop bảng `campaign_completion_verifications` (thay bằng `trash_point_votes` theo từng điểm rác).
+Phiếu "sạch / chưa sạch" cấp chiến dịch đã bỏ: migration `20261008100000_result_verification` drop bảng `campaign_completion_verifications`. Bản đầu bỏ phiếu theo từng điểm rác (`trash_point_verifications`, `trash_point_votes`); migration `20261009100000_meeting_point_verification` (spec bản 2) drop hai bảng đó, tạo `meeting_point_verifications` và `meeting_point_votes`, và đặt `completion_awaiting_admin = true` cho mọi campaign đang PENDING_COMPLETION chưa chờ admin (các vòng cũ đã mất nên admin quyết định). `result_photo_checks` không đổi.
 
 Tính năng Task đã bỏ: migration `20261006100000_drop_campaign_tasks` xoá 4 bảng `campaign_task_result_files`, `campaign_task_results`, `campaign_task_assignments`, `campaign_tasks` và các dòng `media` loại `CAMPAIGN_TASK_RESULT`. Kết quả công việc giờ ghi theo ca (`campaign_shift_results`).
 
@@ -662,8 +663,8 @@ Vòng đời campaign dùng tên riêng trong `DC/campaign-lifecycle.ts > Campai
 | CAMPAIGN_DONE, CAMPAIGN_COMPLETION_APPROVED_BY_ADMIN | campaignDone | Có (APPROVED_BY_ADMIN khi admin Duyệt campaign đã chuyển admin) |
 | CAMPAIGN_RESULT_VERIFIED (migration `20261008100000_result_verification_kinds`) | campaignDone | Có |
 | CAMPAIGN_COMPLETION_REJECTED_BY_ADMIN | campaignCompletionRejected | Không (admin không còn từ chối theo ca; hàm `enqueueCampaignCompletionRejectedByAdminWebsiteNotification` còn nhưng không ai gọi) |
-| CAMPAIGN_RESULT_REJECTED, CAMPAIGN_TRASH_POINT_REJECTED (migration `20261008100000_result_verification_kinds`) | campaignCompletionRejected | Có |
-| CAMPAIGN_TRASH_POINT_CONFIRM_REQUEST, CAMPAIGN_TRASH_POINT_CONFIRM_REMINDER, CAMPAIGN_TRASH_POINT_FLAGGED (migration `20261008100000_result_verification_kinds`) | (luôn gửi) | Có |
+| CAMPAIGN_RESULT_REJECTED, CAMPAIGN_MEETING_POINT_REJECTED (migration `20261008100000_result_verification_kinds`; đổi tên từ `CAMPAIGN_TRASH_POINT_REJECTED` ở `20261009100000_meeting_point_kinds`) | campaignCompletionRejected | Có |
+| CAMPAIGN_MEETING_POINT_CONFIRM_REQUEST, CAMPAIGN_MEETING_POINT_CONFIRM_REMINDER, CAMPAIGN_MEETING_POINT_FLAGGED (migration `20261008100000_result_verification_kinds`; đổi tên tại chỗ từ `CAMPAIGN_TRASH_POINT_*` bằng `ALTER TYPE … RENAME VALUE` ở `20261009100000_meeting_point_kinds`, thông báo cũ giữ nguyên) | (luôn gửi) | Có |
 | VOLUNTEER_REQUEST, VOLUNTEER_APPROVED, VOLUNTEER_REJECTED | volunteerRequest | Có |
 | REPORT_STATUS | reportStatus | Có |
 | REPORT_READY | reportStatus | Không |
