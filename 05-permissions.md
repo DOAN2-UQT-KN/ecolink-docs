@@ -210,8 +210,14 @@ Cột **Owner tổ chức** là thành viên vai `LEGAL_REPRESENTATIVE` / `OWNER
 | Duyệt hoặc huỷ khi duyệt hoàn thành (`PUT /:id/completion-review`) | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | `campaign.controller.ts > adminReviewCampaignCompletion` (role `admin`); Duyệt chỉ khi `completionAwaitingAdmin` (BR-166). State machine: `approve_completion` actor `admin` hoặc `system` (xác thực kết quả), `reject_completion` chỉ `system`, `cancel_by_admin` chỉ `admin` |
 | Tạo và duyệt submission | ❌ | ✅ | ✅ | ✅ (tự duyệt được) | ❌ | ❌ | `assertCanManage()` |
 | Danh sách "multi-submission review" | ❌ | | | | | ✅ | controller |
-| Gửi SOS, xem SOS | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | `authenticate` |
-| Giải quyết SOS | ❌ | ✅ | ✅ | ✅ | ❌ | ✅ | `sos.service.ts > solveSos()`: admin hoặc `canManage` campaign của SOS; sai → 403 `SOS_PERMISSION_DENIED` |
+| Phát SOS (`POST /sos`) | ⚠️ (người dân: GPS ≤ 500 m quanh điểm tập trung có ca đang chạy, email đã xác thực, có số điện thoại) | ✅ (canManage, mọi ca đang chạy) | ✅ | ✅ | ⚠️ (đã điểm danh ca đang chạy, chưa check-out, không bị loại) | ⚠️ (như User; admin không có quyền riêng) | `sos-eligibility.ts > resolveSosEligibility()`: thứ tự manager → trưởng ca (chỉ ca mình) → TNV → người dân; sai → 403 `SOS_NOT_ELIGIBLE {reason}`; ≤ 3 / giờ (BR-193, BR-194) |
+| Xem danh sách / bản đồ SOS (`GET /sos`) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | `authenticate`; chỉ toạ độ, loại, trạng thái, bộ đếm, không dữ liệu cá nhân (BR-198) |
+| Xem chi tiết SOS (`GET /sos/:id`) | ⚠️ | ✅ | ✅ | ✅ | ⚠️ | ✅ | `sos.service.ts > toDetail()`: ai đăng nhập cũng mở được, nhưng SĐT + tên người phát chỉ cho đội (canManage hoặc trưởng ca của SOS) và admin; tên người tới giúp cho người phát, đội, admin; chi tiết y tế cho đội, admin, người phát, người đang đến; SĐT liên hệ campaign cho đội, admin, người đang đến (BR-199) |
+| Tới giúp / huỷ / gửi vị trí (`/sos/:id/respond`) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | `respond()`: trừ người phát; chỉ manpower / medical đang `open` / `helping`; một SOS đang đến mỗi lúc → 403 `SOS_RESPOND_NOT_ALLOWED`, 409 `SOS_ALREADY_RESPONDING` (BR-410–412) |
+| Nhận xử lý SOS (`PUT /sos/:id/claim`) | ❌ (trừ trưởng ca của SOS) | ✅ | ✅ | ✅ | ❌ (trừ trưởng ca của SOS) | ✅ | `claim()`: platform admin hoặc `isTeam()` (canManage hoặc `shift.leaderUserId`); sai → 403 `SOS_PERMISSION_DENIED` (BR-413) |
+| Dời vị trí SOS (`PUT /sos/:id/location`) | ⚠️ (người phát) | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | `updateLocation()`: chỉ người phát; sai → 403 `SOS_PERMISSION_DENIED` (BR-414) |
+| Đóng SOS (`PUT /sos/:id/resolve`, alias `/solved`) | ⚠️ (người phát, trưởng ca của SOS) | ✅ | ✅ | ✅ | ⚠️ (người phát, trưởng ca của SOS) | ✅ | `resolve()`: người phát, `isTeam()` hoặc platform admin; sai → 403 `SOS_PERMISSION_DENIED` (BR-192) |
+| "Sẵn sàng hỗ trợ SOS" (`/sos/me/availability`) | ✅ (của mình) | ✅ | ✅ | ✅ | ✅ | ✅ | `authenticate`, chỉ đọc / ghi dòng của chính người gọi (BR-425) |
 
 `GET /campaigns/my?is_owner=true` của Owner tổ chức gồm cả mọi campaign của tổ chức đó (BR-185). Response campaign có người xem kèm `can_manage_campaign`, `can_delete_campaign`.
 
@@ -258,6 +264,6 @@ Chi tiết từng vấn đề ở [99-open-issues.md](99-open-issues.md) mục A
 4. `request-password-reset` trả token reset trong response.
 5. `PATCH /admin/gift-redemptions/:id/status` thiếu kiểm tra admin.
 6. ~~`PUT /campaigns/:id` cho người quản lý campaign đổi `status` tuỳ ý~~ — đã sửa: body có `status` bị từ chối, mọi chuyển trạng thái đi qua `transitionCampaign()` (04 §2).
-7. Trạng thái job AI không kiểm tra quyền. Danh sách thành viên tổ chức cũng không có guard — cần xác nhận. (Danh sách volunteer đã duyệt và giải quyết SOS đã kiểm quyền từ 2026-09-27.)
+7. Trạng thái job AI không kiểm tra quyền. Danh sách thành viên tổ chức cũng không có guard — cần xác nhận. (Danh sách volunteer đã duyệt và giải quyết SOS đã kiểm quyền từ 2026-09-27; SOS bản 2 lọc dữ liệu cá nhân theo người xem.)
 8. Guard `/admin` phía client bị comment out.
 9. ~~Refresh token đổi claim `role` thành UUID~~ — đã sửa (`refreshAccessToken()` dùng tên role).

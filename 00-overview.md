@@ -1,6 +1,6 @@
 # 00 — Tổng quan hệ thống Ecolink
 
-> Tài liệu này được viết dựa trên source code tại thời điểm 2026-10-05. Phạm vi gồm `ecolink-server/` (gateway, 5 service, 3 thư viện dùng chung) và `ecolink-client/` (web). Hai phần **không** thuộc phạm vi: `ecolink-mobile`, `ecolink-research-lab`, `ecolink-image-dedup-benchmark`.
+> Tài liệu này được viết dựa trên source code tại thời điểm 2026-10-06. Phạm vi gồm `ecolink-server/` (gateway, 5 service, 3 thư viện dùng chung) và `ecolink-client/` (web). Hai phần **không** thuộc phạm vi: `ecolink-mobile`, `ecolink-research-lab`, `ecolink-image-dedup-benchmark`.
 > Mọi đường dẫn tính từ thư mục gốc `/Users/ngoc/ecolink`.
 
 ## Mục lục tài liệu
@@ -31,7 +31,7 @@ Ecolink là nền tảng cộng đồng về môi trường. Code thể hiện c
 - **Báo cáo điểm rác/ô nhiễm (report/incident):** người dùng gửi ảnh, toạ độ và mức độ nghiêm trọng. Hệ thống dùng AI phân tích ảnh và sinh gợi ý xử lý. Admin duyệt hoặc ban report (`incident-service/src/modules/report`).
 - **Tổ chức (organization):** người nộp lập **đơn đăng ký** (xác thực email bằng OTP, lưu nháp, kèm giấy tờ pháp lý và danh sách owner). Mỗi owner tự xác nhận qua email, rồi admin thẩm định; duyệt thì hệ thống tạo tổ chức và gắn vai owner cho từng người (tổ chức **không** có tài khoản đăng nhập riêng). Tổ chức có thể được gắn **Blue Tick** (`trustTier = VERIFIED`) (`incident-service/src/modules/organization_application`).
 - **Chiến dịch (campaign):** owner hoặc quản lý chiến dịch của tổ chức tạo bản nháp chiến dịch dọn dẹp với 1–5 điểm tập kết, mỗi điểm gom các report cần xử lý, rồi gửi duyệt (report bị khoá từ lúc này). Admin duyệt (chiến dịch thành "Sắp diễn ra", tự chuyển "Đang diễn ra" khi tới ngày đầu), yêu cầu chỉnh sửa hoặc chặn; chờ duyệt quá hạn thì hết hạn. Tình nguyện viên đăng ký theo ca (có hiệu lực ngay, không cần duyệt) và điểm danh vào / ra theo từng ca (QR động đổi mỗi 10 phút; quét ngoài 50 m quanh điểm tập trung vẫn được ghi nhưng gắn cờ để người phụ trách / quản lý loại). Sau mỗi ca, người phụ trách nộp kết quả ca (điểm rác đã xử lý kèm ảnh trước / sau upload qua server để chấm EXIF và vị trí ghim, ảnh hoạt động TNV đóng góp, mô tả, khối lượng); ca chỉ "Kết thúc" khi có kết quả và có thể kết thúc sớm. Khi mọi ca đang bật đã Kết thúc, manager gửi hoàn thành; kết quả được **xác thực 3 lớp**: chấm ảnh tự động từng điểm rác "Đã sạch", rồi người báo cáo ban đầu xác nhận và cộng đồng bỏ phiếu có trọng số trong 72 giờ **theo từng điểm tập trung**; hệ thống quyết định từng điểm tập trung rồi tự hoàn thành hoặc từ chối chiến dịch (chỉ mở lại các ca đã nộp điểm rác chưa đạt); admin chỉ xử lý điểm tập trung bị gắn cờ và chiến dịch được chuyển cho admin. Hoàn thành thì người có ca điểm danh đủ nhận **điểm xanh** theo tỉ lệ ca (`incident-service/src/modules/campaign`).
-- **SOS:** yêu cầu khẩn cấp gắn với một chiến dịch đang hoạt động (`incident-service/src/modules/sos`).
+- **SOS:** yêu cầu khẩn cấp phát tại một ca đang chạy của chiến dịch, theo 3 loại (Nhân lực / Dụng cụ, Rác nguy hại, Y tế). Báo ngay cho đội của ca, rồi theo mức ưu tiên tới TNV "Sẵn sàng hỗ trợ SOS" ở gần, tổ chức lân cận và admin; người nhận bấm "Tôi tới giúp" và có bộ đếm người đang đến; job leo thang, hết hạn (`incident-service/src/modules/sos`).
 - **Vote và lưu (bookmark)** cho report và campaign.
 - **Điểm thưởng và gamification:** điểm xanh, ví SP có hạn dùng, điểm xếp hạng CRP/VRP theo season, bảng xếp hạng, badge, đổi quà (`reward-service`).
 - **Thông báo** in-app và email (`notification-service`).
@@ -240,6 +240,8 @@ Bảng chỉ ghi tên biến và ý nghĩa, không ghi giá trị. Chi tiết c�
 | `PUBLIC_INCIDENT_API_URL`, `FRONTEND_APP_URL`, `APP_NAME` | incident (identity dùng `FRONTEND_APP_URL`, `APP_NAME` cho email gửi lại kích hoạt) | Tạo link trong email |
 | `CAMPAIGN_ADMIN_NOTIFY_USER_IDS` | incident | Danh sách user id admin nhận thông báo khi có campaign chờ duyệt (gửi duyệt / nộp lại), điểm tập trung bị gắn cờ khi xác thực kết quả và campaign được chuyển admin quyết định hoàn thành; chưa đặt thì đọc tên cũ `CAMPAIGN_COMPLETION_ADMIN_NOTIFY_USER_IDS` |
 | `CAMPAIGN_LIFECYCLE_INTERVAL_MS`, `CAMPAIGN_LIFECYCLE_ENABLED` | incident (worker) | Chu kỳ job hết hạn duyệt campaign và dọn bản nháp quá 30 ngày (mặc định 15 phút) / tắt job |
+| `SOS_JOB_INTERVAL_MS`, `SOS_JOB_ENABLED` | incident (worker) | Chu kỳ job SOS (leo thang owner, mở rộng bán kính, hết hạn, chuyển admin; mặc định 60 giây) / `false` thì tắt |
+| `SOS_MANPOWER_TTL_H` | incident | Số giờ SOS Nhân lực hết hạn (mặc định 4, kẹp 3–6) |
 | `REPORT_COMPLETION_GREEN_POINTS` | incident | Số điểm xanh khi report được đánh dấu hoàn thành (mặc định 0) |
 | `AI_PREDICT_URL` | incident | Endpoint model nhận diện rác |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` | notification | Gửi email (`SMTP_HOST` rỗng thì không gửi, chỉ lưu DB) |

@@ -1,6 +1,6 @@
 # Ecolink — Tổng quan nghiệp vụ
 
-> Tài liệu dành cho PM, BA, khách hàng, nhà tài trợ và tình nguyện viên nòng cốt. Nội dung tổng hợp từ bộ tài liệu kỹ thuật trong thư mục `docs/`, và được viết dựa trên **đúng những gì sản phẩm đang làm** tại thời điểm 05/10/2026. Nó không mô tả những gì sản phẩm "dự định" làm.
+> Tài liệu dành cho PM, BA, khách hàng, nhà tài trợ và tình nguyện viên nòng cốt. Nội dung tổng hợp từ bộ tài liệu kỹ thuật trong thư mục `docs/`, và được viết dựa trên **đúng những gì sản phẩm đang làm** tại thời điểm 06/10/2026. Nó không mô tả những gì sản phẩm "dự định" làm.
 > Những chỗ sản phẩm chưa làm xong, hoặc đang làm khác với mong đợi, được nêu rõ ở mục 3 (cột Trạng thái) và mục 10.
 
 ---
@@ -33,7 +33,7 @@ Ecolink là nền tảng kết nối cộng đồng để **phát hiện và d�
 | Vai trò | Là ai | Muốn làm gì | Được làm | Không được làm |
 |---|---|---|---|---|
 | **Khách** | Người chưa đăng nhập | Tìm hiểu, đăng ký tài khoản, nộp hồ sơ tổ chức | Đăng ký, đăng nhập, xem danh sách quà và bảng xếp hạng, **nộp hồ sơ đăng ký tổ chức** (không cần tài khoản) | Xem báo cáo, chiến dịch, bản đồ (sẽ được yêu cầu đăng nhập) |
-| **Người dùng** (người dân) | Người có tài khoản cá nhân | Báo cáo rác, theo dõi, bình chọn, tham gia | Gửi và sửa báo cáo của mình; bình chọn và lưu báo cáo hoặc chiến dịch; đăng ký ca của chiến dịch, xin gia nhập tổ chức; gửi yêu cầu khẩn cấp (SOS); chat với trợ lý AI; đổi quà; cài đặt thông báo | Duyệt nội dung; tạo chiến dịch (chỉ owner hoặc quản lý chiến dịch của tổ chức được tạo) |
+| **Người dùng** (người dân) | Người có tài khoản cá nhân | Báo cáo rác, theo dõi, bình chọn, tham gia | Gửi và sửa báo cáo của mình; bình chọn và lưu báo cáo hoặc chiến dịch; đăng ký ca của chiến dịch, xin gia nhập tổ chức; gửi yêu cầu khẩn cấp (SOS) khi đang ở chiến dịch, tới giúp SOS gần mình, bật "Sẵn sàng hỗ trợ SOS"; chat với trợ lý AI; đổi quà; cài đặt thông báo | Duyệt nội dung; tạo chiến dịch (chỉ owner hoặc quản lý chiến dịch của tổ chức được tạo) |
 | **Tình nguyện viên** | Người dùng đã được chấp nhận vào một chiến dịch | Làm việc trong chiến dịch và nhận điểm | Nhận việc được giao, cập nhật kết quả, điểm danh vào / ra từng ca bằng mã QR tại điểm tập trung, nhận điểm khi chiến dịch hoàn thành | Quản lý chiến dịch |
 | **Owner tổ chức** (gồm người đại diện pháp lý) | Người dùng cá nhân được gắn vai owner sau khi hồ sơ được duyệt, hoặc qua **đề xuất thêm owner** được các owner khác đồng ý. Một tổ chức có thể có nhiều owner (tối đa 5 lúc đăng ký); một người làm owner tối đa 3 tổ chức. Tổ chức **không** có tài khoản đăng nhập riêng | Quản lý tổ chức và chiến dịch | Mọi quyền của Admin tổ chức, cộng: nâng / hạ vai Admin, **đề xuất thêm owner**, **đề xuất thu hồi owner khác**, đồng ý / từ chối đề xuất của owner khác, **tự hạ vai hoặc rời tổ chức** (khi còn owner khác; người đại diện pháp lý phải chọn người thay, người thay xác nhận và các owner khác đồng ý); **tạo chiến dịch**; quản lý, sửa và xoá **mọi** chiến dịch của tổ chức (kể cả chiến dịch người khác tạo) | Tự tạo tổ chức mà không qua thẩm định; rời tổ chức khi là owner duy nhất |
 | **Admin tổ chức** | Thành viên được owner nâng vai | Vận hành tổ chức thay owner | Sửa thông tin tổ chức; duyệt người xin gia nhập và lời mời; đổi vai / gỡ Quản lý chiến dịch và Thành viên | Đụng tới owner hoặc admin khác; đề xuất owner; tạo hoặc quản lý chiến dịch (trừ khi được thêm làm người quản lý của một chiến dịch) |
@@ -103,7 +103,7 @@ Trạng thái: ✅ đã có · 🟡 đang làm dở / có hạn chế · ❌ ch�
 | Kết quả và trạng thái ca | Mỗi ca có trạng thái riêng: **Chưa bắt đầu → Đang diễn ra → Chờ kết quả → Kết thúc** (hoặc Đã tắt); ca chỉ Kết thúc khi đã có kết quả. Người phụ trách ca (hoặc quản lý) nộp kết quả từ lúc ca bắt đầu: từng điểm rác của điểm tập trung "Đã sạch" / "Làm dở" kèm ảnh sau (ảnh trước không bắt buộc; không khai = chưa xử lý). Ảnh trước / sau gửi bản gốc kèm **ghim vị trí chụp trên bản đồ**; hệ thống chấm ngay **Đạt / Cảnh báo / Không đạt** theo giờ chụp (trong 48 giờ), vị trí trong ảnh so với ghim và ghim so với điểm rác (trong 100 m), và phát hiện ảnh dùng lại, ảnh hoạt động chọn từ "Ảnh hoạt động của ca", mô tả, số túi và số kg; sửa được tới khi báo hoàn thành. Tình nguyện viên đã điểm danh xem kết quả và đóng góp ảnh / video. Ca đã có kết quả có thể **kết thúc sớm** (mọi người được check-out, điều kiện 60% tính tới lúc kết thúc). Ca chờ kết quả quá 24 giờ thì người phụ trách và quản lý được nhắc mỗi ngày | Người phụ trách ca, quản lý, tình nguyện viên | 🟡 Chưa có chụp trực tiếp (Live Camera) trên điện thoại, chỉ chọn ảnh thư viện kèm ghim; chưa có bản đồ điểm rác **[CHƯA HOÀN THIỆN]** |
 | Tiến độ các ca | Tab **Tiến độ** (Progress) trên trang chiến dịch, mọi người đã đăng nhập thấy khi chiến dịch đã công khai (quản lý và quản trị viên thấy ở mọi trạng thái; thay tab Công việc cũ): lưới ngày × điểm tập trung tô màu theo trạng thái ca, cùng số ca đã Kết thúc, số người có mặt / đăng ký và tỉ lệ, tổng khối lượng, số điểm rác đã sạch / làm dở / chưa xử lý. Bấm một ô ca mở khung xem nhanh kết quả của ca: số người đăng ký / có mặt / đủ điều kiện, từng điểm rác (đã sạch / làm dở / chưa xử lý, ảnh trước / sau), ảnh hoạt động đưa vào kết quả, mô tả và khối lượng (túi, kg); các phần thu gọn được, có link sang trang ca; chưa nộp thì ghi "Chưa nộp kết quả". Ảnh trong kho chưa chọn vào kết quả chỉ quản lý, người phụ trách ca và người đã điểm danh thấy. Quản trị viên còn xem ở tab Kết quả (Result) của khung Xem trước chiến dịch, kèm hồ sơ đề nghị hoàn tất nếu đã gửi | Mọi người đã đăng nhập (chiến dịch công khai), quản lý, quản trị viên | ✅ |
 | Xử lý chiến dịch quá ngày kết thúc | Spec 4.4 | Hệ thống | **[CHƯA HOÀN THIỆN]** |
-| Yêu cầu khẩn cấp (SOS) | Gửi yêu cầu khẩn cấp tại chiến dịch đang diễn ra; hiện trên bản đồ | Người dùng; người quản lý chiến dịch và quản trị viên đóng SOS | 🟡 Chưa có thông báo và leo thang (spec 4.3) **[CHƯA HOÀN THIỆN]** |
+| Yêu cầu khẩn cấp (SOS) | 3 loại (Nhân lực / Dụng cụ, Rác nguy hại, Y tế) phát tại ca đang chạy; báo ngay cho đội của ca rồi lan dần tới tình nguyện viên "Sẵn sàng" ở gần, tổ chức lân cận và quản trị viên; "Tôi tới giúp" kèm bộ đếm, chỉ đường; tự leo thang và hết hạn; bản đồ theo màu từng loại | Người ở hiện trường phát; mọi người tới giúp; đội, quản trị viên và người phát đóng SOS | ✅ Web (thời gian thực bằng tự làm mới; chưa có mobile, chưa có thông báo đẩy / SMS) |
 | Báo hoàn thành | Khi **mọi ca đang bật đã Kết thúc** (nút bị khoá kèm "Còn N ca chưa Kết thúc"), quản lý báo hoàn thành: hệ thống tự gom kết quả các ca thành bộ hồ sơ (từng điểm rác: đã sạch / làm dở kèm ảnh trước / sau); điểm rác chưa ca nào xử lý phải ghi lý do; điểm rác có ảnh Không đạt / Cảnh báo được liệt kê để sửa trước (không chặn). Mỗi **điểm tập trung** có điểm rác "Đã sạch" mở **72 giờ xác thực**: người báo cáo ban đầu của các điểm rác trong đó được mời xác nhận (mỗi người một lời mời cho mỗi điểm tập trung), người dân quanh từng điểm tập trung được mời bỏ phiếu | Quản lý, người dân | ✅ |
 | Xác thực kết quả (3 lớp) | (1) Mỗi ảnh và mỗi điểm rác "Đã sạch" được **chấm ảnh tự động**; mức của điểm tập trung là mức thấp nhất trong các điểm rác của nó. Bầu chọn theo **điểm tập trung** (một khu vực cùng các điểm rác của nó): người xem ảnh trước / sau của mọi điểm rác trong đó rồi bỏ **một phiếu** cho cả khu vực; (2) **người báo cáo ban đầu** của bất kỳ điểm rác nào trong đó xác nhận (một phiếu nặng 10, dù báo cáo nhiều điểm); (3) **cộng đồng bỏ phiếu** "Đã sạch" / "Chưa sạch" (Chưa sạch phải kèm ghi chú hoặc ảnh **và chọn điểm rác nào chưa sạch**), phiếu nặng 3 khi đứng tại chỗ (GPS trong 30 m quanh điểm tập trung hoặc một điểm rác của nó), 1 khi ở gần (trong 5 km), 0 khi ở xa hoặc tài khoản dưới 7 ngày / email chưa xác thực. Thành viên tổ chức, đội quản lý và tình nguyện viên đã điểm danh không được bỏ phiếu; mỗi người tối đa 20 phiếu mới mỗi ngày. Đạt 15 điểm → **Đã xác thực**; có phiếu chưa sạch và ≤ 3 điểm → **Gắn cờ** cho quản trị viên; hết 72 giờ mà không ai phản đối thì kết quả chấm ảnh quyết định (Đạt → xác thực, Cảnh báo → gắn cờ, Không đạt → từ chối) | Người báo cáo, người dân | ✅ |
 | Quyết định hoàn thành và trao điểm | **Hệ thống tự quyết**: mọi điểm tập trung đã xác thực → chiến dịch **hoàn thành** (điểm rác đã sạch thành đã xử lý; làm dở và chưa xử lý trở về danh sách chờ; người có ít nhất một ca **điểm danh đủ** nhận điểm theo tỉ lệ số ca đủ / số ca đã đăng ký); có điểm tập trung bị từ chối → chiến dịch **trở lại đang diễn ra**, chỉ các ca đã nộp ảnh cho **điểm rác chưa đạt** được mở lại kèm lý do. Quản trị viên chỉ: xử lý điểm tập trung bị gắn cờ trong 48 giờ (Xác thực / Từ chối kèm lý do và chọn điểm rác chưa đạt; quá hạn thì tự từ chối); **Duyệt** (chốt mức độ khó) hoặc **Huỷ** chiến dịch khi được chuyển tới (bị từ chối quá 3 lần, hoặc không có điểm rác nào "Đã sạch"); **Huỷ** được bất cứ lúc nào. Không có "Duyệt một phần" | Hệ thống, quản trị viên | ✅ |
@@ -302,13 +302,18 @@ Các trường hợp thường gặp:
 - Người đổi **không nhận thông báo** khi đơn thay đổi trạng thái; phải tự vào xem ở mục Đơn hàng.
 
 ### 4.7 Yêu cầu khẩn cấp (SOS)
-1. Tại một chiến dịch đang diễn ra, người dùng gửi SOS kèm nội dung và số điện thoại.
-2. SOS hiện trên bản đồ tại vị trí chiến dịch (bản đồ tự làm mới mỗi 10 giây).
-3. Người quản lý chiến dịch (hoặc quản trị viên) đánh dấu "đã giải quyết". Khi chiến dịch hoàn thành, mọi SOS của chiến dịch cũng tự đóng.
+1. **Ai phát được:** chỉ khi chiến dịch có ca đang chạy. Quản lý chiến dịch (chọn ca), trưởng ca, tình nguyện viên đã điểm danh ca, hoặc người dân đang đứng trong 500 m quanh điểm tập trung có ca đang chạy (cần email đã xác thực và có số điện thoại trong hồ sơ). Tối đa 3 SOS mỗi giờ mỗi người.
+2. **Chọn loại rồi điền chi tiết:** Nhân lực / Dụng cụ (cần mấy người, dụng cụ gì), Rác nguy hại (loại rác, bắt buộc có ảnh), Y tế / Tai nạn (tỉnh hay bất tỉnh, mấy người). Ứng dụng lấy vị trí GPS (không có thì dùng điểm tập trung). Nếu gần đó (200 m) đã có SOS cùng loại, ứng dụng gợi ý mở SOS đó. SOS Y tế luôn nhắc **gọi 115** trước.
+3. **Ai được báo:** ngay lập tức là đội của ca (trưởng ca, quản lý, tình nguyện viên đã điểm danh), rồi tình nguyện viên bật "Sẵn sàng hỗ trợ SOS" trong 3 km (tối đa 5 lời mời mỗi ngày, Y tế không tính). Y tế báo ngay owner tổ chức và quản trị viên kèm email; Rác nguy hại báo quản trị viên kèm email và cảnh báo tình nguyện viên trong ca "không chạm vào". Y tế và Rác nguy hại còn báo ngay owner các tổ chức ở gần (5 km).
+4. **Tới giúp:** người nhận mở SOS, xem bộ đếm ("2 / 5 người đang đến"), bấm chỉ đường (Google Maps), bấm "Tôi tới giúp ngay"; tới gần trong 50 m thì tự thành "đã tới". Mỗi người chỉ đang đến một SOS mỗi lúc. Rác nguy hại không mời ai tới, chỉ cảnh báo.
+5. **Đóng:** người phát, đội hoặc quản trị viên bấm "Đã giải quyết" (hoặc đánh dấu báo nhầm / không có thật); người đang đến được báo "không cần tới nữa". Đội hoặc quản trị viên có thể "Nhận xử lý" để dừng leo thang. Chiến dịch hoàn thành thì mọi SOS còn mở tự đóng.
+6. **Tự động:** sau 10 phút chưa ai nhận lời, owner tổ chức được báo (Nhân lực, Rác nguy hại); Nhân lực chưa đủ người sau 15 phút thì mở rộng 5 km và hỏi các tổ chức ở gần; Nhân lực hết hạn sau 4 giờ hoặc khi ca kết thúc; Rác nguy hại chưa ai nhận xử lý sau 2 giờ thì chuyển quản trị viên.
 
 Các trường hợp thường gặp:
-- Chiến dịch chưa hoạt động hoặc không có vị trí: không gửi được SOS.
-- Hiện **không có thông báo** nào gửi đi khi có SOS.
+- Không có ca đang chạy, người dân ở xa hoặc chưa xác thực email / thiếu số điện thoại: không phát được SOS, ứng dụng nói rõ lý do.
+- Bản đồ chỉ hiện vị trí và loại SOS; số điện thoại và tên người phát chỉ đội và quản trị viên thấy, chi tiết y tế chỉ người liên quan thấy.
+- Người bị đóng SOS là "báo nhầm / không có thật" 3 lần trong 30 ngày sẽ được báo cho quản trị viên xem xét.
+- **Khác với spec:** chưa xác thực số điện thoại bằng mã OTP (dùng email đã xác thực thay thế); màn SOS tự làm mới mỗi 5 giây, bản đồ mỗi 10 giây (chưa thời gian thực); chưa có thông báo đẩy / SMS, chưa có Apple Maps, chưa có app mobile.
 
 ### 4.8 Chat với trợ lý AI
 1. Người dùng mở khung chat, gõ câu hỏi, có thể đính kèm ảnh (tối đa 8).
@@ -471,8 +476,12 @@ Mã BR-xxx dùng để đối chiếu với `docs/03-business-rules.md`.
 - **BR-188:** Mọi lần đổi trạng thái và mọi lần sửa khi đang chờ duyệt đều được ghi lịch sử.
 
 ### 5.8 Yêu cầu khẩn cấp
-- **BR-190, BR-191:** SOS chỉ gửi được tại chiến dịch đang hoạt động và có vị trí; cần nội dung (tối đa 2000 ký tự) và số điện thoại hợp lệ; vị trí SOS lấy theo vị trí chiến dịch.
-- **BR-192:** Chỉ người quản lý chiến dịch hoặc quản trị viên đóng được SOS; SOS đã giải quyết thì không cần xử lý thêm.
+- **BR-193, BR-194:** Chỉ người ở hiện trường của ca đang chạy phát được SOS (quản lý, trưởng ca, tình nguyện viên đã điểm danh, người dân trong 500 m có email đã xác thực và số điện thoại); tối đa 3 SOS / giờ.
+- **BR-195:** Mỗi loại SOS có thông tin bắt buộc riêng; Rác nguy hại phải có ảnh.
+- **BR-415–420:** Thứ tự người nhận và leo thang: đội ngay, tình nguyện viên "Sẵn sàng" trong 3 km (5 km sau 15 phút với Nhân lực), owner sau 10 phút (Y tế: ngay), tổ chức lân cận trong 5 km, quản trị viên (Y tế và Rác nguy hại: ngay, kèm email; Rác nguy hại chưa ai nhận sau 2 giờ: chuyển hẳn).
+- **BR-192, BR-197:** Người phát, đội hoặc quản trị viên đóng SOS; Nhân lực tự hết hạn sau 4 giờ hoặc khi ca kết thúc.
+- **BR-198, BR-199:** Bản đồ không lộ thông tin cá nhân; số điện thoại người phát chỉ đội và quản trị viên thấy.
+- **BR-416, BR-425:** Tình nguyện viên tự bật "Sẵn sàng hỗ trợ SOS" và chọn khung giờ; vị trí chỉ lưu gần đúng (~500 m) và không hiện cho ai.
 
 ### 5.9 Thông báo
 - **BR-200:** Mỗi thông báo trong ứng dụng gửi cho đúng một người; email về hồ sơ tổ chức gửi thẳng tới địa chỉ email người nộp.
@@ -676,8 +685,9 @@ Có = được · Không = không được · ĐK = có điều kiện
 | Báo hoàn thành chiến dịch | Không | Không | Không | Có | Có | Không |
 | Bỏ phiếu xác thực điểm tập trung | Không | Có | ĐK: chưa điểm danh ca nào của chiến dịch | Không | Không | Có |
 | Xử lý điểm tập trung bị gắn cờ; duyệt hoặc huỷ chiến dịch được chuyển tới | Không | Không | Không | Không | Không | Có |
-| Gửi SOS | Không | ĐK: chiến dịch đang hoạt động | ĐK | ĐK | ĐK | ĐK |
-| Đóng SOS | Không | Không | Không | Có | Có | Có |
+| Phát SOS | Không | ĐK: đứng trong 500 m quanh ca đang chạy, email đã xác thực, có số điện thoại | ĐK: đã điểm danh ca đang chạy | ĐK: có ca đang chạy | ĐK: có ca đang chạy | ĐK: như người dùng |
+| Tới giúp SOS | Không | Có (trừ SOS của mình; Rác nguy hại không nhận người tới) | Có | Có | Có | Có |
+| Nhận xử lý, đóng SOS | Không | ĐK: SOS của mình (chỉ đóng) | ĐK: SOS của mình, hoặc là trưởng ca của SOS | Có | Có | Có |
 | Sửa thông tin tổ chức, duyệt thành viên và lời mời | Không | Không | Không | Không | Có (Admin tổ chức cũng có) | Không |
 | Mời người vào tổ chức | Không | ĐK: là thành viên tổ chức (cần duyệt) | ĐK | ĐK | Có (gửi luôn) | Không |
 | Đổi vai, gỡ thành viên (không phải owner) | Không | Không | Không | Không | Có (Admin tổ chức: trừ admin khác) | Không |
@@ -734,9 +744,14 @@ Kênh gồm **trong ứng dụng** (chuông thông báo) và **email**. Hiện c
 | Chiến dịch hoàn thành | Tình nguyện viên | Ứng dụng | Chiến dịch đã hoàn thành | Có (nhóm "Chiến dịch hoàn thành") |
 | Quản trị viên duyệt hoàn thành | Các owner | Ứng dụng | Kết quả | Có (nhóm "Chiến dịch hoàn thành") |
 | Báo cáo được duyệt hoặc bị chặn | Người gửi | Ứng dụng | Kết quả và lý do | Không |
+| Có SOS mới | Đội của ca (trưởng ca, quản lý, tình nguyện viên đã điểm danh) | Ứng dụng | Loại SOS, điểm tập trung | Không |
+| SOS Y tế / Rác nguy hại | Owner tổ chức và quản trị viên (Y tế); quản trị viên (Rác nguy hại); tình nguyện viên trong ca được cảnh báo (Rác nguy hại) | Ứng dụng + email (email luôn tiếng Anh) | Cảnh báo khẩn | Không |
+| Mời tới giúp / cảnh báo SOS gần mình | Tình nguyện viên bật "Sẵn sàng hỗ trợ SOS" (tối đa 5 / ngày, Y tế không tính) | Ứng dụng | Loại SOS, chiến dịch, số người cần | Có (nhóm "Chiến dịch gần bạn"; tắt nhóm này cũng tắt cả cảnh báo Rác nguy hại gửi cho tình nguyện viên trong ca) |
+| SOS cần thêm người / leo thang | Owner tổ chức lân cận, owner tổ chức của chiến dịch, quản trị viên | Ứng dụng | Nhờ hỗ trợ / chưa ai nhận | Không |
+| SOS đổi vị trí, hết hạn, đã giải quyết | Người đang trên đường tới | Ứng dụng | Vị trí mới / không cần tới nữa | Không |
 | Báo cáo đã được xử lý | Người gửi | Ứng dụng | Trạng thái mới | Có (nhóm "Trạng thái báo cáo") |
 
-Hiện **không có** thông báo cho các sự kiện: đặt lại mật khẩu, đơn đổi quà đổi trạng thái, có SOS mới.
+Hiện **không có** thông báo cho các sự kiện: đặt lại mật khẩu, đơn đổi quà đổi trạng thái.
 
 > Chi tiết kỹ thuật: xem `docs/services/notification-service.md`.
 
@@ -759,7 +774,8 @@ Hiện **không có** thông báo cho các sự kiện: đặt lại mật khẩ
 | **Người quản lý chiến dịch** | Người tạo chiến dịch và những người được thêm vào để vận hành |
 | **Tình nguyện viên** | Người dùng đã được chấp nhận tham gia một chiến dịch |
 | **Điểm danh theo ca** | Người tham gia quét mã QR (đổi mỗi 10 phút) do người phụ trách ca hiển thị, khi đến và khi về; quét xa điểm tập trung quá 50 m thì bị gắn cờ để ban tổ chức kiểm tra và có thể loại; ca có mặt ≥ 60% thời gian và không bị loại mới được tính điểm |
-| **SOS** | Yêu cầu hỗ trợ khẩn cấp gửi tại một chiến dịch đang diễn ra |
+| **SOS** | Yêu cầu hỗ trợ khẩn cấp phát tại một ca đang chạy của chiến dịch, theo 3 loại: Nhân lực / Dụng cụ, Rác nguy hại, Y tế |
+| **Sẵn sàng hỗ trợ SOS** | Cài đặt trong hồ sơ: tình nguyện viên bật để nhận lời mời tới giúp SOS ở gần trong khung giờ đã chọn |
 | **Xác nhận đã sạch** | Người dân quanh khu vực đánh giá khu vực đã sạch hay chưa sau khi chiến dịch báo hoàn thành; chỉ để quản trị viên tham khảo |
 | **Điểm xanh** | Điểm thưởng ghi nhận đóng góp (hoàn thành chiến dịch, báo cáo được xử lý, báo cáo đạt mốc bình chọn) |
 | **Điểm tiêu dùng** | Điểm dùng để đổi quà, sinh ra cùng lúc với điểm xanh, **hết hạn sau 90 ngày** |
@@ -786,7 +802,7 @@ Phần này viết lại các vấn đề trong `docs/99-open-issues.md` theo g�
 | 4 | Người dùng bất kỳ đổi được trạng thái đơn đổi quà của người khác | Huỷ đơn người khác, hoặc tự đánh dấu "đã giao" | Chỉ quản trị viên |
 | 5 | Người bị khoá vẫn thao tác được thêm một thời gian (tới khi phiên hết hạn, có thể lên đến 30 ngày tuỳ cấu hình) | Khoá tài khoản không có hiệu lực ngay | Có cần hiệu lực tức thì không? |
 | 6 | Mã QR điểm danh có thể chụp và chia sẻ để điểm danh từ xa | **Mới giảm nhẹ (03/10/2026):** mã QR đổi mỗi 10 phút nên ảnh chụp vẫn dùng được tới khoảng 20 phút; điểm danh ở xa vẫn được ghi, chỉ bị gắn cờ để người phụ trách / quản lý loại tay. Người bị gắn cờ mà không ai loại vẫn được điểm | Có chấp nhận rủi ro này không, hay rút ngắn chu kỳ mã / chặn hẳn điểm danh ở xa? |
-| 7 | Một số thông tin cá nhân (email, số điện thoại trong SOS, danh sách thành viên) hiện ai đăng nhập cũng xem được | Quyền riêng tư | Ai được xem những thông tin này? |
+| 7 | Một số thông tin cá nhân (email, danh sách thành viên) hiện ai đăng nhập cũng xem được (số điện thoại trong SOS đã được ẩn từ 06/10/2026, chỉ đội và quản trị viên thấy) | Quyền riêng tư | Ai được xem những thông tin này? |
 | 8 | Khoá bí mật của trang Facebook đang nằm trong mã nguồn | Có thể bị lạm dụng tài khoản Facebook | Thu hồi và cấp lại khoá |
 
 ### 10.2 Quy trình chưa rõ, cần chủ sản phẩm quyết định
@@ -807,7 +823,7 @@ Phần này viết lại các vấn đề trong `docs/99-open-issues.md` theo g�
 | 20 | **Rời chiến dịch** | Đã được chấp nhận thì không rời được; người bị từ chối có thể xin lại ngay | Cho phép rời không? Có giới hạn số lần xin lại không? |
 | 21 | **Xác nhận "đã sạch" của cộng đồng** | Chỉ để tham khảo, không ảnh hưởng quyết định | Có dùng làm điều kiện duyệt không? |
 | 22 | **Nộp kết quả (submission)** | Có chức năng nhưng không gắn với luồng hoàn thành | Giữ lại (và gắn vào luồng hoàn thành) hay bỏ? |
-| 23 | **SOS** | Không báo cho ai. Chỉ người quản lý chiến dịch và quản trị viên đóng được (từ 27/09/2026) | Ai cần nhận SOS (quản lý, quản trị viên, lực lượng cứu hộ)? |
+| 23 | ~~SOS báo cho ai~~ | **Đã giải quyết (06/10/2026, theo spec "Cải tiến tính năng SOS"):** đội của ca nhận ngay; rồi tình nguyện viên "Sẵn sàng" ở gần, owner tổ chức (sau 10 phút, Y tế ngay), tổ chức lân cận và quản trị viên theo loại và mức ưu tiên (mục 4.7). Chưa kết nối lực lượng cứu hộ bên ngoài; SOS Y tế nhắc gọi 115 | — |
 | 24 | **Đơn đổi quà** | Không báo cho người đổi; huỷ đơn không trả lại tồn kho; điểm hoàn có hạn dùng mới | Có thông báo không? Huỷ đơn có trả lại quà vào kho không? Hạn dùng của điểm hoàn tính thế nào? |
 | 25 | **Hai hệ điểm song song** | "Điểm xanh" (dùng cho lịch sử và bảng xếp hạng cũ) và "điểm tiêu dùng / điểm xếp hạng" (dùng để đổi quà và xếp hạng mùa). Đổi quà không trừ điểm xanh | Người dùng nhìn thấy loại điểm nào? Có gộp lại không? |
 | 26 | **Mùa giải và huy hiệu** | Đã cấu hình được nhưng giao diện chưa có. Huy hiệu chưa được trao cho ai. Mùa không tự chuyển | Thời điểm ra mắt? Ai phụ trách mở và đóng mùa? |

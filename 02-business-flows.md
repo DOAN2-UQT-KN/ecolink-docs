@@ -47,7 +47,7 @@
 | F30 | Quản lý task (đã bỏ) | Chiến dịch |
 | F31 | Điểm danh theo ca (QR động, GPS) | Chiến dịch |
 | F31b | Kết quả và trạng thái ca, kết thúc ca sớm, kho ảnh, tổng quan | Chiến dịch |
-| F32 | Gửi SOS và giải quyết SOS | Chiến dịch |
+| F32 | Phát SOS, tới hỗ trợ và đóng SOS | Chiến dịch |
 | F33 | Báo hoàn thành và xác thực kết quả 3 lớp (Layer 1 ảnh, Layer 2 người báo cáo, Layer 3 cộng đồng) | Chiến dịch |
 | F34 | Quyết định chiến dịch tự động, admin xử lý điểm tập trung bị gắn cờ, duyệt hoặc huỷ khi được chuyển và trao điểm | Chiến dịch + Điểm |
 | F35 | Submission kết quả chiến dịch | Chiến dịch |
@@ -898,13 +898,50 @@ sequenceDiagram
   INC->>NS: CAMPAIGN_SHIFT_RESULT_MISSING (mỗi 24h)
 ```
 
-### F32 — Gửi SOS và giải quyết SOS
-- `POST /api/v1/sos {campaignId, content, phone}`: campaign phải ACTIVE và có toạ độ (BR-190). SOS lấy toạ độ và địa chỉ của campaign, status=1.
-- `GET /api/v1/sos` (có lọc theo khoảng cách PostGIS nếu gửi lat/lng). Trang `/maps` poll mỗi 10 giây.
-- `PUT /api/v1/sos/:id/solved` → COMPLETED (17). Chỉ platform admin hoặc người quản lý campaign của SOS; người khác → 403 `SOS_PERMISSION_DENIED` (BR-192).
-- Khi campaign được duyệt hoàn thành, mọi SOS chưa xong của campaign chuyển COMPLETED.
-- **Không có thông báo** nào khi tạo SOS; thông báo và leo thang SOS (spec -8 4.3) **[CHƯA HOÀN THIỆN]**.
-- **File:** `INC/modules/sos/*`.
+### F32 — Phát SOS, tới hỗ trợ và đóng SOS
+SOS bản 2 (spec "Ecolink – Cải tiến tính năng SOS"). Rule ở [03 §9](03-business-rules.md) (BR-190–199, BR-410–428); vòng đời ở [04 §6](04-state-machines.md).
+- **Actor:** người phát (quản lý campaign, trưởng ca, TNV đã điểm danh, người dân ở gần), đội của SOS (quản lý campaign hoặc trưởng ca), người tới giúp, owner tổ chức, admin, job SOS.
+- **Điều kiện:** campaign UPCOMING / ACTIVE có ca đang chạy; người phát đủ điều kiện (BR-193); chưa phát 3 SOS trong 1 giờ (BR-194).
+- **Luồng chính:**
+  1. Client gọi `GET /api/v1/sos/eligibility?campaign_id&latitude&longitude` → `{can_raise, role, reason, shifts[], hourly_remaining}`; nút SOS chỉ hiện khi được phát.
+  2. Dialog bước 1 chọn loại (`manpower` / `hazard` / `medical`), bước 2 nhập chi tiết theo loại (BR-195), mô tả, ảnh, chọn ca (quản lý), lấy GPS (không có thì dùng điểm tập trung). Có SOS cùng loại trong 200 m thì gợi ý mở SOS đó (`GET /sos/duplicates`, BR-196). Loại Y tế luôn có banner "Gọi 115".
+  3. `POST /api/v1/sos` → transaction (advisory lock theo user, đếm lại 3 / giờ) tạo SOS `open` (BR-191), manpower có `expires_at` (BR-197), rồi `dispatchOnCreate()` ghi outbox (BR-415–417): đội (`SOS_TEAM_ALERT`), TNV trong ca (`SOS_HAZARD_WARNING` với hazard), owner + admin (`SOS_MEDICAL_ALERT` + email với medical), admin (`SOS_ADMIN_ALERT` + email với hazard), TNV Sẵn sàng trong 3 km (ưu tiên 1), tổ chức lân cận trong 5 km (ưu tiên 2, ngay lúc tạo với hazard / medical). Client mở `/sos/:id`.
+  4. Người nhận mở `/sos/:id` (thông báo `SOS_*` dẫn tới đây): bộ đếm người đang đến / đã tới, chỉ đường Google Maps, khoảng cách và thời gian ước tính. Bấm "Tôi tới giúp ngay" (`POST /:id/respond`, BR-410) → SOS `helping`; client theo dõi GPS và gửi `PUT /:id/respond/location` tối đa 30 giây một lần, trong 50 m thì thành "đã tới" (BR-412). "Không tới được nữa" (`DELETE /:id/respond`, BR-411).
+  5. Đội hoặc admin bấm "Nhận xử lý" (`PUT /:id/claim`, BR-413); người phát có thể dời vị trí (`PUT /:id/location`, BR-414, người đang đến nhận `SOS_LOCATION_CHANGED`).
+  6. Người phát, đội hoặc admin bấm "Đã giải quyết" (`PUT /:id/resolve {code, note}`, BR-192) → `resolved`; người đang đến nhận `SOS_NO_LONGER_NEEDED`. Đóng bằng `false_alarm` / `not_real` lần thứ 3 trong 30 ngày → admin nhận `SOS_ABUSE_REVIEW` (BR-424).
+- **Job SOS** (worker, mặc định 60 giây, BR-421): leo thang owner sau 10 phút (BR-418), mở rộng manpower sau 15 phút (BR-419), hết hạn manpower (BR-197), hazard chưa ai nhận sau 2 giờ → `escalated` (BR-420).
+- **Khác:** campaign hoàn thành thì đóng mọi SOS còn sống (BR-426). Bản đồ `/maps` và danh sách chỉ thấy toạ độ, loại, trạng thái, bộ đếm (BR-198); chi tiết lọc theo người xem (BR-199). TNV bật "Sẵn sàng hỗ trợ SOS" trong hồ sơ (BR-425).
+- **Lỗi:** 403 `SOS_NOT_ELIGIBLE {reason}`, 429 `SOS_RATE_LIMIT`, 422 `SOS_DETAILS_INVALID` / `SOS_PHOTO_REQUIRED`, 409 `SOS_ALREADY_RESPONDING` / `SOS_CLOSED`, 403 `SOS_RESPOND_NOT_ALLOWED` / `SOS_PERMISSION_DENIED`.
+- **Lệch spec:** người dân dùng email đã xác thực + có số điện thoại thay cho số điện thoại đã xác thực; thời gian thực bằng poll (chi tiết 5 giây, bản đồ 10 giây), không WebSocket; không kênh ưu tiên cao, không Apple Maps, chưa có mobile (BR-428).
+- **Dữ liệu thay đổi:** `sos`, `sos_responders`, `sos_deliveries`, `volunteer_availabilities`, `outbox_events` (`WEBSITE_NOTIFICATION`).
+- **File:** `INC/modules/sos/sos.routes.ts`, `sos.controller.ts`, `sos.service.ts`, `sos-eligibility.ts`, `sos-dispatch.ts`, `sos.job.ts`, `sos-availability.service.ts`, `DC/sos.ts`, `INC/modules/campaign/website-notification.publisher.ts`, `FE/components/sos/*`, `FE/app/(pages)/(main)/sos/[id]/page.tsx`.
+
+```mermaid
+sequenceDiagram
+  actor R as Người phát
+  actor H as Người tới giúp
+  participant FE as client
+  participant INC as incident
+  participant NS as notification
+  R->>FE: Bấm SOS
+  FE->>INC: GET /sos/eligibility?campaign_id&lat&lng
+  INC-->>FE: {can_raise, role, shifts, hourly_remaining}
+  FE->>INC: GET /sos/duplicates (gợi ý SOS trùng 200 m)
+  FE->>INC: POST /sos {type, details, photo_urls, lat, lng}
+  INC->>INC: TX: lock user, ≤ 3/giờ, tạo SOS open, dispatchOnCreate() → outbox
+  INC->>NS: SOS_TEAM_ALERT (đội), ưu tiên 1/2/3 theo loại
+  INC-->>FE: 201 SosDetail → mở /sos/:id (poll 5 s)
+  H->>INC: POST /sos/:id/respond
+  INC->>INC: responder on_the_way, SOS → helping
+  loop mỗi ≤ 30 s
+    H->>INC: PUT /sos/:id/respond/location
+    INC->>INC: ≤ 50 m → arrived
+  end
+  R->>INC: PUT /sos/:id/resolve {code}
+  INC->>INC: SOS → resolved, người đang đến → cancelled
+  INC->>NS: SOS_NO_LONGER_NEEDED
+  Note over INC: Job 60 s: owner sau 10', mở rộng 15', hết hạn, hazard 2h → escalated
+```
 
 ### F33 — Báo hoàn thành và xác thực kết quả 3 lớp
 Thay admin duyệt tay mọi hồ sơ (spec "Cơ chế xác thực kết quả chiến dịch", **bản 2**). **Layer 1** chấm từng ảnh và từng điểm rác khai "Đã sạch" (EXIF, ghim, mã băm); **Layer 2** (người báo cáo ban đầu xác nhận, phiếu nặng 10) và **Layer 3** (cộng đồng bỏ phiếu có trọng số trong khung 72h) bầu chọn **theo điểm tập trung**: mỗi người một phiếu cho cả điểm tập trung sau khi xem ảnh của mọi điểm rác trong đó. Quyết định cũng theo điểm tập trung (F34). Hằng số ở `DC/result-verification.ts` (`MEETING_POINT_*`).
@@ -970,7 +1007,7 @@ sequenceDiagram
   2. Transaction Serializable:
      - campaign → COMPLETED (17), rejectReason=null, `completionAwaitingAdmin = false`, difficulty = mức đã chốt.
      - Điểm rác `cleaned` trong submission → 17; `partial`, `unhandled` và điểm rác còn lại → TODO, bỏ `campaignId` (BR-168).
-     - Mọi SOS → 17.
+     - SOS còn sống → `resolved` / `handled`, `status = 17`; người đang trên đường → `cancelled` (BR-426).
      - Outbox `CAMPAIGN_COMPLETION_GREEN_POINTS {campaignId, credits[]}` (nếu có người nhận), dedup theo campaignId.
   3. `CAMPAIGN_DONE` tới mọi người đang đăng ký ca **cộng** mọi người được cộng điểm.
   4. Relay đẩy event lên SQS `reward-intake`; reward cộng điểm (F36). Reward-service không phản hồi lúc lấy tier thì lần quyết định đó lỗi (log), lần sau (phiếu / job) thử lại.
@@ -990,7 +1027,7 @@ sequenceDiagram
   A->>INC: PUT /campaigns/:id/verification/:meetingPointId/decision verify
   INC->>INC: decideCampaign(): mọi điểm tập trung verified
   INC->>RW: GET difficulty tier (greenPoints)
-  INC->>INC: TX Serializable: campaign=17, report cleaned=17 / còn lại→TODO, sos=17 + outbox CAMPAIGN_COMPLETION_GREEN_POINTS
+  INC->>INC: TX Serializable: campaign=17, report cleaned=17 / còn lại→TODO, sos còn sống → resolved + outbox CAMPAIGN_COMPLETION_GREEN_POINTS
   INC->>NS: CAMPAIGN_DONE → volunteers, CAMPAIGN_RESULT_VERIFIED → đội
   INC-->>A: 200 {meeting_point, campaign_status}
   RL->>Q: publish envelope

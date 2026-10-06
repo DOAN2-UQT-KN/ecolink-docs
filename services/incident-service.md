@@ -21,7 +21,7 @@
 
 - **Báo cáo sự cố môi trường (report)**: user tạo report kèm ảnh và toạ độ; tìm kiếm theo bộ lọc / khoảng cách PostGIS; chủ report sửa, thêm/xoá ảnh, xoá mềm; admin duyệt (verify), cấm (ban), đánh dấu hoàn thành (mark-done). Tạo report và thêm ảnh sẽ đẩy job phân tích ảnh AI (`ANALYZE_REPORT`) và job dịch (`TRANSLATE_TEXT`). Mark-done ghi outbox event cộng điểm xanh cho người báo cáo.
 - **Vote**: upvote / downvote (toggle) cho report hoặc campaign; upvote report ghi outbox event mốc vote (`REPORT_VOTE_MILESTONE_GREEN_POINTS`).
-- **SOS**: tạo yêu cầu khẩn cấp gắn với một campaign đang ACTIVE (toạ độ lấy từ campaign), liệt kê (có lọc theo khoảng cách), đánh dấu đã xử lý.
+- **SOS** (bản 2): phát SOS 3 loại tại ca đang chạy (kiểm điều kiện người phát, 3 / giờ), gửi thông báo theo mức ưu tiên (đội, TNV "Sẵn sàng", tổ chức lân cận, admin), "Tôi tới giúp" kèm bộ đếm và vị trí, nhận xử lý, đóng; job leo thang / hết hạn; cài đặt "Sẵn sàng hỗ trợ SOS".
 - **Saved resource**: lưu / bỏ lưu (toggle) report hoặc campaign, liệt kê danh sách đã lưu kèm dữ liệu chi tiết.
 - **Admin media**: admin đăng ký một URL ảnh (đã upload ở nơi khác) thành bản ghi `Media` loại `OTHER`. Không có chức năng kiểm duyệt media. Thư mục `src/modules/media` chỉ có thư mục `__tests__` rỗng.
 - **Organization**: danh sách / chi tiết tổ chức (kèm `owners[]`, `myRole`, `isOwner`), cập nhật hồ sơ (người có vai owner), xác minh email liên hệ, admin verify/ban, yêu cầu tham gia (join request), duyệt/huỷ/rời tổ chức, liệt kê thành viên, đổi vai / gỡ thành viên, lời mời, owner change (thêm / thu hồi owner, quyết trong tổ chức) và owner tự hạ vai / rời. Endpoint tạo tổ chức trực tiếp chỉ còn dùng nội bộ (`x-internal-api-key`).
@@ -37,7 +37,7 @@ ecolink-server/services/incident-service/
 ├── prisma/schema.prisma            # 31 model (từ điển dữ liệu nằm trong ghi chú gửi điều phối)
 ├── src/
 │   ├── index.ts                    # Express app; import "./worker" (xem mục 6, 9)
-│   ├── worker.ts                   # startAllQueues() + startOutboxRelay()
+│   ├── worker.ts                   # startAllQueues() + startOutboxRelay() + các job (gồm startSosJob())
 │   ├── tracer.ts                   # dd-trace
 │   ├── config/prisma.client.ts
 │   ├── constants/                  # re-export @da2/constants; job-type.enum.ts
@@ -52,7 +52,7 @@ ecolink-server/services/incident-service/
 │       ├── report/                 # routes, controller, service, repository, report_media.repository,
 │       │                           # report-ai-analysis.service (dùng bởi worker), report-status-notify.client
 │       ├── vote/                   # routes, controller, service, repository, dto
-│       ├── sos/                    # routes, controller, service, repository, dto, entity
+│       ├── sos/                    # routes, controller, service, eligibility, dispatch, job, availability, dto
 │       ├── saved_resource/         # routes, controller, service, repository, dto
 │       ├── admin_media/            # routes, controller
 │       ├── media/                  # chỉ có __tests__/ rỗng
@@ -136,7 +136,7 @@ Không qua `authenticate`: `GET /health`, `GET /api/v1/organizations/verify-cont
 
 ## 4. Danh sách API endpoint
 
-**Tổng số endpoint phần A: 54** (report 15, vote 2, SOS 3, saved resource 2, admin media 1, organization 16, organization application công khai 9, organization application admin 6). Ngoài ra service có `GET /health` và các route Swagger do `mountOpenApi` gắn.
+**Tổng số endpoint phần A: 66** (report 15, vote 2, SOS 15, saved resource 2, admin media 1, organization 16, organization application công khai 9, organization application admin 6). Ngoài ra service có `GET /health` và các route Swagger do `mountOpenApi` gắn.
 
 Mọi prefix dưới đây đều được api-gateway proxy nguyên đường dẫn (`ecolink-server/api-gateway/src/index.ts`), riêng saved resource: gateway `/api/v1/incident/saved-resources` → upstream `/incident/saved-resources`. `POST /api/v1/organizations` vẫn đi qua gateway được nhưng cần `x-internal-api-key`.
 
@@ -178,13 +178,27 @@ Lưu ý hiển thị:
 
 ### 4.3 SOS — `IS/src/modules/sos/sos.routes.ts` (prefix `/api/v1/sos`)
 
-| Method | Path | Auth | Role | Request | Response | Mã lỗi | Handler |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| POST | `/api/v1/sos` | JWT | Mọi user | Body `campaignId` UUID; `content` không rỗng, trim, ≤2000; `phone` trim, regex `^\+?\d{7,15}$` | 201 "SOS created successfully" `{ sos }` | 400 VALIDATION_ERROR; 400 "SOS can only be created for an active campaign"; 400 "Campaign does not have location coordinates"; 404 "Campaign not found"; 500 | `IS/src/modules/sos/sos.controller.ts > createSos` → `sos.service.ts > create()` |
-| GET | `/api/v1/sos` | JWT | Mọi user | Query `campaignId?` UUID, `status?` int, `latitude?`, `longitude?`, `maxDistance?` int ≥1 (mét, mặc định 50000), `page?` (1), `limit?` 1..100 (20) | 200 `{ sos[] (kèm campaign), total, page, limit, totalPages }`; có lat+lng thì sắp theo khoảng cách tăng dần | 400; 500 | `sos.controller.ts > listSos` → `sos.service.ts > list()` |
-| PUT | `/api/v1/sos/:id/solved` | JWT | Platform admin, hoặc người quản lý campaign của SOS (`campaignAccessService.canManage()`) | Param `id` int ≥1 | 200 "SOS marked as solved" `{ sos }` (`updatedBy` = người gọi) | 400; 401; 404 "SOS not found"; 403 `SOS_PERMISSION_DENIED`; 500 | `sos.controller.ts > solveSos` → `sos.service.ts > solveSos()` |
+SOS bản 2. Mọi route dùng `authenticate`; body nhận snake_case (`camelCaseRequestBody`), response trả snake_case. Đường tĩnh khai báo trước `/:id` (`:id` là số nguyên ≥ 1, sai → 400). Mã lỗi chung: 400 `VALIDATION_ERROR`, 401, 404 "SOS not found", 500. "Đội" = canManage campaign hoặc trưởng ca của SOS. Rule ở [03 §9](../03-business-rules.md).
 
-`SosResponse`: `id (int), campaignId, campaign?, content, phone, address, detailAddress, latitude, longitude, status, createdBy, updatedBy, createdAt, updatedAt` (`IS/src/modules/sos/sos.entity.ts`). Không trả `contentVi/contentEn`. Khi có toạ độ, response không kèm `distanceMetres` (hàm `listNearby()` có trả nhưng không được gọi).
+| Method | Path | Auth | Role | Request | Response (`data`) | Mã lỗi | Handler |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| GET | `/api/v1/sos/eligibility` | JWT | Mọi user | Query `campaign_id` UUID (bắt buộc), `latitude?`, `longitude?` | 200 `{ can_raise, role, reason, shifts[{id, name, meeting_point_id, meeting_point_name, start_at, end_at}], hourly_remaining }` (BR-193) | 400 "campaign_id is required"; 404 "Campaign not found" | `sos.controller.ts > eligibility` → `sos-eligibility.ts > resolveSosEligibility()` |
+| GET | `/api/v1/sos/duplicates` | JWT | Mọi user | Query `campaign_id?`, `type` bắt buộc, `latitude`, `longitude` bắt buộc | 200 `SosSummary[]` (≤ 10, trong 200 m; không có `campaign_id` → `[]`) (BR-196) | 400 | `duplicates` → `sos.service.ts > duplicates()` |
+| GET | `/api/v1/sos/me/availability` | JWT | Chính mình | — | 200 `{ enabled, schedule[], location_updated_at }` | — | `getAvailability` → `sos-availability.service.ts > get()` |
+| PUT | `/api/v1/sos/me/availability` | JWT | Chính mình | Body `enabled` boolean, `schedule?` `[{days: [0..6], from: "HH:mm", to: "HH:mm"}]` ≤ 20, `from < to` | 200 như GET (BR-425) | 400 | `updateAvailability` → `update()` |
+| PUT | `/api/v1/sos/me/availability/location` | JWT | Chính mình | Body `latitude`, `longitude` | 200 như GET; vị trí làm tròn ~500 m, ghi đè | 400 | `updateAvailabilityLocation` → `updateLocation()` |
+| POST | `/api/v1/sos` | JWT | Người đủ điều kiện (BR-193) | Body `campaign_id` UUID, `shift_id?` UUID, `type` (`manpower` / `hazard` / `medical`), `details` object (BR-195), `description?` ≤ 2000, `photo_urls?` ≤ 5 URL, `latitude?`, `longitude?`, `accuracy?` | 201 `SosDetail` | 403 `SOS_NOT_ELIGIBLE {reason}`; 429 `SOS_RATE_LIMIT`; 422 `SOS_DETAILS_INVALID` / `SOS_PHOTO_REQUIRED`; 404 | `createSos` → `sos.service.ts > create()` → `sos-dispatch.ts > dispatchOnCreate()` |
+| GET | `/api/v1/sos` | JWT | Mọi user | Query `states?` (CSV, mặc định `open,helping,escalated`), `campaign_id?`, `latitude?`, `longitude?`, `max_distance?` (mét, mặc định 50000), `page?` (1), `limit?` 1..100 (20) | 200 `{ items: SosSummary[], sos (= items), total, page, limit, total_pages }`; medical trước rồi mới nhất (BR-198) | 400 | `listSos` → `list()` |
+| GET | `/api/v1/sos/:id` | JWT | Mọi user (dữ liệu lọc theo người xem, BR-199) | Param `id` | 200 `SosDetail` | 400; 404 | `getSos` → `getDetail()` → `toDetail()` |
+| POST | `/api/v1/sos/:id/respond` | JWT | Mọi user trừ người phát | — | 200 `SosDetail` (BR-410) | 409 `SOS_CLOSED`; 403 `SOS_RESPOND_NOT_ALLOWED`; 409 `SOS_ALREADY_RESPONDING` | `respond` → `respond()` |
+| DELETE | `/api/v1/sos/:id/respond` | JWT | Người đang đến / đã tới | — | 200 `SosDetail` (BR-411) | — | `cancelResponse` → `cancelResponse()` |
+| PUT | `/api/v1/sos/:id/respond/location` | JWT | Người đang đến / đã tới | Body `latitude`, `longitude` | 200 `SosDetail` (BR-412) | 409 `SOS_CLOSED`; 403 `SOS_RESPOND_NOT_ALLOWED` | `responderLocation` → `updateResponderLocation()` |
+| PUT | `/api/v1/sos/:id/claim` | JWT | Đội hoặc platform admin | — | 200 `SosDetail` (BR-413) | 403 `SOS_PERMISSION_DENIED`; 409 `SOS_CLOSED` | `claim` → `claim()` |
+| PUT | `/api/v1/sos/:id/location` | JWT | Người phát | Body `latitude`, `longitude` | 200 `SosDetail` (BR-414) | 403 `SOS_PERMISSION_DENIED`; 409 `SOS_CLOSED` | `updateLocation` → `updateLocation()` |
+| PUT | `/api/v1/sos/:id/resolve` | JWT | Người phát, đội hoặc platform admin | Body `code` (`handled` / `false_alarm` / `not_real`), `note?` ≤ 1000 | 200 `SosDetail` (BR-192) | 403 `SOS_PERMISSION_DENIED`; 409 `SOS_CLOSED` | `resolveSos` → `resolve()` |
+| PUT | `/api/v1/sos/:id/solved` | JWT | Như `/resolve` | — | 200 `SosDetail`; alias cũ = resolve `handled`, gọi lại trên SOS `resolved` trả SOS thay vì 409 | 403 `SOS_PERMISSION_DENIED`; 409 `SOS_CLOSED` (SOS `expired`) | `solveSos` → `solveSos()` |
+
+`SosSummary` (`IS/src/modules/sos/sos.dto.ts`): `id (int), campaign_id, shift_id, meeting_point_id, type, state, status (1 / 17), latitude, longitude, created_at, people_needed, on_the_way_count, arrived_count, is_mine, my_response (on_the_way | arrived | null)`. `SosDetail` thêm `campaign {id, title, contact_name, contact_phone, safety_notes}`, `shift {id, name, start_at, end_at}`, `meeting_point {id, name, latitude, longitude}`, `reporter_role`, `details`, `description`, `photo_urls`, `phone`, `reporter {id, name, avatar}`, `responders[{user_id, name, avatar, status, updated_at}]`, `expires_at`, `claimed_by`, `claimed_at`, `escalated_at`, `radius_km`, `resolved_at`, `resolved_by`, `resolution_code`, `resolution_note`, `location_updated_at`, `permissions {can_respond, can_cancel_response, can_claim, can_update_location, can_resolve}`, `viewer_is_team`. Trường bị ẩn theo người xem trả `null` / `[]`. `sos.entity.ts` và `sos.repository.ts` cũ đã xoá; không trả `content_vi` / `content_en`.
 
 ### 4.4 Saved resource — `IS/src/modules/saved_resource/saved_resource.routes.ts` (upstream `/incident/saved-resources`, gateway `/api/v1/incident/saved-resources`)
 
@@ -347,9 +361,11 @@ sequenceDiagram
 
 #### 4.9.4 SOS
 
-- Tạo: campaign phải tồn tại (chưa xoá), `status = ACTIVE(1)`, có `latitude/longitude`; SOS lấy `address = campaign.detailAddress ?? ""`, `detailAddress`, toạ độ của campaign; `status = ACTIVE(1)` (dù default DB là 12) (`sos.service.ts > create()`).
-- Solve: `ACTIVE → COMPLETED(17)`, đã COMPLETED → no-op, ai đăng nhập cũng làm được (`solveSos()`).
-- Campaign hoàn thành sẽ chuyển mọi SOS chưa COMPLETED của campaign sang COMPLETED (`IS/src/modules/campaign/campaign_completion/completion.service.ts > approve()`, part B). `sosService.resolveAllByCampaignId()` và `listNearby()` không được gọi ở đâu.
+Chi tiết ở BR-190–199, BR-410–428 ([03 §9](../03-business-rules.md)) và [04 §6](../04-state-machines.md). Tóm tắt:
+- Tạo: `sos-eligibility.ts > resolveSosEligibility()` (campaign UPCOMING / ACTIVE có ca đang chạy; manager → trưởng ca → TNV đã điểm danh → người dân ≤ 500 m có email đã xác thực và số điện thoại), giới hạn 3 / giờ trong transaction có advisory lock, chi tiết theo loại (`normalizeSosDetails()`), vị trí GPS hoặc điểm tập trung, `phone` lấy từ hồ sơ qua `fetchUserVoteProfile()` (identity `POST /internal/v1/users/vote-profile` có thêm `phone_number`). Thông báo đi qua outbox `WEBSITE_NOTIFICATION` (`sos-dispatch.ts > sendSosNotice()`, ghi `sos_deliveries`); payload có `email: true` thì `website-notification.publisher.ts` gửi thêm email cùng kind (`enqueueEmailToUser()`).
+- Đóng: `resolve()` cho người phát, đội (canManage hoặc trưởng ca) hoặc platform admin; `solveSos()` là alias `handled`. Không còn chuyện "ai đăng nhập cũng solve được".
+- Campaign hoàn thành: `verification-decision.service.ts > completeCampaign()` đóng mọi SOS còn sống (`resolved` / `handled`) và huỷ người đang trên đường.
+- Job: `sos.job.ts` (BR-418–421).
 
 #### 4.9.5 Saved resource
 
@@ -464,7 +480,7 @@ stateDiagram-v2
 | `REPORT_COMPLETION_GREEN_POINTS` | Outbox → SQS reward intake | `{ reportId, userId, points }` (`points = REPORT_COMPLETION_GREEN_POINTS` env, mặc định 0); dedup `REPORT_COMPLETION_GREEN_POINTS:<reportId>` | Admin mark-done report có `userId` | reward-service (qua relay, part B) | `report.service.ts > adminMarkReportDone()` |
 | `REPORT_VOTE_MILESTONE_GREEN_POINTS` | Outbox → SQS reward intake | `{ reportId, reportCreatorUserId, voteCount }`; dedup theo `reportId:voteCount` | Upvote report thành giá trị 1 | reward-service | `vote.service.ts > emitReportVoteMilestoneIfNeeded()` |
 | `ORG_OWNER_ONBOARD` | Outbox → handler nội bộ (không qua SQS) | `{ applicationId, candidateId, organizationId, organizationName, organizationSlug, userId, email, fullName, isLegalRep }`; dedup `ORG_OWNER_ONBOARD:<candidateId>` | Admin approve đơn (mỗi owner một event) | `organization-owner-onboard.publisher.ts > publish()` → identity-service + notification-service | `organization-application-admin.service.ts > approve()` |
-| `WEBSITE_NOTIFICATION` | Outbox → handler nội bộ (không qua SQS) | `{ kind, userIds[], payload }`; dedup theo nghiệp vụ, ví dụ `CAMPAIGN_SHIFT_CLOSED:<shiftId>` | Thông báo website không được mất, hiện chỉ có tắt ca | `campaign/website-notification.publisher.ts > publish()` → `enqueueWebsiteNotificationsToUsers()`; lỗi thì relay thử lại (có thể lặp với người đã nhận ở lần lỗi) | `campaign_registration.service.ts > closeShift()` |
+| `WEBSITE_NOTIFICATION` | Outbox → handler nội bộ (không qua SQS) | `{ kind, userIds[], payload, email? }`; dedup theo nghiệp vụ, ví dụ `CAMPAIGN_SHIFT_CLOSED:<shiftId>`, `SOS_TEAM_ALERT:<sosId>` | Thông báo website không được mất (tắt ca, xác thực kết quả, SOS…) | `campaign/website-notification.publisher.ts > publish()` → `enqueueWebsiteNotificationsToUsers()`, và `email: true` (SOS medical / hazard) thì thêm `enqueueEmailToUser()` cho từng user; lỗi thì relay thử lại (có thể lặp với người đã nhận ở lần lỗi) | `campaign_registration.service.ts > closeShift()`, `sos-dispatch.ts > sendSosNotice()` |
 | Notification website `REPORT_STATUS` | HTTP `POST {NOTIFICATION_SERVICE_URL}/api/v1/notifications/jobs` `{ type:"website", kind, userId, payload }` | `{ reportId, reportTitle, status: "COMPLETED" }` | Mark-done | notification-service | `report-status-notify.client.ts > enqueueReportStatusWebsiteNotification()` |
 | Notification website `REPORT_APPROVED` | HTTP như trên | `{ reportId, reportTitle }` | Admin verify | notification-service | `enqueueReportApprovedWebsiteNotification()` |
 | Notification website `REPORT_REJECTED` | HTTP như trên | `{ reportId, reportTitle, rejectReason }` | Admin ban (lần đầu) | notification-service | `enqueueReportRejectedWebsiteNotification()` |
@@ -490,7 +506,7 @@ Thông báo website đều lọc qua tuỳ chọn người dùng: `POST {IDENTIT
 
 ## 6. Job nền, cron, worker
 
-- `IS/src/worker.ts`: `startAllQueues()` (ANALYZE_REPORT, TRANSLATE_TEXT), `startOutboxRelay()` và `startOwnerConfirmationExpiryJob()` (mỗi giờ: owner hết hạn — đơn mới về NEEDS_REVISION, owner change thành WITHDRAWN —; `ownerChangeExecutor.sweep()`: approval quá 14 ngày → owner change WITHDRAWN, owner change đã đủ điều kiện nhưng áp dụng lỗi tạm thời → thử lại; lời mời SENT quá hạn thành EXPIRED qua `organizationInvitationService.expireOverdue()`); SIGINT/SIGTERM → dừng sweeper, dừng relay, disconnect Prisma, `process.exit(0)`. Cấu hình queue/relay ở part B.
+- `IS/src/worker.ts`: `startAllQueues()` (ANALYZE_REPORT, TRANSLATE_TEXT), `startOutboxRelay()` và `startOwnerConfirmationExpiryJob()` (mỗi giờ: owner hết hạn — đơn mới về NEEDS_REVISION, owner change thành WITHDRAWN —; `ownerChangeExecutor.sweep()`: approval quá 14 ngày → owner change WITHDRAWN, owner change đã đủ điều kiện nhưng áp dụng lỗi tạm thời → thử lại; lời mời SENT quá hạn thành EXPIRED qua `organizationInvitationService.expireOverdue()`), và `startSosJob()` (`INC/modules/sos/sos.job.ts`, mặc định 60 giây `SOS_JOB_INTERVAL_MS`, tắt bằng `SOS_JOB_ENABLED=false`: leo thang owner, mở rộng manpower, hết hạn, hazard chuyển admin; BR-421); SIGINT/SIGTERM → dừng sweeper và các job, dừng relay, disconnect Prisma, `process.exit(0)`. Cấu hình queue/relay ở part B.
 - `IS/src/index.ts` có `import "./worker";` nên tiến trình API cũng khởi động poller SQS và outbox relay (ngoài tiến trình `npm run worker`). Xem mục 9.
 - Ngoài sweeper owner hết hạn, không có cron nào trong phần A. Không có job retention/purge cho `purgedAt` của đơn và tài liệu, không có sweep Blue Tick hoặc hết hạn `verificationExpiresAt` [CHƯA HOÀN THIỆN].
 
@@ -508,7 +524,7 @@ Thông báo website đều lọc qua tuỳ chọn người dùng: `POST {IDENTIT
 | ai-service | `POST {AI_SERVICE_URL}/api/v1/recommendations/report` `{ image_urls, results }`, timeout 45s | Gợi ý xử lý (LLM) | `report-ai-analysis.service.ts > analyzeReport()` |
 | Cloudinary | Upload có chữ ký (`https://api.cloudinary.com/v1_1/<cloud>/image/upload`), `private_download_url` (TTL 5 phút), `uploader.destroy` | Giấy tờ pháp lý của đơn | `IS/src/modules/organization_application/storage/cloudinary-document-storage.ts` |
 | AWS SQS | Queue ANALYZE_REPORT, TRANSLATE_TEXT, reward intake | Job nền, outbox | part B |
-| PostGIS | `ST_DWithin`, `ST_Distance` trên `geography` | Tìm report / SOS theo khoảng cách | `report.repository.ts > searchWithDistance()`, `sos.repository.ts > findNearby()` |
+| PostGIS | `ST_DWithin`, `ST_Distance` trên `geography` | Tìm report / SOS theo khoảng cách | `report.repository.ts > searchWithDistance()`, `sos.service.ts > list(), duplicates()`, `sos-dispatch.ts > inviteAvailableVolunteers(), nearbyOrganizationIds()` |
 
 Lời gọi identity và notification chạy qua circuit breaker dùng chung theo tên (`HTTP_CIRCUIT_IDENTITY`, `HTTP_CIRCUIT_NOTIFICATION` trong `IS/src/resilience/http-circuit.ts`, part B). `fetchOrganizationOwnersByUserIds` nuốt lỗi và trả map rỗng; chỉ id đúng định dạng UUID RFC 4122 (version 1-8, variant 8/9/a/b) mới được gửi (`isIdentityCallableUserId()`).
 
@@ -538,13 +554,13 @@ Lời gọi identity và notification chạy qua circuit breaker dùng chung the
 | `OTP_RATE_WINDOW_MS`, `OTP_RATE_MAX_PER_EMAIL`, `OTP_RATE_MAX_PER_IP`, `APPLICATION_RATE_WINDOW_MS`, `APPLICATION_RATE_MAX_PER_IP` | Rate limit form đăng ký | Có (comment) |
 | `APPLICATION_RATE_LIMIT_DISABLED` | Tắt rate limit ngoài production | Có (comment) |
 | `APPLICATION_OTP_TTL_MS`, `APPLICATION_OTP_MAX_ATTEMPTS`, `APPLICATION_SUBMISSION_TOKEN_TTL_MS`, `APPLICATION_TRACKING_TOKEN_TTL_MS` | TTL/số lần thử token | Có (comment) |
-| `OUTBOX_*`, `HTTP_BREAKER_*`, `AWS_*`, `SQS_REWARD_INTAKE_QUEUE_URL`, `REWARD_SERVICE_URL`, `INTERNAL_REWARD_API_KEY`, `INTERNAL_AI_API_KEY`, `CAMPAIGN_ADMIN_NOTIFY_USER_IDS`, `CAMPAIGN_LIFECYCLE_*`, `DD_ENV`, `DD_VERSION`, `AWS_SQS_ENDPOINT` | Thuộc part B | — |
+| `OUTBOX_*`, `HTTP_BREAKER_*`, `AWS_*`, `SQS_REWARD_INTAKE_QUEUE_URL`, `REWARD_SERVICE_URL`, `INTERNAL_REWARD_API_KEY`, `INTERNAL_AI_API_KEY`, `CAMPAIGN_ADMIN_NOTIFY_USER_IDS` (cũng là danh sách admin nhận thông báo SOS), `CAMPAIGN_LIFECYCLE_*`, `SOS_JOB_*`, `SOS_MANPOWER_TTL_H`, `DD_ENV`, `DD_VERSION`, `AWS_SQS_ENDPOINT` | Thuộc part B | — |
 
 ## 9. Vấn đề cần xác nhận / [CHƯA HOÀN THIỆN]
 
 ### 9.1 Bảo mật / phân quyền
 1. **Liệt kê thành viên không kiểm tra quyền**: kiểm tra chủ sở hữu trong `IS/src/modules/organization/organization.service.ts > listMembersForOwner()` và tham số `userId` ở `organization.controller.ts > listMembers` bị comment out. Mọi user đăng nhập xem được danh sách thành viên của bất kỳ tổ chức nào, trong khi route comment ghi "owner only" [CHƯA HOÀN THIỆN].
-2. **SOS**: `GET /api/v1/sos` trả số điện thoại của mọi SOS cho mọi user. (Đánh dấu solved đã kiểm quyền từ 2026-09-27: `sos.service.ts > solveSos()`.)
+2. ~~**SOS**: `GET /api/v1/sos` trả số điện thoại của mọi SOS cho mọi user.~~ Đã sửa 2026-10-06 (SOS bản 2): danh sách chỉ trả toạ độ, loại, trạng thái, bộ đếm; chi tiết lọc theo người xem (BR-198, BR-199).
 3. **Report chưa duyệt / bị ban vẫn lộ**: `/search`, `/my`, `/by-ids`, saved list không lọc `status`; chỉ `GET /:id` ẩn report bị ban. `GET /:id/background-jobs/status` không kiểm tra quyền sở hữu.
 4. ~~**Admin check dựa trên claim `role`**: identity ký `role = user.roleId` khi refresh token.~~ Đã sửa 2026-09-26: refresh ký tên role như login.
 5. `authenticate` không kiểm tra user bị ban / `PENDING_ACTIVATION`.
@@ -580,7 +596,7 @@ Lời gọi identity và notification chạy qua circuit breaker dùng chung the
 31. Không có job purge (`purgedAt` trên đơn và tài liệu), `DocumentStorage.remove()` không được gọi. Tài liệu presign không gắn đơn (orphan) không bao giờ bị dọn.
 32. ~~`ADD_OWNER`, gán vai `ADMIN` / `CAMPAIGN_MANAGER`, thu hồi / chuyển giao owner~~ — đã có ở Phase 2 và Phase 3 (owner change quyết trong tổ chức, owner tự hạ vai / rời). Quyền chiến dịch theo vai tổ chức đã có ở Phase 4 (2026-09-27). Còn lại: admin nền tảng can thiệp trực tiếp vai owner (chưa làm). `membershipVersion` không cần.
 33. `src/modules/media` chỉ có thư mục test rỗng; không có chức năng kiểm duyệt media. Model `ReportIssue` không được code nào dùng.
-34. `sosService.resolveAllByCampaignId()`, `sosService.listNearby()`, `reportService.getReportById()`, `updateReportStatus()`, `isReporter()` không được gọi; SOS `contentVi/contentEn` không bao giờ được ghi.
+34. `reportService.getReportById()`, `updateReportStatus()`, `isReporter()` không được gọi; SOS `contentVi/contentEn` không bao giờ được ghi (`sosService.resolveAllByCampaignId()` / `listNearby()` đã xoá cùng `sos.repository.ts`).
 35. `.env.example` thiếu `AI_PREDICT_URL`, `REPORT_COMPLETION_GREEN_POINTS`, `ANALYZE_REPORT_CONCURRENCY`, `SWAGGER_SERVER_URL`.
 
 ### 9.4 Lệch giữa tài liệu cũ (`docs/ORG_CREATION_FLOW.md`, `docs/REFACTOR_ORG_CREATION_FLOW.md`) và code
@@ -607,7 +623,7 @@ Lời gọi identity và notification chạy qua circuit breaker dùng chung the
 ## 1. Trách nhiệm (phần B)
 
 - Quản lý **chiến dịch dọn dẹp (Campaign)**: tạo nháp thuộc một Organization với 1–5 điểm tập kết, mỗi điểm gom các Report; gửi duyệt (khoá report); admin duyệt / yêu cầu chỉnh sửa / chặn / ban; job hết hạn duyệt và dọn nháp; máy trạng thái và audit log; quản lý danh sách manager, yêu cầu tham gia của tình nguyện viên, điểm danh theo ca tại chỗ (QR động đổi mỗi 10 phút, GPS ngoài 50 m gắn cờ, loại / khôi phục, check-in / check-out), bài nộp kết quả (submission/result), cộng đồng xác nhận "đã sạch / chưa sạch", manager gửi yêu cầu hoàn thành, admin duyệt hoàn thành.
-- Khi admin duyệt hoàn thành: đổi trạng thái campaign, report, sos sang COMPLETED và **ghi sự kiện outbox** `CAMPAIGN_COMPLETION_GREEN_POINTS` để reward-service cộng điểm xanh cho những người có ≥ 1 ca điểm danh đủ điều kiện, theo tỉ lệ ca đủ điều kiện / ca đã đăng ký (BR-167, BR-365).
+- Khi admin duyệt hoàn thành: đổi trạng thái campaign, report sang COMPLETED, SOS còn sống sang `resolved` (BR-426) và **ghi sự kiện outbox** `CAMPAIGN_COMPLETION_GREEN_POINTS` để reward-service cộng điểm xanh cho những người có ≥ 1 ca điểm danh đủ điều kiện, theo tỉ lệ ca đủ điều kiện / ca đã đăng ký (BR-167, BR-365).
 - Gọi **reward-service** (HTTP nội bộ) để lấy bậc độ khó (`difficulty`): số điểm xanh và giới hạn tình nguyện viên.
 - **Dịch nội dung** bất đồng bộ: API đẩy job `TRANSLATE_TEXT` vào SQS; worker gọi ai-service và ghi kết quả vào các cột `*Vi` / `*En`.
 - Hạ tầng dùng chung của service: **transactional outbox relay** (đẩy sự kiện sang SQS của reward, hoặc gọi identity + notification để onboarding owner sau khi duyệt đơn), **queue runner** (SQS worker cho `ANALYZE_REPORT` và `TRANSLATE_TEXT`), **circuit breaker** cho các HTTP client (identity, reward, notification) và cho đường publish của outbox.

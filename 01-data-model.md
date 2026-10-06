@@ -130,6 +130,9 @@ erDiagram
   MeetingPointVerification ||--o{ MeetingPointVote : "cascade"
   Campaign ||--o{ CampaignCompletionReport : "cascade, submission hoàn thành"
   Campaign ||--o{ Sos : ""
+  CampaignShift ||--o{ Sos : "shiftId"
+  Sos ||--o{ SosResponder : "cascade"
+  Sos ||--o{ SosDelivery : "cascade"
   Campaign ||--o{ CampaignMeetingPoint : "1–5 điểm tập kết"
   CampaignMeetingPoint ||--o{ CampaignMeetingPointReport : ""
   Report ||--o{ CampaignMeetingPointReport : ""
@@ -191,8 +194,24 @@ erDiagram
   Sos {
     int id PK "autoincrement"
     uuid campaignId FK
-    string phone
-    int status
+    uuid shiftId FK "null khi ca bị xoá"
+    uuid meetingPointId FK
+    string type "manpower | hazard | medical"
+    string state "open | helping | resolved | expired | escalated"
+    int status "1 còn sống, 17 đã đóng (cho client cũ)"
+  }
+  SosResponder {
+    uuid id PK
+    int sosId FK
+    uuid userId
+    string status "on_the_way | arrived | cancelled"
+  }
+  SosDelivery {
+    uuid id PK
+    int sosId FK
+    uuid userId
+    int tier "0..3"
+    string kind
   }
 ```
 
@@ -359,17 +378,40 @@ Phiếu "sạch / chưa sạch" cấp chiến dịch đã bỏ: migration `20261
 
 Tính năng Task đã bỏ: migration `20261006100000_drop_campaign_tasks` xoá 4 bảng `campaign_task_result_files`, `campaign_task_results`, `campaign_task_assignments`, `campaign_tasks` và các dòng `media` loại `CAMPAIGN_TASK_RESULT`. Kết quả công việc giờ ghi theo ca (`campaign_shift_results`).
 
-**Sos (`sos`)**
+**Sos (`sos`)** — SOS bản 2, migration `20261011100000_sos_v2` (hằng số `DC/sos.ts`, rule BR-190–199, BR-410–428)
 | Field | Kiểu | Ràng buộc | Ý nghĩa |
 |---|---|---|---|
 | id | **Int autoincrement** | PK | |
 | campaignId | uuid | FK → campaigns | |
-| content | text | NOT NULL | contentVi/contentEn? không bao giờ được ghi |
-| phone | varchar(20) | | |
-| address | varchar(500) | NOT NULL | Lấy từ campaign |
+| type | varchar(16) | default `manpower` | `manpower` \| `hazard` \| `medical` |
+| details | jsonb | default `{}` | Theo loại: `{peopleNeeded?, tools[], toolsNote?}` \| `{hazardKind}` \| `{consciousness, affected}` (BR-195) |
+| state | varchar(16) | default `open`, index | `open` \| `helping` \| `resolved` \| `expired` \| `escalated` ([04 §6](04-state-machines.md)) |
+| content | text? | | Mô tả ngắn tuỳ chọn (trước là bắt buộc). contentVi/contentEn? không bao giờ được ghi |
+| phone | varchar(20)? | | Số điện thoại trong hồ sơ người gửi; chỉ đội và admin xem được (BR-199) |
+| address | varchar(500) | NOT NULL | Địa chỉ điểm tập trung (chuỗi rỗng nếu không có) |
 | detailAddress | varchar(255)? | | |
-| latitude, longitude | float | NOT NULL | Lấy toạ độ của campaign |
-| status | int | default 12 | Code tạo với giá trị 1; khi giải quyết đổi thành 17 |
+| photoUrls | text[] | default `{}` | ≤ 5; hazard bắt buộc ≥ 1 |
+| shiftId | uuid? | FK → campaign_shifts, SET NULL | Ca đang chạy mà SOS thuộc về |
+| meetingPointId | uuid? | FK → campaign_meeting_points, SET NULL | Điểm tập trung của ca |
+| reporterRole | varchar(16)? | | `volunteer` \| `leader` \| `manager` \| `resident` (BR-193) |
+| latitude, longitude | float | NOT NULL | GPS người gửi, không có thì toạ độ điểm tập trung; người gửi sửa được |
+| locationUpdatedAt | timestamp? | | Lần người gửi dời vị trí |
+| expiresAt | timestamp? | | Chỉ manpower (BR-197) |
+| claimedBy, claimedAt | uuid?, timestamp? | | "Nhận xử lý" (BR-413) |
+| ownerNotifiedAt | timestamp? | | Đã báo owner (leo thang 10 phút, hoặc lúc tạo với medical) |
+| tier2SentAt | timestamp? | | Đã gửi ưu tiên 2 (tổ chức lân cận) |
+| radiusKm | float | default 3 | Bán kính mời TNV Sẵn sàng; 5 sau khi mở rộng |
+| escalatedAt | timestamp? | | Hazard chuyển admin |
+| resolvedBy, resolvedAt, resolutionCode, resolutionNote | uuid?, timestamp?, varchar(20)?, text? | | `handled` \| `false_alarm` \| `not_real` |
+| status | int | default 1, index | Giữ cho client cũ: 1 khi còn sống, 17 khi đã đóng / hết hạn |
+
+Index thêm: (createdBy, createdAt) cho giới hạn 3 SOS / giờ. Migration backfill: dòng cũ thành manpower; `status = 17` → `resolved` / `handled`, còn lại `open` và `status = 1`.
+
+**SosResponder (`sos_responders`)**: id, sosId (cascade), userId, status (`on_the_way` \| `arrived` \| `cancelled`), distanceM?, arrivedAt?, cancelledAt?, createdAt, updatedAt. **unique (sosId, userId)**, index (userId, status), và partial unique index SQL `sos_responders_one_on_the_way` trên `user_id` WHERE `status = 'on_the_way'` (mỗi người chỉ đang đến một SOS).
+
+**SosDelivery (`sos_deliveries`)**: id, sosId (cascade), userId, tier (0 đội, 1 TNV Sẵn sàng, 2 tổ chức lân cận, 3 admin), kind, createdAt. **unique (sosId, userId, kind)**, index (userId, createdAt) cho giới hạn 5 thông báo / ngày (BR-416, BR-422).
+
+**VolunteerAvailability (`volunteer_availabilities`)**: userId (PK, không FK), enabled (default false, index), schedule jsonb (`[{days: [0..6], from: "HH:mm", to: "HH:mm"}]`, rỗng = luôn), approxLat?, approxLng? (làm tròn ~500 m, chỉ giữ bản mới nhất, không trả ra API), locationUpdatedAt?, createdAt, updatedAt (BR-425).
 
 ### 2.5 Từ điển dữ liệu — Vote, Saved, Job, Outbox
 
@@ -653,7 +695,7 @@ Vòng đời campaign dùng tên riêng trong `DC/campaign-lifecycle.ts > Campai
 ### 6.3 Notification (`notification-service/prisma/schema.prisma`, `ecolink-server/shared/da2-constants/src/notification-preferences.ts`)
 
 - `NotificationType`: `EMAIL`, `WEBSITE` (in-app).
-- `NotificationKind` (64 giá trị). Bảng dưới liệt kê từng kind, key preference tương ứng và nơi phát:
+- `NotificationKind` (77 giá trị). Bảng dưới liệt kê từng kind, key preference tương ứng và nơi phát:
 
 | Kind | Preference key | Có nơi phát? |
 |---|---|---|
@@ -670,6 +712,8 @@ Vòng đời campaign dùng tên riêng trong `DC/campaign-lifecycle.ts > Campai
 | REPORT_READY | reportStatus | Không |
 | CAMPAIGN_SUBMISSION_PENDING_REVIEW, CAMPAIGN_SUBMISSION_APPROVED | campaignNew | Không |
 | CAMPAIGN_COMPLETION_PENDING_ADMIN | (luôn gửi) | Có |
+| SOS_HELP_INVITE, SOS_HAZARD_WARNING (migration `20261011100000_sos_kinds`) | campaignNearbyVerify | Có (`INC/modules/sos/sos-dispatch.ts`) |
+| SOS_TEAM_ALERT, SOS_MEDICAL_ALERT, SOS_NEARBY_ORG_REQUEST, SOS_ADMIN_ALERT, SOS_OWNER_ESCALATION, SOS_ESCALATED, SOS_LOCATION_CHANGED, SOS_EXPIRED, SOS_NO_LONGER_NEEDED, SOS_ABUSE_REVIEW (migration `20261011100000_sos_kinds`) | (luôn gửi) | Có (`INC/modules/sos/*`) |
 | ORGANIZATION_CONTACT_VERIFY, ORGANIZATION_APPROVED, ORGANIZATION_REJECTED | (luôn gửi) | Có |
 | ORG_APPLICATION_OTP, ORG_APPLICATION_DRAFT_STARTED, ORG_APPLICATION_DRAFT_UPDATED, ORG_APPLICATION_RECEIVED, ORG_APPLICATION_NEEDS_INFO, ORG_APPLICATION_REJECTED, ORG_OWNER_CONFIRMATION_REQUEST, ORG_OWNER_DECLINED, ORG_OWNER_CONFIRMATION_EXPIRED, ORG_APPLICATION_WITHDRAWN_NOTICE, ORG_OWNER_ATTACHED, ACCOUNT_ACTIVATION (đổi tên từ ORG_ACCOUNT_ACTIVATION), ORG_INVITATION | (luôn gửi) | Có |
 | ORG_INVITATION_PENDING, ORG_INVITATION_REJECTED, ORG_MEMBERSHIP_CHANGED (website; migration `20260926130000_notification_org_membership_kinds`) | (luôn gửi) | Có |
