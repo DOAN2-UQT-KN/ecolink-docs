@@ -384,7 +384,7 @@ Tính năng Task đã bỏ: migration `20261006100000_drop_campaign_tasks` xoá 
 | id | **Int autoincrement** | PK | |
 | campaignId | uuid | FK → campaigns | |
 | type | varchar(16) | default `manpower` | `manpower` \| `hazard` \| `medical` |
-| details | jsonb | default `{}` | Theo loại: `{peopleNeeded?, tools[], toolsNote?}` \| `{hazardKind}` \| `{consciousness, affected}` (BR-195) |
+| details | jsonb | default `{}` | Theo loại: `{peopleNeeded?, tools[], toolsNote?}` \| `{hazardKinds[]}` (dòng cũ có thể còn `{hazardKind}`, `toDetail()` trả thành `hazard_kinds: [kind]`) \| `{consciousness, affected}` (BR-195) |
 | state | varchar(16) | default `open`, index | `open` \| `helping` \| `resolved` \| `expired` \| `escalated` ([04 §6](04-state-machines.md)) |
 | content | text? | | Mô tả ngắn tuỳ chọn (trước là bắt buộc). contentVi/contentEn? không bao giờ được ghi |
 | phone | varchar(20)? | | Số điện thoại trong hồ sơ người gửi; chỉ đội và admin xem được (BR-199) |
