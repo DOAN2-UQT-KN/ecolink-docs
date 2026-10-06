@@ -207,7 +207,7 @@ stateDiagram-v2
 
 | Từ → sang | Ai | Điều kiện | Side effect | File |
 |---|---|---|---|---|
-| (mới) → `open` | Quản lý campaign, trưởng ca, TNV đã điểm danh, người dân ≤ 500 m (BR-193) | Ca đang chạy; ≤ 3 SOS / giờ; chi tiết hợp lệ | Thông báo đội và các ưu tiên theo loại (BR-415–417) | `INC/modules/sos/sos.service.ts > create()`, `sos-dispatch.ts > dispatchOnCreate()` |
+| (mới) → `open` | Quản lý campaign, trưởng ca, TNV đã điểm danh, người dân ≤ 500 m (BR-193) | Ca đang chạy; ≤ `SOS_MAX_PER_HOUR` SOS / giờ nếu có đặt (mặc định không giới hạn); chi tiết hợp lệ | Thông báo đội và các ưu tiên theo loại (BR-415–417) | `INC/modules/sos/sos.service.ts > create()`, `sos-dispatch.ts > dispatchOnCreate()` |
 | `open` → `helping` | Người bấm "Tôi tới giúp ngay" | Manpower / medical, không phải người phát, không đang đến SOS khác (BR-410) | Dòng `sos_responders` `on_the_way` | `respond()` |
 | `helping` → `open` | Người tới giúp huỷ | Không còn ai `on_the_way` / `arrived` (BR-411) | — | `cancelResponse()` |
 | `open` / `helping` / `escalated` → `resolved` | Người phát, đội hoặc admin (BR-192) | `code` handled / false_alarm / not_real; khác → 403 `SOS_PERMISSION_DENIED`; đã đóng → 409 `SOS_CLOSED` (alias `/solved` trả SOS) | `status = 17`; người đang đến → `cancelled` + `SOS_NO_LONGER_NEEDED`; có thể báo admin `SOS_ABUSE_REVIEW` (BR-424) | `resolve()`, `solveSos()` |

@@ -241,6 +241,7 @@ Bảng chỉ ghi tên biến và ý nghĩa, không ghi giá trị. Chi tiết c�
 | `CAMPAIGN_ADMIN_NOTIFY_USER_IDS` | incident | Danh sách user id admin nhận thông báo khi có campaign chờ duyệt (gửi duyệt / nộp lại), điểm tập trung bị gắn cờ khi xác thực kết quả và campaign được chuyển admin quyết định hoàn thành; chưa đặt thì đọc tên cũ `CAMPAIGN_COMPLETION_ADMIN_NOTIFY_USER_IDS` |
 | `CAMPAIGN_LIFECYCLE_INTERVAL_MS`, `CAMPAIGN_LIFECYCLE_ENABLED` | incident (worker) | Chu kỳ job hết hạn duyệt campaign và dọn bản nháp quá 30 ngày (mặc định 15 phút) / tắt job |
 | `SOS_JOB_INTERVAL_MS`, `SOS_JOB_ENABLED` | incident (worker) | Chu kỳ job SOS (leo thang owner, mở rộng bán kính, hết hạn, chuyển admin; mặc định 60 giây) / `false` thì tắt |
+| `SOS_MAX_PER_HOUR` | incident | Số SOS tối đa / người / giờ trượt; không đặt hoặc `0` = không giới hạn (mặc định hiện tại), `3` = giá trị spec (BR-194) |
 | `SOS_MANPOWER_TTL_H` | incident | Số giờ SOS Nhân lực hết hạn (mặc định 4, kẹp 3–6) |
 | `REPORT_COMPLETION_GREEN_POINTS` | incident | Số điểm xanh khi report được đánh dấu hoàn thành (mặc định 0) |
 | `AI_PREDICT_URL` | incident | Endpoint model nhận diện rác |

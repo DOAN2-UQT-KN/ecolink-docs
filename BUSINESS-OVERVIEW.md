@@ -302,7 +302,7 @@ Các trường hợp thường gặp:
 - Người đổi **không nhận thông báo** khi đơn thay đổi trạng thái; phải tự vào xem ở mục Đơn hàng.
 
 ### 4.7 Yêu cầu khẩn cấp (SOS)
-1. **Ai phát được:** chỉ khi chiến dịch có ca đang chạy. Quản lý chiến dịch (chọn ca), trưởng ca, tình nguyện viên đã điểm danh ca, hoặc người dân đang đứng trong 500 m quanh điểm tập trung có ca đang chạy (cần email đã xác thực và có số điện thoại trong hồ sơ). Tối đa 3 SOS mỗi giờ mỗi người.
+1. **Ai phát được:** chỉ khi chiến dịch có ca đang chạy. Quản lý chiến dịch (chọn ca), trưởng ca, tình nguyện viên đã điểm danh ca, hoặc người dân đang đứng trong 500 m quanh điểm tập trung có ca đang chạy (cần email đã xác thực và có số điện thoại trong hồ sơ). Giới hạn 3 SOS mỗi giờ mỗi người theo spec hiện đang tạm tắt (bật lại được bằng cấu hình).
 2. **Chọn loại rồi điền chi tiết:** Nhân lực / Dụng cụ (cần mấy người, dụng cụ gì), Rác nguy hại (loại rác, bắt buộc có ảnh), Y tế / Tai nạn (tỉnh hay bất tỉnh, mấy người). Ứng dụng lấy vị trí GPS (không có thì dùng điểm tập trung). Nếu gần đó (200 m) đã có SOS cùng loại, ứng dụng gợi ý mở SOS đó. SOS Y tế luôn nhắc **gọi 115** trước.
 3. **Ai được báo:** ngay lập tức là đội của ca (trưởng ca, quản lý, tình nguyện viên đã điểm danh), rồi tình nguyện viên bật "Sẵn sàng hỗ trợ SOS" trong 3 km (tối đa 5 lời mời mỗi ngày, Y tế không tính). Y tế báo ngay owner tổ chức và quản trị viên kèm email; Rác nguy hại báo quản trị viên kèm email và cảnh báo tình nguyện viên trong ca "không chạm vào". Y tế và Rác nguy hại còn báo ngay owner các tổ chức ở gần (5 km).
 4. **Tới giúp:** người nhận mở SOS, xem bộ đếm ("2 / 5 người đang đến"), bấm chỉ đường (Google Maps), bấm "Tôi tới giúp ngay"; tới gần trong 50 m thì tự thành "đã tới". Mỗi người chỉ đang đến một SOS mỗi lúc. Rác nguy hại không mời ai tới, chỉ cảnh báo.
@@ -476,7 +476,7 @@ Mã BR-xxx dùng để đối chiếu với `docs/03-business-rules.md`.
 - **BR-188:** Mọi lần đổi trạng thái và mọi lần sửa khi đang chờ duyệt đều được ghi lịch sử.
 
 ### 5.8 Yêu cầu khẩn cấp
-- **BR-193, BR-194:** Chỉ người ở hiện trường của ca đang chạy phát được SOS (quản lý, trưởng ca, tình nguyện viên đã điểm danh, người dân trong 500 m có email đã xác thực và số điện thoại); tối đa 3 SOS / giờ.
+- **BR-193, BR-194:** Chỉ người ở hiện trường của ca đang chạy phát được SOS (quản lý, trưởng ca, tình nguyện viên đã điểm danh, người dân trong 500 m có email đã xác thực và số điện thoại); giới hạn 3 SOS / giờ tạm tắt, bật lại bằng cấu hình.
 - **BR-195:** Mỗi loại SOS có thông tin bắt buộc riêng; Rác nguy hại phải có ảnh.
 - **BR-415–420:** Thứ tự người nhận và leo thang: đội ngay, tình nguyện viên "Sẵn sàng" trong 3 km (5 km sau 15 phút với Nhân lực), owner sau 10 phút (Y tế: ngay), tổ chức lân cận trong 5 km, quản trị viên (Y tế và Rác nguy hại: ngay, kèm email; Rác nguy hại chưa ai nhận sau 2 giờ: chuyển hẳn).
 - **BR-192, BR-197:** Người phát, đội hoặc quản trị viên đóng SOS; Nhân lực tự hết hạn sau 4 giờ hoặc khi ca kết thúc.

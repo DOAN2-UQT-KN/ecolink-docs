@@ -901,17 +901,17 @@ sequenceDiagram
 ### F32 — Phát SOS, tới hỗ trợ và đóng SOS
 SOS bản 2 (spec "Ecolink – Cải tiến tính năng SOS"). Rule ở [03 §9](03-business-rules.md) (BR-190–199, BR-410–428); vòng đời ở [04 §6](04-state-machines.md).
 - **Actor:** người phát (quản lý campaign, trưởng ca, TNV đã điểm danh, người dân ở gần), đội của SOS (quản lý campaign hoặc trưởng ca), người tới giúp, owner tổ chức, admin, job SOS.
-- **Điều kiện:** campaign UPCOMING / ACTIVE có ca đang chạy; người phát đủ điều kiện (BR-193); chưa phát 3 SOS trong 1 giờ (BR-194).
+- **Điều kiện:** campaign UPCOMING / ACTIVE có ca đang chạy; người phát đủ điều kiện (BR-193); nếu có đặt giới hạn / giờ (`SOS_MAX_PER_HOUR`, hiện tắt) thì chưa chạm giới hạn (BR-194).
 - **Luồng chính:**
-  1. Client gọi `GET /api/v1/sos/eligibility?campaign_id&latitude&longitude` → `{can_raise, role, reason, shifts[], hourly_remaining}`; nút SOS chỉ hiện khi được phát.
+  1. Client gọi `GET /api/v1/sos/eligibility?campaign_id&latitude&longitude` → `{can_raise, role, reason, shifts[], hourly_remaining}` (`hourly_remaining = null` khi không giới hạn); nút SOS chỉ hiện khi được phát.
   2. Dialog bước 1 chọn loại (`manpower` / `hazard` / `medical`), bước 2 nhập chi tiết theo loại (BR-195), mô tả, ảnh, chọn ca (quản lý), lấy GPS (không có thì dùng điểm tập trung). Có SOS cùng loại trong 200 m thì gợi ý mở SOS đó (`GET /sos/duplicates`, BR-196). Loại Y tế luôn có banner "Gọi 115".
-  3. `POST /api/v1/sos` → transaction (advisory lock theo user, đếm lại 3 / giờ) tạo SOS `open` (BR-191), manpower có `expires_at` (BR-197), rồi `dispatchOnCreate()` ghi outbox (BR-415–417): đội (`SOS_TEAM_ALERT`), TNV trong ca (`SOS_HAZARD_WARNING` với hazard), owner + admin (`SOS_MEDICAL_ALERT` + email với medical), admin (`SOS_ADMIN_ALERT` + email với hazard), TNV Sẵn sàng trong 3 km (ưu tiên 1), tổ chức lân cận trong 5 km (ưu tiên 2, ngay lúc tạo với hazard / medical). Client mở `/sos/:id`.
+  3. `POST /api/v1/sos` → transaction (khi có giới hạn: advisory lock theo user, đếm lại số SOS trong giờ) tạo SOS `open` (BR-191), manpower có `expires_at` (BR-197), rồi `dispatchOnCreate()` ghi outbox (BR-415–417): đội (`SOS_TEAM_ALERT`), TNV trong ca (`SOS_HAZARD_WARNING` với hazard), owner + admin (`SOS_MEDICAL_ALERT` + email với medical), admin (`SOS_ADMIN_ALERT` + email với hazard), TNV Sẵn sàng trong 3 km (ưu tiên 1), tổ chức lân cận trong 5 km (ưu tiên 2, ngay lúc tạo với hazard / medical). Client mở `/sos/:id`.
   4. Người nhận mở `/sos/:id` (thông báo `SOS_*` dẫn tới đây): bộ đếm người đang đến / đã tới, chỉ đường Google Maps, khoảng cách và thời gian ước tính. Bấm "Tôi tới giúp ngay" (`POST /:id/respond`, BR-410) → SOS `helping`; client theo dõi GPS và gửi `PUT /:id/respond/location` tối đa 30 giây một lần, trong 50 m thì thành "đã tới" (BR-412). "Không tới được nữa" (`DELETE /:id/respond`, BR-411).
   5. Đội hoặc admin bấm "Nhận xử lý" (`PUT /:id/claim`, BR-413); người phát có thể dời vị trí (`PUT /:id/location`, BR-414, người đang đến nhận `SOS_LOCATION_CHANGED`).
   6. Người phát, đội hoặc admin bấm "Đã giải quyết" (`PUT /:id/resolve {code, note}`, BR-192) → `resolved`; người đang đến nhận `SOS_NO_LONGER_NEEDED`. Đóng bằng `false_alarm` / `not_real` lần thứ 3 trong 30 ngày → admin nhận `SOS_ABUSE_REVIEW` (BR-424).
 - **Job SOS** (worker, mặc định 60 giây, BR-421): leo thang owner sau 10 phút (BR-418), mở rộng manpower sau 15 phút (BR-419), hết hạn manpower (BR-197), hazard chưa ai nhận sau 2 giờ → `escalated` (BR-420).
 - **Khác:** campaign hoàn thành thì đóng mọi SOS còn sống (BR-426). Bản đồ `/maps` và danh sách chỉ thấy toạ độ, loại, trạng thái, bộ đếm (BR-198); chi tiết lọc theo người xem (BR-199). TNV bật "Sẵn sàng hỗ trợ SOS" trong hồ sơ (BR-425).
-- **Lỗi:** 403 `SOS_NOT_ELIGIBLE {reason}`, 429 `SOS_RATE_LIMIT`, 422 `SOS_DETAILS_INVALID` / `SOS_PHOTO_REQUIRED`, 409 `SOS_ALREADY_RESPONDING` / `SOS_CLOSED`, 403 `SOS_RESPOND_NOT_ALLOWED` / `SOS_PERMISSION_DENIED`.
+- **Lỗi:** 403 `SOS_NOT_ELIGIBLE {reason}`, 429 `SOS_RATE_LIMIT` (chỉ khi có giới hạn), 422 `SOS_DETAILS_INVALID` / `SOS_PHOTO_REQUIRED`, 409 `SOS_ALREADY_RESPONDING` / `SOS_CLOSED`, 403 `SOS_RESPOND_NOT_ALLOWED` / `SOS_PERMISSION_DENIED`.
 - **Lệch spec:** người dân dùng email đã xác thực + có số điện thoại thay cho số điện thoại đã xác thực; thời gian thực bằng poll (chi tiết 5 giây, bản đồ 10 giây), không WebSocket; không kênh ưu tiên cao, không Apple Maps, chưa có mobile (BR-428).
 - **Dữ liệu thay đổi:** `sos`, `sos_responders`, `sos_deliveries`, `volunteer_availabilities`, `outbox_events` (`WEBSITE_NOTIFICATION`).
 - **File:** `INC/modules/sos/sos.routes.ts`, `sos.controller.ts`, `sos.service.ts`, `sos-eligibility.ts`, `sos-dispatch.ts`, `sos.job.ts`, `sos-availability.service.ts`, `DC/sos.ts`, `INC/modules/campaign/website-notification.publisher.ts`, `FE/components/sos/*`, `FE/app/(pages)/(main)/sos/[id]/page.tsx`.
@@ -928,7 +928,7 @@ sequenceDiagram
   INC-->>FE: {can_raise, role, shifts, hourly_remaining}
   FE->>INC: GET /sos/duplicates (gợi ý SOS trùng 200 m)
   FE->>INC: POST /sos {type, details, photo_urls, lat, lng}
-  INC->>INC: TX: lock user, ≤ 3/giờ, tạo SOS open, dispatchOnCreate() → outbox
+  INC->>INC: TX: [có giới hạn] lock user, ≤ N/giờ, tạo SOS open, dispatchOnCreate() → outbox
   INC->>NS: SOS_TEAM_ALERT (đội), ưu tiên 1/2/3 theo loại
   INC-->>FE: 201 SosDetail → mở /sos/:id (poll 5 s)
   H->>INC: POST /sos/:id/respond

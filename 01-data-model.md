@@ -405,7 +405,7 @@ Tính năng Task đã bỏ: migration `20261006100000_drop_campaign_tasks` xoá 
 | resolvedBy, resolvedAt, resolutionCode, resolutionNote | uuid?, timestamp?, varchar(20)?, text? | | `handled` \| `false_alarm` \| `not_real` |
 | status | int | default 1, index | Giữ cho client cũ: 1 khi còn sống, 17 khi đã đóng / hết hạn |
 
-Index thêm: (createdBy, createdAt) cho giới hạn 3 SOS / giờ. Migration backfill: dòng cũ thành manpower; `status = 17` → `resolved` / `handled`, còn lại `open` và `status = 1`.
+Index thêm: (createdBy, createdAt) cho giới hạn SOS / giờ (`SOS_MAX_PER_HOUR`, hiện tắt mặc định). Migration backfill: dòng cũ thành manpower; `status = 17` → `resolved` / `handled`, còn lại `open` và `status = 1`.
 
 **SosResponder (`sos_responders`)**: id, sosId (cascade), userId, status (`on_the_way` \| `arrived` \| `cancelled`), distanceM?, arrivedAt?, cancelledAt?, createdAt, updatedAt. **unique (sosId, userId)**, index (userId, status), và partial unique index SQL `sos_responders_one_on_the_way` trên `user_id` WHERE `status = 'on_the_way'` (mỗi người chỉ đang đến một SOS).
 
