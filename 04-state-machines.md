@@ -197,7 +197,8 @@ stateDiagram-v2
   escalated --> resolved: người phát / đội / admin đóng
   open --> expired: job, manpower quá expires_at
   helping --> expired: job, manpower quá expires_at
-  open --> escalated: job, hazard chưa ai nhận xử lý sau 2h
+  open --> escalated: job, hazard chưa giải quyết sau 2h
+  helping --> escalated: job, hazard chưa giải quyết sau 2h
   open --> resolved: campaign hoàn thành
   helping --> resolved: campaign hoàn thành
   escalated --> resolved: campaign hoàn thành
@@ -212,10 +213,10 @@ stateDiagram-v2
 | `helping` → `open` | Người tới giúp huỷ | Không còn ai `on_the_way` / `arrived` (BR-411) | — | `cancelResponse()` |
 | `open` / `helping` / `escalated` → `resolved` | Người phát, đội hoặc admin (BR-192) | `code` handled / false_alarm / not_real; khác → 403 `SOS_PERMISSION_DENIED`; đã đóng → 409 `SOS_CLOSED` (alias `/solved` trả SOS) | `status = 17`; người đang đến → `cancelled` + `SOS_NO_LONGER_NEEDED`; có thể báo admin `SOS_ABUSE_REVIEW` (BR-424) | `resolve()`, `solveSos()` |
 | `open` / `helping` → `expired` | Job | Manpower, `expires_at` ≤ now (BR-197) | `status = 17`; người đang đến → `cancelled` + `SOS_EXPIRED` | `sos.job.ts > runSosSweep()` |
-| `open` → `escalated` | Job | Hazard, chưa "Nhận xử lý", tạo ≥ 2 giờ (BR-420) | Admin nhận `SOS_ESCALATED` | `runSosSweep()` |
+| `open` / `helping` → `escalated` | Job | Hazard chưa giải quyết, chưa `escalated_at`, tạo ≥ 2 giờ (BR-420; lệch spec: spec xét "chưa ai nhận xử lý") | Admin nhận `SOS_ESCALATED` | `runSosSweep()` |
 | còn sống → `resolved` | Hệ thống / admin, gián tiếp | Campaign hoàn thành (BR-426) | `handled`; người đang đến → `cancelled`, không thông báo | `verification-decision.service.ts > completeCampaign()` |
 
-Không đổi trạng thái nhưng ghi lại: "Nhận xử lý" (`claimed_by/at`, BR-413), leo thang owner (`owner_notified_at`, BR-418), mở rộng bán kính và ưu tiên 2 (`radius_km = 5`, `tier2_sent_at`, BR-419), dời vị trí (`location_updated_at`, BR-414).
+Không đổi trạng thái nhưng ghi lại: leo thang owner (`owner_notified_at`, BR-418), mở rộng bán kính và ưu tiên 2 (`radius_km = 5`, `tier2_sent_at`, BR-419), dời vị trí (`location_updated_at`, BR-414). Không còn "Nhận xử lý" (đã bỏ, BR-428).
 
 **Người tới giúp (`sos_responders.status`):** (mới) → `on_the_way` (BR-410) → `arrived` (GPS ≤ 50 m, BR-412); `on_the_way` / `arrived` → `cancelled` khi tự huỷ (BR-411); `on_the_way` → `cancelled` khi SOS đóng / hết hạn / campaign hoàn thành (người đã tới giữ nguyên `arrived`). `cancelled` → `on_the_way` khi bấm tới giúp lại. Mỗi user chỉ một dòng `on_the_way` (partial unique index).
 

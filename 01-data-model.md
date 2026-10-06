@@ -378,7 +378,7 @@ Phiếu "sạch / chưa sạch" cấp chiến dịch đã bỏ: migration `20261
 
 Tính năng Task đã bỏ: migration `20261006100000_drop_campaign_tasks` xoá 4 bảng `campaign_task_result_files`, `campaign_task_results`, `campaign_task_assignments`, `campaign_tasks` và các dòng `media` loại `CAMPAIGN_TASK_RESULT`. Kết quả công việc giờ ghi theo ca (`campaign_shift_results`).
 
-**Sos (`sos`)** — SOS bản 2, migration `20261011100000_sos_v2` (hằng số `DC/sos.ts`, rule BR-190–199, BR-410–428)
+**Sos (`sos`)** — SOS bản 2, migration `20261011100000_sos_v2`, `20261012100000_sos_drop_claim` bỏ `claimed_by` / `claimed_at` (hằng số `DC/sos.ts`, rule BR-190–199, BR-410–428)
 | Field | Kiểu | Ràng buộc | Ý nghĩa |
 |---|---|---|---|
 | id | **Int autoincrement** | PK | |
@@ -397,7 +397,6 @@ Tính năng Task đã bỏ: migration `20261006100000_drop_campaign_tasks` xoá 
 | latitude, longitude | float | NOT NULL | GPS người gửi, không có thì toạ độ điểm tập trung; người gửi sửa được |
 | locationUpdatedAt | timestamp? | | Lần người gửi dời vị trí |
 | expiresAt | timestamp? | | Chỉ manpower (BR-197) |
-| claimedBy, claimedAt | uuid?, timestamp? | | "Nhận xử lý" (BR-413) |
 | ownerNotifiedAt | timestamp? | | Đã báo owner (leo thang 10 phút, hoặc lúc tạo với medical) |
 | tier2SentAt | timestamp? | | Đã gửi ưu tiên 2 (tổ chức lân cận) |
 | radiusKm | float | default 3 | Bán kính mời TNV Sẵn sàng; 5 sau khi mở rộng |

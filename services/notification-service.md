@@ -128,8 +128,8 @@ Lọc theo preferences: các client dùng `enqueueWebsiteNotificationsToUsers()`
 | 14j | `SOS_HAZARD_WARNING` | website | TNV đã điểm danh ca có SOS Rác nguy hại; và TNV "Sẵn sàng" ở gần (như #14i) | `dispatchOnCreate()`, `inviteAvailableVolunteers()` | outbox | `campaignNearbyVerify` |
 | 14k | `SOS_NEARBY_ORG_REQUEST` | website | Owner của tổ chức lân cận (toạ độ tổ chức hoặc điểm tập trung của campaign UPCOMING / ACTIVE trong 5 km); với Nhân lực có thêm admin | `sos-dispatch.ts > askNearbyOrganizations()` (hazard / medical lúc tạo, manpower ở job 15 phút) | outbox | **Không** |
 | 14l | `SOS_ADMIN_ALERT` | website + **email** | Admin khi có SOS Rác nguy hại | `dispatchOnCreate()` | outbox, `email: true` | **Không** |
-| 14m | `SOS_OWNER_ESCALATION` | website | Owner tổ chức của campaign: SOS Nhân lực / Rác nguy hại vẫn `open`, chưa ai nhận xử lý sau 10 phút | `IS/src/modules/sos/sos.job.ts > runSosSweep()` | outbox | **Không** |
-| 14n | `SOS_ESCALATED` | website | Admin: SOS Rác nguy hại chưa ai nhận xử lý sau 2 giờ | `runSosSweep()` | outbox | **Không** |
+| 14m | `SOS_OWNER_ESCALATION` | website | Owner tổ chức của campaign: SOS Nhân lực / Rác nguy hại vẫn `open` (chưa ai bấm "Tôi tới giúp") sau 10 phút, một lần | `IS/src/modules/sos/sos.job.ts > runSosSweep()` | outbox | **Không** |
+| 14n | `SOS_ESCALATED` | website | Admin: SOS Rác nguy hại chưa được giải quyết sau 2 giờ | `runSosSweep()` | outbox | **Không** |
 | 14o | `SOS_LOCATION_CHANGED` | website | Người đang trên đường tới khi người phát dời vị trí SOS | `IS/src/modules/sos/sos.service.ts > updateLocation()` | outbox | **Không** |
 | 14p | `SOS_EXPIRED` | website | Người đang trên đường khi SOS Nhân lực hết hạn | `runSosSweep()` → `closeResponders()` | outbox | **Không** |
 | 14q | `SOS_NO_LONGER_NEEDED` | website | Người đang trên đường khi SOS được đóng | `sos.service.ts > resolve()` → `closeResponders()` | outbox | **Không** |

@@ -4,7 +4,7 @@
 > - **Phần A**: report, vote, SOS, saved resource, media, organization, organization application, cùng auth và middleware dùng chung
 > - **Phần B**: campaign (đăng ký ca, điểm danh, kết quả ca, submission, hoàn thành, xác thực kết quả 3 lớp), reward client, translation, background job, outbox, queue, resilience
 >
-> Tổng endpoint: **113** (phần A 57, phần B 56), cộng `/health` và Swagger.
+> Tổng endpoint: **121** (phần A 65, phần B 56), cộng `/health` và Swagger.
 > Mọi đường dẫn tính từ `/Users/ngoc/ecolink`. Tiền tố `IS/` = `ecolink-server/services/incident-service/`.
 
 **Mục lục:** [Phần A](#phan-a) · [Phần B](#phan-b)
@@ -21,7 +21,7 @@
 
 - **Báo cáo sự cố môi trường (report)**: user tạo report kèm ảnh và toạ độ; tìm kiếm theo bộ lọc / khoảng cách PostGIS; chủ report sửa, thêm/xoá ảnh, xoá mềm; admin duyệt (verify), cấm (ban), đánh dấu hoàn thành (mark-done). Tạo report và thêm ảnh sẽ đẩy job phân tích ảnh AI (`ANALYZE_REPORT`) và job dịch (`TRANSLATE_TEXT`). Mark-done ghi outbox event cộng điểm xanh cho người báo cáo.
 - **Vote**: upvote / downvote (toggle) cho report hoặc campaign; upvote report ghi outbox event mốc vote (`REPORT_VOTE_MILESTONE_GREEN_POINTS`).
-- **SOS** (bản 2): phát SOS 3 loại tại ca đang chạy (kiểm điều kiện người phát; giới hạn / giờ tạm tắt, bật bằng `SOS_MAX_PER_HOUR`), gửi thông báo theo mức ưu tiên (đội, TNV "Sẵn sàng", tổ chức lân cận, admin), "Tôi tới giúp" kèm bộ đếm và vị trí, nhận xử lý, đóng; job leo thang / hết hạn; cài đặt "Sẵn sàng hỗ trợ SOS".
+- **SOS** (bản 2): phát SOS 3 loại tại ca đang chạy (kiểm điều kiện người phát; giới hạn / giờ tạm tắt, bật bằng `SOS_MAX_PER_HOUR`), gửi thông báo theo mức ưu tiên (đội, TNV "Sẵn sàng", tổ chức lân cận, admin), "Tôi tới giúp" kèm bộ đếm và vị trí, đóng (không có "Nhận xử lý"); job leo thang / hết hạn; cài đặt "Sẵn sàng hỗ trợ SOS".
 - **Saved resource**: lưu / bỏ lưu (toggle) report hoặc campaign, liệt kê danh sách đã lưu kèm dữ liệu chi tiết.
 - **Admin media**: admin đăng ký một URL ảnh (đã upload ở nơi khác) thành bản ghi `Media` loại `OTHER`. Không có chức năng kiểm duyệt media. Thư mục `src/modules/media` chỉ có thư mục `__tests__` rỗng.
 - **Organization**: danh sách / chi tiết tổ chức (kèm `owners[]`, `myRole`, `isOwner`), cập nhật hồ sơ (người có vai owner), xác minh email liên hệ, admin verify/ban, yêu cầu tham gia (join request), duyệt/huỷ/rời tổ chức, liệt kê thành viên, đổi vai / gỡ thành viên, lời mời, owner change (thêm / thu hồi owner, quyết trong tổ chức) và owner tự hạ vai / rời. Endpoint tạo tổ chức trực tiếp chỉ còn dùng nội bộ (`x-internal-api-key`).
@@ -136,7 +136,7 @@ Không qua `authenticate`: `GET /health`, `GET /api/v1/organizations/verify-cont
 
 ## 4. Danh sách API endpoint
 
-**Tổng số endpoint phần A: 66** (report 15, vote 2, SOS 15, saved resource 2, admin media 1, organization 16, organization application công khai 9, organization application admin 6). Ngoài ra service có `GET /health` và các route Swagger do `mountOpenApi` gắn.
+**Tổng số endpoint phần A: 65** (report 15, vote 2, SOS 14, saved resource 2, admin media 1, organization 16, organization application công khai 9, organization application admin 6). Ngoài ra service có `GET /health` và các route Swagger do `mountOpenApi` gắn.
 
 Mọi prefix dưới đây đều được api-gateway proxy nguyên đường dẫn (`ecolink-server/api-gateway/src/index.ts`), riêng saved resource: gateway `/api/v1/incident/saved-resources` → upstream `/incident/saved-resources`. `POST /api/v1/organizations` vẫn đi qua gateway được nhưng cần `x-internal-api-key`.
 
@@ -193,12 +193,11 @@ SOS bản 2. Mọi route dùng `authenticate`; body nhận snake_case (`camelCas
 | POST | `/api/v1/sos/:id/respond` | JWT | Mọi user trừ người phát | — | 200 `SosDetail` (BR-410) | 409 `SOS_CLOSED`; 403 `SOS_RESPOND_NOT_ALLOWED`; 409 `SOS_ALREADY_RESPONDING` | `respond` → `respond()` |
 | DELETE | `/api/v1/sos/:id/respond` | JWT | Người đang đến / đã tới | — | 200 `SosDetail` (BR-411) | — | `cancelResponse` → `cancelResponse()` |
 | PUT | `/api/v1/sos/:id/respond/location` | JWT | Người đang đến / đã tới | Body `latitude`, `longitude` | 200 `SosDetail` (BR-412) | 409 `SOS_CLOSED`; 403 `SOS_RESPOND_NOT_ALLOWED` | `responderLocation` → `updateResponderLocation()` |
-| PUT | `/api/v1/sos/:id/claim` | JWT | Đội hoặc platform admin | — | 200 `SosDetail` (BR-413) | 403 `SOS_PERMISSION_DENIED`; 409 `SOS_CLOSED` | `claim` → `claim()` |
 | PUT | `/api/v1/sos/:id/location` | JWT | Người phát | Body `latitude`, `longitude` | 200 `SosDetail` (BR-414) | 403 `SOS_PERMISSION_DENIED`; 409 `SOS_CLOSED` | `updateLocation` → `updateLocation()` |
 | PUT | `/api/v1/sos/:id/resolve` | JWT | Người phát, đội hoặc platform admin | Body `code` (`handled` / `false_alarm` / `not_real`), `note?` ≤ 1000 | 200 `SosDetail` (BR-192) | 403 `SOS_PERMISSION_DENIED`; 409 `SOS_CLOSED` | `resolveSos` → `resolve()` |
 | PUT | `/api/v1/sos/:id/solved` | JWT | Như `/resolve` | — | 200 `SosDetail`; alias cũ = resolve `handled`, gọi lại trên SOS `resolved` trả SOS thay vì 409 | 403 `SOS_PERMISSION_DENIED`; 409 `SOS_CLOSED` (SOS `expired`) | `solveSos` → `solveSos()` |
 
-`SosSummary` (`IS/src/modules/sos/sos.dto.ts`): `id (int), campaign_id, shift_id, meeting_point_id, type, state, status (1 / 17), latitude, longitude, created_at, people_needed, on_the_way_count, arrived_count, is_mine, my_response (on_the_way | arrived | null)`. `SosDetail` thêm `campaign {id, title, contact_name, contact_phone, safety_notes}`, `shift {id, name, start_at, end_at}`, `meeting_point {id, name, latitude, longitude}`, `reporter_role`, `details` (hazard luôn trả `hazard_kinds[]`, kể cả SOS cũ lưu `hazardKind` — `toDetail()`), `description`, `photo_urls`, `phone`, `reporter {id, name, avatar}`, `responders[{user_id, name, avatar, status, updated_at}]`, `expires_at`, `claimed_by`, `claimed_at`, `escalated_at`, `radius_km`, `resolved_at`, `resolved_by`, `resolution_code`, `resolution_note`, `location_updated_at`, `permissions {can_respond, can_cancel_response, can_claim, can_update_location, can_resolve}`, `viewer_is_team`. Trường bị ẩn theo người xem trả `null` / `[]`. `sos.entity.ts` và `sos.repository.ts` cũ đã xoá; không trả `content_vi` / `content_en`.
+`SosSummary` (`IS/src/modules/sos/sos.dto.ts`): `id (int), campaign_id, shift_id, meeting_point_id, type, state, status (1 / 17), latitude, longitude, created_at, people_needed, on_the_way_count, arrived_count, is_mine, my_response (on_the_way | arrived | null)`. `SosDetail` thêm `campaign {id, title, contact_name, contact_phone, safety_notes}`, `shift {id, name, start_at, end_at}`, `meeting_point {id, name, latitude, longitude}`, `reporter_role`, `details` (hazard luôn trả `hazard_kinds[]`, kể cả SOS cũ lưu `hazardKind` — `toDetail()`), `description`, `photo_urls`, `phone`, `reporter {id, name, avatar}`, `responders[{user_id, name, avatar, status, updated_at}]`, `expires_at`, `escalated_at`, `radius_km`, `resolved_at`, `resolved_by`, `resolution_code`, `resolution_note`, `location_updated_at`, `permissions {can_respond, can_cancel_response, can_update_location, can_resolve}`, `viewer_is_team`. Trường bị ẩn theo người xem trả `null` / `[]`. `sos.entity.ts` và `sos.repository.ts` cũ đã xoá; không trả `content_vi` / `content_en`.
 
 ### 4.4 Saved resource — `IS/src/modules/saved_resource/saved_resource.routes.ts` (upstream `/incident/saved-resources`, gateway `/api/v1/incident/saved-resources`)
 
