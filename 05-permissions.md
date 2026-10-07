@@ -211,12 +211,15 @@ Cột **Owner tổ chức** là thành viên vai `LEGAL_REPRESENTATIVE` / `OWNER
 | Tạo và duyệt submission | ❌ | ✅ | ✅ | ✅ (tự duyệt được) | ❌ | ❌ | `assertCanManage()` |
 | Danh sách "multi-submission review" | ❌ | | | | | ✅ | controller |
 | Phát SOS (`POST /sos`) | ⚠️ (người dân: GPS ≤ 500 m quanh điểm tập trung có ca đang chạy, email đã xác thực, có số điện thoại) | ✅ (canManage, mọi ca đang chạy) | ✅ | ✅ | ⚠️ (đã điểm danh ca đang chạy, chưa check-out, không bị loại) | ⚠️ (như User; admin không có quyền riêng) | `sos-eligibility.ts > resolveSosEligibility()`: thứ tự manager → trưởng ca (chỉ ca mình) → TNV → người dân; sai → 403 `SOS_NOT_ELIGIBLE {reason}`; giới hạn / giờ tạm tắt, cấu hình bằng `SOS_MAX_PER_HOUR` (BR-193, BR-194) |
-| Xem danh sách / bản đồ SOS (`GET /sos`) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | `authenticate`; chỉ toạ độ, loại, trạng thái, bộ đếm, không dữ liệu cá nhân (BR-198) |
+| Xem danh sách / bản đồ SOS (`GET /sos`, cả `GET /sos/duplicates`) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | `authenticate`; ai cũng thấy toạ độ, loại, trạng thái, bộ đếm, tên campaign, vai trò người phát, giờ / mã đóng (BR-198) |
+| — `reporter` (tên, avatar) và `phone` trong từng dòng danh sách | ❌ (kể cả khi là người phát) | ✅ | ✅ | ✅ | ⚠️ (chỉ dòng của ca mình làm trưởng ca) | ✅ | `sos.service.ts > summaries()`: platform admin, trưởng ca của SOS, hoặc `canManage` campaign; người khác nhận null (BR-429) |
 | Xem chi tiết SOS (`GET /sos/:id`) | ⚠️ | ✅ | ✅ | ✅ | ⚠️ | ✅ | `sos.service.ts > toDetail()`: ai đăng nhập cũng mở được, nhưng SĐT + tên người phát chỉ cho đội (canManage hoặc trưởng ca của SOS) và admin; tên người tới giúp cho người phát, đội, admin; chi tiết y tế cho đội, admin, người phát, người đang đến; SĐT liên hệ campaign cho đội, admin, người đang đến (BR-199) |
 | Tới giúp / huỷ / gửi vị trí (`/sos/:id/respond`) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | `respond()`: trừ người phát; chỉ manpower / medical đang `open` / `helping`; một SOS đang đến mỗi lúc → 403 `SOS_RESPOND_NOT_ALLOWED`, 409 `SOS_ALREADY_RESPONDING` (BR-410–412) |
 | Dời vị trí SOS (`PUT /sos/:id/location`) | ⚠️ (người phát) | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | `updateLocation()`: chỉ người phát; sai → 403 `SOS_PERMISSION_DENIED` (BR-414) |
 | Đóng SOS (`PUT /sos/:id/resolve`, alias `/solved`) | ⚠️ (người phát, trưởng ca của SOS) | ✅ | ✅ | ✅ | ⚠️ (người phát, trưởng ca của SOS) | ✅ | `resolve()`: người phát, `isTeam()` hoặc platform admin; sai → 403 `SOS_PERMISSION_DENIED` (BR-192) |
 | "Sẵn sàng hỗ trợ SOS" (`/sos/me/availability`) | ✅ (của mình) | ✅ | ✅ | ✅ | ✅ | ✅ | `authenticate`, chỉ đọc / ghi dòng của chính người gọi (BR-425) |
+
+Phía client, SOS: tab **SOS** của trang campaign (`FE/app/(pages)/(main)/campaigns/[id]/_components/CampaignTabs.tsx`) hiện cho **mọi người đã đăng nhập** (`is_authenticated`), ở mọi trạng thái campaign; tên và SĐT người phát trong tab chỉ hiện khi server trả (BR-429). Trang `/admin/sos` không có kiểm tra role riêng (giống mọi trang `/admin/*`, §1.5): user thường mở được và thấy mọi SOS nhưng `reporter` / `phone` là null trừ các SOS họ thuộc đội.
 
 `GET /campaigns/my?is_owner=true` của Owner tổ chức gồm cả mọi campaign của tổ chức đó (BR-185). Response campaign có người xem kèm `can_manage_campaign`, `can_delete_campaign`.
 
