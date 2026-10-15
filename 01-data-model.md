@@ -303,23 +303,33 @@ erDiagram
 | userId | uuid? | index | Người báo cáo |
 | title, titleVi, titleEn | varchar(200)? | | Bản gốc và bản dịch |
 | description, descriptionVi, descriptionEn | text? | | |
-| wasteType | varchar(100)? | | Loại rác |
+| wasteType | varchar(100)? | | **Deprecated** (thay bằng `wasteTypes`, xoá ở P10 của specs/006). Chuỗi CSV tự do |
+| category | enum `ReportCategory` | NOT NULL, default `OTHER` | Sự việc ở đâu/là gì, một giá trị: WATERWAY, BEACH, MARKET, SCHOOL, PARK, INDUSTRIAL_ZONE, ALLEY, STREET, ILLEGAL_DUMP, DRAIN, OPEN_BURNING, OTHER. Report cũ = OTHER. Migration `20261015100000_report_category_and_location` |
+| wasteTypes (`waste_types`) | enum `WasteType[]` | default `{}` | Loại rác, nhiều giá trị: HOUSEHOLD, CONSTRUCTION, INDUSTRIAL, HAZARDOUS. Backfill từ `wasteType` CSV (bỏ giá trị lạ) |
 | severityLevel | int? | Validator: 1..5 | Mức độ nghiêm trọng |
-| latitude, longitude | float? | | Tìm kiếm bằng PostGIS `ST_DWithin` qua raw SQL |
+| latitude, longitude | float? | | Toạ độ gốc |
+| location | geography(Point, 4326)? | index GiST `reports_location_gist` | Trigger `reports_sync_location` tự ghi từ latitude/longitude. Tìm kiếm theo bán kính (`INC/modules/report/report.repository.ts > searchWithDistance()`, `findDistinctReporterUserIdsNearPoint()`) dùng cột này |
+| idempotencyKey (`idempotency_key`) | varchar(64)? | **unique (userId, idempotencyKey)** | Header `Idempotency-Key` của client. **[CHƯA HOÀN THIỆN]** chưa có code ghi (P02) |
 | detailAddress | text? | | |
 | status | int? | default 12, index | `GlobalStatus`, xem [04-state-machines.md](04-state-machines.md) |
 | isVerify | bool | default false | Admin đã duyệt |
 | rejectReason | text? | | Lý do ban |
 | aiVerified | bool | default false | Đã được AI phân tích |
 | aiRecommendation | text? | | Gợi ý xử lý do LLM sinh (Markdown) |
+| latestVerificationId (`latest_verification_id`) | uuid? | chưa có FK | Lần xác minh mới nhất. **[CHƯA HOÀN THIỆN]** bảng xác minh chưa có (P05) |
+| moderatedBy, moderatedAt, moderationReasonCode | uuid?, timestamp?, enum? | `ModerationReasonCode`: DUPLICATE_OF_OTHER, NOT_ON_SITE, INAPPROPRIATE_CONTENT | Quyết định kiểm duyệt. **[CHƯA HOÀN THIỆN]** chưa có code ghi (P09) |
 
-**ReportMediaFile (`report_media_files`)**: gồm reportId (FK), mediaId (uuid, không có FK), uploadedBy, deletedAt.
+Index thêm: `(user_id, created_at)` cho giới hạn gửi report và lịch sử của người gửi.
+
+**ReportMediaFile (`report_media_files`)**: gồm reportId (FK), mediaId (uuid, không có FK), uploadedBy, deletedAt, captureSource (`capture_source`, enum `LIVE` \| `GALLERY`, default GALLERY) và captureId (`capture_id`, uuid?, unique, chưa có FK). **[CHƯA HOÀN THIỆN]** nguồn ảnh chưa được gắn: mọi ảnh hiện là GALLERY cho tới khi có phiên chụp (P03).
 
 **Media (`media`)**: gồm url (text), type varchar(50) (`REPORT`, `USER`, `REPORT_RESULT`, `AI_PREDICT`, `OTHER`, `CAMPAIGN_RESULT`). Loại `CAMPAIGN_TASK_RESULT` đã bị xoá cùng tính năng Task (migration `20261006100000_drop_campaign_tasks`).
 
 **AiAnalysisLog (`ai_analysis_logs`)**: gồm reportId (FK), reportMediaFileId?, mediaId? (ảnh kết quả AI), detections int?, processedAt.
 
 **ReportIssue (`report_issues`)**: không được code nào dùng.
+
+**VerificationConfig (`verification_configs`)**: id, key varchar(64), version varchar(64), value jsonb, isActive (`is_active`), createdAt. **Unique (key, version)** và partial unique `(key) WHERE is_active` (mỗi key một phiên bản đang dùng). Seed trong migration `20261015100100_verification_configs`: `pipeline` 2.3.0, `engine` rules@3.0.0, `checks` checks@1.0.0, `category-rules` category-rules@1.0.0. Đọc qua `INC/modules/verification/verification-config.service.ts > verificationConfigService.get()` (cache `VERIFICATION_CONFIG_CACHE_MS`, mặc định 60 s); đổi phiên bản bằng `ecolink-server/services/incident-service/prisma/scripts/verification-config-activate.ts`. **[CHƯA HOÀN THIỆN]** chưa có pipeline nào đọc bảng này (P05).
 
 ### 2.4 Từ điển dữ liệu — Campaign
 
