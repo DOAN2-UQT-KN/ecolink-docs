@@ -13,6 +13,9 @@ stateDiagram-v2
   PENDING_12 --> TODO_21: engine ACCEPT (*)
   PENDING_12 --> INREVIEW_9: engine REVIEW / hết 3 attempt (*)
   PENDING_12 --> INACTIVE_2: engine REJECT (*)
+  INREVIEW_9 --> TODO_21: moderator ACCEPT
+  INREVIEW_9 --> INACTIVE_2: moderator REJECT
+  INACTIVE_2 --> TODO_21: moderator ACCEPT (chỉ khi engine tự từ chối)
   PENDING_12 --> INACTIVE_2: admin ban
   TODO_21 --> INACTIVE_2: admin ban
   INACTIVE_2 --> TODO_21: admin verify (gỡ ban)
@@ -32,6 +35,7 @@ stateDiagram-v2
 |---|---|---|---|---|
 | (mới) → PENDING 12 | User đăng nhập, hoặc qua tool chat AI | BR-100 | Tạo media và report_media_files; enqueue ANALYZE_REPORT và TRANSLATE_TEXT | `INC/modules/report/report.service.ts > createReport()` |
 | PENDING 12 → TODO 21 (isVerify=true) / INREVIEW 9 / INACTIVE 2 | System (worker xác minh, chỉ khi `REPORT_VERIFICATION_ENABLED=true`) | Report **còn** 12 lúc chốt (cập nhật có điều kiện; kết quả đến muộn không đổi status). Theo flag của Risk Engine: ACCEPT → 21, REVIEW → 9, REJECT → 2; hết 3 attempt không check nào hoàn tất → 9 | Ghi `report_verifications` + `verification_checks`, `latestVerificationId`, outbox `REPORT_VERIFIED` → thông báo REPORT_APPROVED / REPORT_IN_REVIEW / REPORT_REJECTED (không lý do). **[CHƯA HOÀN THIỆN]** 3 check còn là stub NOT_AVAILABLE (P06–P08), nên khi bật cờ mọi report đi tới 9; admin chưa có thao tác riêng cho 9 (P09) | `INC/modules/verification/verification.orchestrator.ts > handle()` |
+| INREVIEW 9 → TODO 21 / INACTIVE 2; INACTIVE 2 (engine, chưa ai quyết) → TODO 21 | Admin qua `POST /reports/:id/moderation` | Compare-and-set trên trạng thái đang chờ (BR-117); REJECT cần `reason_code` | Ghi `moderated_by/at`, `moderation_reason_code`, `reject_reason = note`; outbox `REPORT_VERIFIED{source: MODERATOR}` → REPORT_APPROVED / REPORT_REJECTED (kèm ghi chú) | `INC/modules/verification/moderation.service.ts > moderate()` |
 | PENDING / INACTIVE / … → TODO 21 (isVerify=true) | Admin | Chưa được duyệt, hoặc đang bị ban | Thông báo REPORT_APPROVED cho chủ report | `adminVerifyReport()` |
 | bất kỳ (≠ 2) → INACTIVE 2 | Admin | Có lý do | Thông báo REPORT_REJECTED. Từ 2 sang 2 thì chỉ đổi lý do | `adminBanReport()` |
 | bất kỳ (≠ 17) → COMPLETED 17 | Admin | Không kiểm tra trạng thái nguồn | Outbox REPORT_COMPLETION_GREEN_POINTS; thông báo REPORT_STATUS | `adminMarkReportDone()` |

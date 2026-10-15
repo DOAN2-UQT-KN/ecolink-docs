@@ -154,7 +154,9 @@ Mọi response tổ chức có người xem (`GET /:id`, `/by-slug/:slug`, `/`, 
 | Hành động | Khách | User | Chủ report | Admin | Nơi kiểm tra |
 |---|---|---|---|---|---|
 | Tạo report | ❌ | ✅ | | ✅ | `authenticate` |
-| Tìm kiếm, xem danh sách, xem chi tiết | ❌ | ✅ (kể cả report PENDING của người khác qua `/search`, `/by-ids`) | ✅ | ✅ | `authenticate`; report bị ban trả 404 ở chi tiết |
+| Tìm kiếm, xem danh sách, xem chi tiết | ❌ | ✅ (kể cả report PENDING của người khác qua `/search`, `/by-ids`) | ✅ | ✅ | `authenticate`; report bị ban trả 404 ở chi tiết, trừ chủ report và admin (BR-103) |
+| Xem kết quả xác minh (`GET /:id/verification`) | ❌ | ❌ (403) | ⚠️ mức người dùng: không điểm, không lý do chỉ-admin, không danh tính người khác | ✅ mức chi tiết | `verification-view.service.ts > getForViewer()` |
+| Hàng chờ kiểm duyệt, mọi attempt, quyết định kiểm duyệt | ❌ | ❌ | ❌ | ✅ | `verification.controller.ts` (`isPlatformAdmin()`) |
 | Xem ảnh theo ids | ❌ | ⚠️ (report đã duyệt) | ✅ | ⚠️ | `findManyByIdsVisibleToViewer()` |
 | Sửa, thêm hoặc xoá ảnh, xoá report | ❌ | ❌ | ⚠️ (report chưa bị ban) | ❌ (bị cấm tường minh) | `assertReporterMayEditReport()` |
 | Duyệt, ban, đánh dấu đã xử lý | ❌ | ❌ | ❌ | ✅ | `report.controller.ts` |
