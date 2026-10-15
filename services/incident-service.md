@@ -146,7 +146,7 @@ Chú thích cột Auth: **JWT** = `authenticate`; **Public** = không xác thự
 
 | Method | Path | Auth | Role | Request | Response (`data`) | Mã lỗi | Handler |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| POST | `/api/v1/reports` | JWT | Mọi user | Body: `title` bắt buộc (trim); `description?`, `titleVi?`, `titleEn?`, `descriptionVi?`, `descriptionEn?` (không validate), `wasteType?`, `severityLevel?` int 1..5, `latitude` bắt buộc float -90..90, `longitude` bắt buộc float -180..180, `detailAddress?`, `imageUrls` mảng ≥1 chuỗi không rỗng (không kiểm tra là URL) | 201 `{ report }` (ReportResponse) | 400 VALIDATION_ERROR; 401; 500 mọi lỗi khác | `IS/src/modules/report/report.controller.ts > createReport` → `report.service.ts > createReport()` |
+| POST | `/api/v1/reports` | JWT | Mọi user | Header `Idempotency-Key?` (UUID; sai định dạng → 400). Body: `title` bắt buộc (trim); `description?`, `titleVi?`, `titleEn?`, `descriptionVi?`, `descriptionEn?` (không validate); `category?` (enum `ReportCategory`, thiếu thì OTHER); `wasteTypes?` mảng ≥1 giá trị `WasteType`; `severityLevel?` int 1..5; `latitude` bắt buộc float -90..90, `longitude` bắt buộc float -180..180; `detailAddress?`; `images` 1..10 `{url, captureId?}` (`url` phải bắt đầu bằng `https://res.cloudinary.com/<CLOUDINARY_CLOUD_NAME>/image/upload/`, `captureId` UUID). Legacy (client trước spec 007): `imageUrls` (cùng luật URL) và `wasteType` CSV vẫn được nhận; `mediaCaptures` được nhận nhưng bỏ qua. Không tải ảnh trong request. Kiểm khu vực phục vụ (BR-113), 5 report / 24 giờ (BR-114), gửi lại cùng key trả report cũ (BR-115) | 202 `{ report }` (ReportResponse, status 12), cả lần đầu lẫn gửi lại | 400 VALIDATION_ERROR; 401; 422 `REPORT_OUT_OF_SERVICE_AREA`; 429 `REPORT_RATE_LIMITED` (kèm `retry_after` ISO và header `Retry-After` giây); 500 lỗi khác | `IS/src/modules/report/report.controller.ts > createReport` → `report.service.ts > createReport()`, `report-submit-gate.ts`, `report-create.input.ts > normalizeCreateReportInput()` |
 | GET | `/api/v1/reports/search` | JWT | Mọi user | Query: `search?`, `status?` int, `statuses?` (lặp hoặc phẩy, ≤25 số nguyên), `wasteType?`, `severityLevel?` 1..5, `latitude?`, `longitude?`, `maxDistance?` int ≥1 (mét, mặc định 50000), `sortBy?` distance/createdAt/severityLevel, `sortOrder?` asc/desc, `page?` ≥1 (1), `limit?` 1..100 (10) | 200 `{ reports[], total, page, limit, totalPages }` (ReportDetailResponse có `mediaFiles`, `handledBy`, `votes`, `saved`, `user`, `distance?`) | 400; 500 | `report.controller.ts > searchReports` → `report.service.ts > searchReports()` |
 | GET | `/api/v1/reports/my` | JWT | Chủ report | Như `/search` | Như `/search`, chỉ report của mình | 400; 401; 500 | `report.controller.ts > getMyReports` → `searchMyReports()` |
 | GET | `/api/v1/reports/all` | JWT | Mọi user | — | 200 `{ reports[] }` — report `status = TODO(21)` (comment ghi "ACTIVE" nhưng code lọc TODO), không phân trang | 500 | `report.controller.ts > getAllActiveReports` → `getAllActiveReports()` → `report.repository.ts > findAllToDo()` |
@@ -336,11 +336,13 @@ sequenceDiagram
     participant W as Worker
     participant P as AI predict
     participant A as ai-service
-    U->>I: POST /api/v1/reports
-    I->>DB: "transaction: reports + media + report_media_files"
+    U->>I: "POST /api/v1/reports (Idempotency-Key?)"
+    I->>DB: "Idempotency-Key đã có? → 202 report cũ (BR-115)"
+    I->>DB: "ST_Covers service_areas (BR-113) → 422"
+    I->>DB: "transaction: advisory lock user, ≤5 report/24h (BR-114) → 429, reports + media + report_media_files + outbox REPORT_SUBMITTED{attempt:1}"
     I-->>Q: "ANALYZE_REPORT { reportId, reportMediaFileIds }"
     I-->>Q: "TRANSLATE_TEXT { REPORT, titleVi/En, descriptionVi/En }"
-    I-->>U: "201 { report }"
+    I-->>U: "202 { report }"
     W->>Q: poll
     W->>P: "POST AI_PREDICT_URL { image_urls }"
     W->>A: "POST /api/v1/recommendations/report"

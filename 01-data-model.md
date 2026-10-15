@@ -309,7 +309,7 @@ erDiagram
 | severityLevel | int? | Validator: 1..5 | Mức độ nghiêm trọng |
 | latitude, longitude | float? | | Toạ độ gốc |
 | location | geography(Point, 4326)? | index GiST `reports_location_gist` | Trigger `reports_sync_location` tự ghi từ latitude/longitude. Tìm kiếm theo bán kính (`INC/modules/report/report.repository.ts > searchWithDistance()`, `findDistinctReporterUserIdsNearPoint()`) dùng cột này |
-| idempotencyKey (`idempotency_key`) | varchar(64)? | **unique (userId, idempotencyKey)** | Header `Idempotency-Key` của client. **[CHƯA HOÀN THIỆN]** chưa có code ghi (P02) |
+| idempotencyKey (`idempotency_key`) | varchar(64)? | **unique (userId, idempotencyKey)** | Header `Idempotency-Key` của client (BR-115) |
 | detailAddress | text? | | |
 | status | int? | default 12, index | `GlobalStatus`, xem [04-state-machines.md](04-state-machines.md) |
 | isVerify | bool | default false | Admin đã duyệt |
@@ -328,6 +328,8 @@ Index thêm: `(user_id, created_at)` cho giới hạn gửi report và lịch s�
 **AiAnalysisLog (`ai_analysis_logs`)**: gồm reportId (FK), reportMediaFileId?, mediaId? (ảnh kết quả AI), detections int?, processedAt.
 
 **ReportIssue (`report_issues`)**: không được code nào dùng.
+
+**ServiceArea (`service_areas`)**: id, name varchar(120), geog `geography(MultiPolygon, 4326)` (index GiST `service_areas_geog_gist`), active (default true), createdAt. Vùng nhận report (BR-113). Migration `20261015100200_service_areas` seed một hình chữ nhật bao TP.HCM sau sáp nhập 07/2025.
 
 **VerificationConfig (`verification_configs`)**: id, key varchar(64), version varchar(64), value jsonb, isActive (`is_active`), createdAt. **Unique (key, version)** và partial unique `(key) WHERE is_active` (mỗi key một phiên bản đang dùng). Seed trong migration `20261015100100_verification_configs`: `pipeline` 2.3.0, `engine` rules@3.0.0, `checks` checks@1.0.0, `category-rules` category-rules@1.0.0. Đọc qua `INC/modules/verification/verification-config.service.ts > verificationConfigService.get()` (cache `VERIFICATION_CONFIG_CACHE_MS`, mặc định 60 s); đổi phiên bản bằng `ecolink-server/services/incident-service/prisma/scripts/verification-config-activate.ts`. **[CHƯA HOÀN THIỆN]** chưa có pipeline nào đọc bảng này (P05).
 
