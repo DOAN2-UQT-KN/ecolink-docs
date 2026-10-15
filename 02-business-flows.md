@@ -590,7 +590,8 @@ sequenceDiagram
   5. Một transaction: verification COMPLETED, 3 dòng `verification_checks`, report 12 → 21 / 9 / 2 (chỉ khi còn 12), `latestVerificationId`, outbox `REPORT_VERIFIED`.
   6. Relay xử lý `REPORT_VERIFIED` tại chỗ → thông báo REPORT_APPROVED / REPORT_IN_REVIEW / REPORT_REJECTED nếu status đổi.
 - **Luồng lỗi:** không check nào hoàn tất → attempt FAILED, outbox `REPORT_SUBMITTED{attempt+1}`; hết 3 attempt → report 9 + `REPORT_VERIFIED{exhausted}`. Lỗi DB giữa chừng → attempt FAILED và lên lịch lần sau, hoặc SQS giao lại và chạy tiếp từ RUNNING.
-- **[CHƯA HOÀN THIỆN]** 3 check còn là stub NOT_AVAILABLE (specs/006 P06–P08); bật cờ lúc này thì mọi report đi tới 9.
+- DUPLICATE: ai-service so ảnh với mọi user (pHash toàn cục ≤ 6 → pHash ứng viên 500 m / 7 ngày ≤ 10 → ORB ứng viên), có lật gương; xem `docs/services/ai-service.md` mục 6.
+- **[CHƯA HOÀN THIỆN]** TRUST, CONTEXT còn là stub NOT_AVAILABLE (specs/006 P07, P08): điểm chỉ dựa vào DUPLICATE (trùng → REVIEW, không trùng → ACCEPT).
 - **File:** `INC/modules/verification/verification.orchestrator.ts`, `run-check.ts`, `risk-engine.ts`, `checks/*`, `report-verified.publisher.ts`, `INC/queue/worker/report-verification-worker.ts`.
 
 ```mermaid

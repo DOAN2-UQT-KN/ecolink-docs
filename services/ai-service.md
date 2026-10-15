@@ -79,6 +79,7 @@ Gateway chỉ proxy `/api/v1/chat/*` (→ `/api/v1/chat/*`, `parseReqBody: false
 | Method | Path | Auth | Role | Request | Response | Mã lỗi | Handler |
 |---|---|---|---|---|---|---|---|
 | POST | `/internal/v1/translate` | `x-internal-api-key` | Service nội bộ | `{ content: string }` (khác `""`) | Giống `/api/v1/chat/translate` | `400`; `401`; `500` (RuntimeError hoặc lỗi bất ngờ, detail `"<ExceptionType>: <msg>"`) | `internal/router.py > internal_translate()` |
+| POST | `/internal/v1/verification/duplicate` | `x-internal-api-key` | incident-service (worker xác minh) | `{ report_id, user_id?, attempt, latitude?, longitude?, created_at, category, media[{media_id, report_media_file_id, url}], config{version, phash_global_max, phash_candidate_max, candidate_radius_m, candidate_days, orb_min_inliers, orb_min_inlier_ratio, risk{…}} }` | Luôn 200 với một `CheckResult` snake_case (`check: DUPLICATE`, `status`, `risk`, `reasons`, `signals[phash, orb, internet]`, `evidence{candidates_scanned, images_failed, match}`, `error?`, `duration_ms`); lỗi xử lý → `status: FAILED` (`DOWNLOAD_FAILED` / `ERROR`) | `401`; `422` body sai | `internal/router.py > verification_duplicate()` → `verification/duplicate_check/service.py > run_duplicate_check()` |
 
 ### 4.3 Recommendation (`AI/app/recommendation/router.py`), gateway không proxy
 
@@ -112,7 +113,7 @@ Gateway chỉ proxy `/api/v1/chat/*` (→ `/api/v1/chat/*`, `parseReqBody: false
 
 ## 5. Event/Job phát ra và lắng nghe
 
-ai-service **không** phát/nhận SQS hay outbox (không có worker trong `app/`). Chỉ có HTTP.
+ai-service không ghi outbox. Có một worker SQS cũ (mục 6) nhận `REPORT_SUBMITTED`; luồng mới của DuplicateCheck là HTTP đồng bộ (mục 6, specs/006 P06).
 
 ### 5.1 HTTP ai-service gọi ra (tool → incident-service)
 
@@ -144,7 +145,17 @@ Gọi ra OpenAI (hoặc provider tương thích): `chat.completions.create` ở 
 
 ## 6. Job nền, cron, worker
 
-Không có job nền, cron hay worker nào trong `app/`. [CHƯA HOÀN THIỆN] File `.env` của service có comment `# REPORT_SUBMITTED worker (python -m app.worker)` cùng các biến `SQS_AI_ANALYSIS_QUEUE_URL`, `AWS_*`, nhưng **không tồn tại `app/worker.py`** và không có code đọc các biến này.
+**Worker kiểm trùng cũ** (`python -m app.worker` → `app/queue/sqs_worker.py`, hàng đợi `SQS_AI_ANALYSIS_QUEUE_URL`): nhận `REPORT_SUBMITTED` khi incident tắt `REPORT_VERIFICATION_ENABLED`, chạy `app/verification/duplicate/__init__.py > run_duplicate_cascade()` (pHash ≤ 10 rồi ORB, **chỉ trong report của cùng user**), upsert corpus rồi `PATCH /internal/v1/reports/:id/duplicate-verification` (incident ban report trùng). Từ specs/006 P06 đã bỏ tầng SHA-256 và `embedding_similarity()`; upsert ghi thêm `phash_int`. Không có container nào chạy worker này (chỉ `uvicorn`). Sẽ xoá ở P10.
+
+**DuplicateCheck mới** (`app/verification/duplicate_check/`, gọi qua `POST /internal/v1/verification/duplicate`): tải ảnh (timeout 6 s), pHash ảnh gốc và bản lật gương, rồi cascade dừng ở tầng khớp đầu tiên:
+1. pHash ≤ `phash_global_max` (6) trên **toàn bộ** corpus, tính trong Postgres bằng `bit_count((phash_int # q)::bit(64))` (`corpus.py > SqlCorpus.find_global_phash()`); risk `phash_strict` (0.9), reason `DUP_NEAR_IMAGE_MATCH`.
+2. pHash ≤ `phash_candidate_max` (10) trên ứng viên trong `candidate_radius_m` (500 m) và `candidate_days` (7 ngày) (lọc hộp bao trong SQL + haversine trong Python); risk `phash_loose` (0.75).
+3. ORB + RANSAC (ảnh gốc và bản lật) trên cùng tập ứng viên, cần ≥ `orb_min_inliers` (25) inlier và tỉ lệ ≥ `orb_min_inlier_ratio` (0.3); risk `orb` (0.7), reason `DUP_FEATURE_MATCH`.
+4. `internet`: luôn `NOT_AVAILABLE`.
+
+Report đã từ chối / xoá bị loại qua incident `POST /internal/v1/reports/inactive-ids`. Report không có toạ độ chỉ chạy tầng 1. Ảnh không khớp được upsert vào corpus (kèm lat/lng/created_at/category); ảnh khớp thì không; lỗi upsert chỉ log. Phần CPU chạy bằng `run_in_threadpool`, DB `await` trực tiếp trên session của request (không dùng `run_coro`).
+
+**Migration**: `init_db()` chạy `create_all` rồi `app/db/migrations/__init__.py > run_migrations()` (mọi file `*.sql`, idempotent; `001_corpus_geo_phash_int.sql` thêm cột corpus, xoá dòng SHA256, backfill `phash_int`). **Backfill** một lần trước khi bật cờ: `python -m scripts.backfill_corpus [--dry-run]` (geo/category qua incident `POST /internal/v1/reports/geo-by-ids`).
 
 ### Luồng chat SSE (`AI/app/chat/service.py > stream_chat_turn()`)
 
@@ -237,7 +248,7 @@ Service không có `.env.example`; danh sách dưới đây lấy từ `AI/app/c
 11. **Không có migration**: schema tạo bằng `create_all` (không thay đổi cột khi model đổi; ví dụ cột `append_text` thêm sau sẽ không tự có trên DB cũ).
 12. **`init_db` lỗi vẫn khởi động** (log exception) → service "healthy" nhưng DB có thể chưa sẵn sàng.
 13. **CORS** `allow_credentials=True` với origin `*` (Starlette sẽ phản hồi origin cụ thể khi có credentials; cần xác nhận chính sách).
-14. **Worker REPORT_SUBMITTED** [CHƯA HOÀN THIỆN]: `.env` nhắc `python -m app.worker` nhưng không có module; các biến SQS/AWS không dùng.
+14. **Worker REPORT_SUBMITTED**: module có (`app/worker.py`) nhưng Dockerfile chỉ chạy `uvicorn`, nên môi trường container không có ai chạy worker kiểm trùng cũ (cần xác nhận cách deploy hiện tại). Luồng thay thế: DuplicateCheck qua HTTP (specs/006 P06).
 15. **Không có `.env.example`** cho ai-service.
 16. **`_list_organizations`**: `int(x)` trên `status`/`page`/`limit` không bắt lỗi → exception, được `stream_chat_turn` gói thành `{"error": ...}`.
 17. **Model dùng chung cho mọi tác vụ**: `translate_text` dùng `response_format=json_object`; nếu `OPENAI_BASE_URL` trỏ sang provider không hỗ trợ tham số này có thể lỗi (code có xử lý khối think nhưng không xử lý lỗi tham số).

@@ -649,7 +649,10 @@ erDiagram
 | `ai_chat_conversations` | id, user_id (index), agent_id String(64) (index), title?, created_at, updated_at | agent_id: `ecolink_assistant`, `translation_assistant`, hoặc giá trị legacy `ecolink_support` / `campaign_helper` |
 | `ai_chat_messages` | id, conversation_id (FK, cascade), role `ChatMessageRole` (system / user / assistant / tool), content?, append_text? (khối `media_ids:` chỉ dành cho agent), tool_calls JSONB?, tool_call_id?, created_at | |
 
-Nguồn: `ecolink-server/services/ai-service/app/db/models.py`. Bảng được tạo bằng `create_all` khi bật `AUTO_CREATE_DB_TABLES`.
+| `ai_media_content_hashes` | id, report_id, report_media_file_id, media_id, user_id?, algorithm (chỉ còn `PHASH`), hash (hex 16 ký tự), **phash_int** bigint? (dạng có dấu của hash, cho `bit_count` trong Postgres), **latitude / longitude** float?, **report_created_at** timestamptz?, **category** varchar(32)?, created_at | unique (media_id, algorithm); index (algorithm, hash), report_created_at. Dòng `SHA256` bị xoá ở migration `001_corpus_geo_phash_int.sql` (specs/006 P06) |
+| `ai_media_orb_features` | id, report_id, report_media_file_id, media_id, user_id?, keypoints / descriptors (numpy `savez_compressed`), keypoint_count, **latitude / longitude / report_created_at**, created_at | unique media_id; index report_created_at |
+
+Nguồn: `ecolink-server/services/ai-service/app/db/models.py`. Bảng được tạo bằng `create_all` khi bật `AUTO_CREATE_DB_TABLES`, sau đó `run_migrations()` chạy các file `app/db/migrations/*.sql` (idempotent).
 
 ---
 
