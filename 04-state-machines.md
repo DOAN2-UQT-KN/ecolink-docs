@@ -10,6 +10,9 @@
 stateDiagram-v2
   [*] --> PENDING_12: user tạo report
   PENDING_12 --> TODO_21: admin verify
+  PENDING_12 --> TODO_21: engine ACCEPT (*)
+  PENDING_12 --> INREVIEW_9: engine REVIEW / hết 3 attempt (*)
+  PENDING_12 --> INACTIVE_2: engine REJECT (*)
   PENDING_12 --> INACTIVE_2: admin ban
   TODO_21 --> INACTIVE_2: admin ban
   INACTIVE_2 --> TODO_21: admin verify (gỡ ban)
@@ -23,9 +26,12 @@ stateDiagram-v2
   COMPLETED_17 --> [*]
 ```
 
+(*) Chỉ khi `REPORT_VERIFICATION_ENABLED=true` (specs/006 P05). INREVIEW 9 = `_STATUS_INREVIEW`.
+
 | Từ → sang | Ai | Điều kiện | Side effect | File |
 |---|---|---|---|---|
 | (mới) → PENDING 12 | User đăng nhập, hoặc qua tool chat AI | BR-100 | Tạo media và report_media_files; enqueue ANALYZE_REPORT và TRANSLATE_TEXT | `INC/modules/report/report.service.ts > createReport()` |
+| PENDING 12 → TODO 21 (isVerify=true) / INREVIEW 9 / INACTIVE 2 | System (worker xác minh, chỉ khi `REPORT_VERIFICATION_ENABLED=true`) | Report **còn** 12 lúc chốt (cập nhật có điều kiện; kết quả đến muộn không đổi status). Theo flag của Risk Engine: ACCEPT → 21, REVIEW → 9, REJECT → 2; hết 3 attempt không check nào hoàn tất → 9 | Ghi `report_verifications` + `verification_checks`, `latestVerificationId`, outbox `REPORT_VERIFIED` → thông báo REPORT_APPROVED / REPORT_IN_REVIEW / REPORT_REJECTED (không lý do). **[CHƯA HOÀN THIỆN]** 3 check còn là stub NOT_AVAILABLE (P06–P08), nên khi bật cờ mọi report đi tới 9; admin chưa có thao tác riêng cho 9 (P09) | `INC/modules/verification/verification.orchestrator.ts > handle()` |
 | PENDING / INACTIVE / … → TODO 21 (isVerify=true) | Admin | Chưa được duyệt, hoặc đang bị ban | Thông báo REPORT_APPROVED cho chủ report | `adminVerifyReport()` |
 | bất kỳ (≠ 2) → INACTIVE 2 | Admin | Có lý do | Thông báo REPORT_REJECTED. Từ 2 sang 2 thì chỉ đổi lý do | `adminBanReport()` |
 | bất kỳ (≠ 17) → COMPLETED 17 | Admin | Không kiểm tra trạng thái nguồn | Outbox REPORT_COMPLETION_GREEN_POINTS; thông báo REPORT_STATUS | `adminMarkReportDone()` |
@@ -34,6 +40,7 @@ stateDiagram-v2
 | INPROCESS 22 → COMPLETED 17 | Admin duyệt hoàn thành campaign | Campaign đang ở 7; report `cleaned` / `partial` trong submission (campaign không có submission: mọi report) | **Không** phát outbox điểm cho report | `completion.service.ts > approve()` |
 | INPROCESS 22 → TODO 21 | Admin duyệt hoàn thành (report `unhandled`) hoặc huỷ khi duyệt hoàn thành | Campaign đang ở 7 | campaignId = null | `completion.service.ts > approve(), cancel()` |
 | bất kỳ (không bị ban) → PENDING 12, aiVerified=false | Chủ report | Report không bị ban | Enqueue ANALYZE_REPORT. Nếu `isVerify` đã true thì report bị kẹt (99) | `addReportImages()` |
+| `report_verifications.status`: RUNNING → COMPLETED \| FAILED | Worker xác minh | Một dòng mỗi `(reportId, attempt)` (unique). Giao lặp: dòng đã xong thì bỏ qua, còn RUNNING thì chạy tiếp; bước chốt chỉ cập nhật khi còn RUNNING. FAILED → outbox `REPORT_SUBMITTED{attempt+1}` (tối đa 3) | — | `verification.orchestrator.ts > startAttempt(), finalize(), failAttempt()` |
 | aiVerified false → true | Worker | Có kết quả predict | aiRecommendation, ai_analysis_logs | `report-ai-analysis.service.ts > analyzeReport()` |
 | → xoá mềm | Chủ report | Report không bị ban | — | `deleteReport()` |
 

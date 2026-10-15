@@ -33,6 +33,7 @@
 | F18e | Thu hồi owner khác (REMOVE_OWNER) | Tổ chức |
 | F18g | Owner tự hạ vai / rời tổ chức | Tổ chức |
 | F19 | Tạo báo cáo sự cố (report) và phân tích AI | Sự cố |
+| F19b | Xác minh report tự động (worker, Risk Engine) | Sự cố |
 | F20 | Chủ report sửa, thêm ảnh, xoá ảnh, xoá report | Sự cố |
 | F21 | Admin duyệt hoặc ban report | Sự cố |
 | F22 | Admin đánh dấu report đã xử lý và cộng điểm | Sự cố |
@@ -542,16 +543,16 @@ sequenceDiagram
 - **Actor:** người dùng đã đăng nhập. Tạo qua form web hoặc qua chat AI (F47).
 - **Luồng chính:**
   1. `/incidents/create`: chọn 1–10 ảnh, nén ảnh, upload Cloudinary lấy URL. Chọn vị trí trên bản đồ, severity 1–5.
-  2. `POST /api/v1/reports {title, description?, wasteType?, severityLevel, latitude, longitude, detailAddress?, imageUrls[]}` (BR-100).
-  3. `report.service.ts > createReport()` chạy trong 1 transaction: report (status PENDING 12), `media` (type REPORT), `report_media_files`.
+  2. `POST /api/v1/reports {title, description?, category?, wasteTypes?, severityLevel, latitude, longitude, detailAddress?, images[{url, captureId?}]}` kèm header `Idempotency-Key?` (BR-100; client cũ gửi `imageUrls`, `wasteType` vẫn được nhận).
+  3. `report.service.ts > createReport()`: key đã có → trả report cũ (BR-115); kiểm khu vực phục vụ (BR-113); rồi 1 transaction: khoá theo user, ≤ 5 report / 24 giờ (BR-114), report (status PENDING 12), `media` (type REPORT, không tải ảnh), `report_media_files`, outbox `REPORT_SUBMITTED{attempt: 1}`.
   4. Enqueue `ANALYZE_REPORT` và `TRANSLATE_TEXT` (best-effort; lỗi chỉ ghi log).
-  5. Trả 201 kèm vote, trạng thái saved, hồ sơ người báo cáo.
+  5. Trả 202 kèm vote, trạng thái saved, hồ sơ người báo cáo. Xác minh chạy sau (F19b).
   6. Worker `ReportAnalysisWorker` → `report-ai-analysis.service.ts > analyzeReport()`:
      - Gọi `AI_PREDICT_URL {image_urls}` (model nhận diện rác).
      - Gọi ai-service `POST /api/v1/recommendations/report` → gợi ý Markdown tiếng Việt (lỗi thì bỏ qua).
      - Trong 1 transaction: media AI_PREDICT, `ai_analysis_logs`, `aiVerified=true`, `aiRecommendation`.
 - **Luồng lỗi:**
-  - Validate → 400. Mọi lỗi khác khi tạo → 500.
+  - Validate → 400; ngoài vùng → 422 `REPORT_OUT_OF_SERVICE_AREA`; quá 5 report / 24 giờ → 429 `REPORT_RATE_LIMITED` (+ `Retry-After`); lỗi khác → 500.
   - AI predict lỗi → job retry, tối đa 5 lần rồi FAILED. Report vẫn tồn tại với `aiVerified=false`.
   - Client xem tiến độ AI qua `GET /reports/:id/background-jobs/status`.
 - **Dữ liệu thay đổi:** `reports`, `media`, `report_media_files`, `background_jobs`, `ai_analysis_logs`.
@@ -570,13 +571,42 @@ sequenceDiagram
   U->>FE: chọn ảnh, vị trí
   FE->>CLD: upload ảnh
   FE->>INC: POST /api/v1/reports
-  INC->>INC: TX reports(PENDING)+media+report_media_files
+  INC->>INC: Idempotency-Key, service area, TX lock user + ≤5/24h + reports(PENDING)+media+report_media_files+outbox REPORT_SUBMITTED
   INC->>Q: ANALYZE_REPORT, TRANSLATE_TEXT
-  INC-->>FE: 201
+  INC-->>FE: 202
   Q->>W: ANALYZE_REPORT
   W->>P: predict(image_urls)
   W->>AI: POST /api/v1/recommendations/report
   W->>INC: TX aiVerified=true, aiRecommendation, ai_analysis_logs
+```
+
+### F19b — Xác minh report tự động
+- **Actor:** system (worker incident-service). Chỉ chạy khi `REPORT_VERIFICATION_ENABLED=true`; tắt thì `REPORT_SUBMITTED` vẫn đi kiểm trùng cũ ở ai-service.
+- **Luồng chính:**
+  1. Outbox relay đẩy `REPORT_SUBMITTED{reportId, attempt}` lên `report-verification`.
+  2. `ReportVerificationWorker` → `verification.orchestrator.ts > handle()`: tạo `report_verifications` RUNNING cho `(reportId, attempt)` (đã xong → bỏ qua; còn RUNNING → chạy tiếp).
+  3. Chạy 3 check song song (DUPLICATE, TRUST, CONTEXT), mỗi check timeout 10 s (`verification_configs.pipeline`); quá hạn / lỗi → check FAILED.
+  4. Risk Engine (`risk-engine.ts > assess()`, cấu hình `engine` rules@3.0.0): điểm < 0.30 ACCEPT, < 0.70 REVIEW, còn lại REJECT; DUPLICATE lỗi → tối thiểu REVIEW.
+  5. Một transaction: verification COMPLETED, 3 dòng `verification_checks`, report 12 → 21 / 9 / 2 (chỉ khi còn 12), `latestVerificationId`, outbox `REPORT_VERIFIED`.
+  6. Relay xử lý `REPORT_VERIFIED` tại chỗ → thông báo REPORT_APPROVED / REPORT_IN_REVIEW / REPORT_REJECTED nếu status đổi.
+- **Luồng lỗi:** không check nào hoàn tất → attempt FAILED, outbox `REPORT_SUBMITTED{attempt+1}`; hết 3 attempt → report 9 + `REPORT_VERIFIED{exhausted}`. Lỗi DB giữa chừng → attempt FAILED và lên lịch lần sau, hoặc SQS giao lại và chạy tiếp từ RUNNING.
+- **[CHƯA HOÀN THIỆN]** 3 check còn là stub NOT_AVAILABLE (specs/006 P06–P08); bật cờ lúc này thì mọi report đi tới 9.
+- **File:** `INC/modules/verification/verification.orchestrator.ts`, `run-check.ts`, `risk-engine.ts`, `checks/*`, `report-verified.publisher.ts`, `INC/queue/worker/report-verification-worker.ts`.
+
+```mermaid
+sequenceDiagram
+  participant R as Outbox relay
+  participant Q as SQS report-verification
+  participant W as incident worker
+  participant DB as Postgres
+  participant NS as notification-service
+  R->>Q: REPORT_SUBMITTED{reportId, attempt}
+  Q->>W: message
+  W->>DB: report_verifications RUNNING
+  W->>W: DUPLICATE / TRUST / CONTEXT (song song, 10 s mỗi check)
+  W->>W: assess() → ACCEPT / REVIEW / REJECT
+  W->>DB: TX checks + verdict + report status (khi còn 12) + outbox REPORT_VERIFIED
+  R->>NS: REPORT_APPROVED / REPORT_IN_REVIEW / REPORT_REJECTED
 ```
 
 ### F20 — Chủ report sửa, thêm ảnh, xoá ảnh, xoá report

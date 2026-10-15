@@ -316,7 +316,7 @@ erDiagram
 | rejectReason | text? | | Lý do ban |
 | aiVerified | bool | default false | Đã được AI phân tích |
 | aiRecommendation | text? | | Gợi ý xử lý do LLM sinh (Markdown) |
-| latestVerificationId (`latest_verification_id`) | uuid? | chưa có FK | Lần xác minh mới nhất. **[CHƯA HOÀN THIỆN]** bảng xác minh chưa có (P05) |
+| latestVerificationId (`latest_verification_id`) | uuid? | FK → report_verifications (SET NULL) | Lần xác minh mới nhất (kể cả khi kết quả không đổi status) |
 | moderatedBy, moderatedAt, moderationReasonCode | uuid?, timestamp?, enum? | `ModerationReasonCode`: DUPLICATE_OF_OTHER, NOT_ON_SITE, INAPPROPRIATE_CONTENT | Quyết định kiểm duyệt. **[CHƯA HOÀN THIỆN]** chưa có code ghi (P09) |
 
 Index thêm: `(user_id, created_at)` cho giới hạn gửi report và lịch sử của người gửi.
@@ -331,7 +331,11 @@ Index thêm: `(user_id, created_at)` cho giới hạn gửi report và lịch s�
 
 **ServiceArea (`service_areas`)**: id, name varchar(120), geog `geography(MultiPolygon, 4326)` (index GiST `service_areas_geog_gist`), active (default true), createdAt. Vùng nhận report (BR-113). Migration `20261015100200_service_areas` seed một hình chữ nhật bao TP.HCM sau sáp nhập 07/2025.
 
-**VerificationConfig (`verification_configs`)**: id, key varchar(64), version varchar(64), value jsonb, isActive (`is_active`), createdAt. **Unique (key, version)** và partial unique `(key) WHERE is_active` (mỗi key một phiên bản đang dùng). Seed trong migration `20261015100100_verification_configs`: `pipeline` 2.3.0, `engine` rules@3.0.0, `checks` checks@1.0.0, `category-rules` category-rules@1.0.0. Đọc qua `INC/modules/verification/verification-config.service.ts > verificationConfigService.get()` (cache `VERIFICATION_CONFIG_CACHE_MS`, mặc định 60 s); đổi phiên bản bằng `ecolink-server/services/incident-service/prisma/scripts/verification-config-activate.ts`. **[CHƯA HOÀN THIỆN]** chưa có pipeline nào đọc bảng này (P05).
+**ReportVerification (`report_verifications`)**: id, reportId (FK, cascade), attempt int (default 1), status enum `VerificationStatus` (RUNNING \| COMPLETED \| FAILED), pipelineVersion varchar(32), engineVersion varchar(64)?, riskScore float?, flag enum `RiskFlag` (ACCEPT \| REVIEW \| REJECT)?, reasons text[], startedAt, completedAt?. **Unique (reportId, attempt)**. Mỗi lần chạy pipeline một dòng, không ghi đè. Migration `20261015100300_report_verifications`.
+
+**VerificationCheck (`verification_checks`)**: id, verificationId (FK, cascade), check enum `VerificationCheckName` (DUPLICATE \| TRUST \| CONTEXT), version varchar(64), status enum `VerificationCheckStatus` (COMPLETED \| SKIPPED \| FAILED \| NOT_AVAILABLE), risk float?, reasons text[], signals jsonb, evidence jsonb, error jsonb?, durationMs int. **Unique (verificationId, check)**. Ghi một lần.
+
+**VerificationConfig (`verification_configs`)**: id, key varchar(64), version varchar(64), value jsonb, isActive (`is_active`), createdAt. **Unique (key, version)** và partial unique `(key) WHERE is_active` (mỗi key một phiên bản đang dùng). Seed trong migration `20261015100100_verification_configs`: `pipeline` 2.3.0, `engine` rules@3.0.0, `checks` checks@1.0.0, `category-rules` category-rules@1.0.0. Đọc qua `INC/modules/verification/verification-config.service.ts > verificationConfigService.get()` (cache `VERIFICATION_CONFIG_CACHE_MS`, mặc định 60 s); đổi phiên bản bằng `ecolink-server/services/incident-service/prisma/scripts/verification-config-activate.ts`. Đọc bởi worker xác minh (`verification.orchestrator.ts`); `category-rules` chưa có check nào dùng (P08).
 
 ### 2.4 Từ điển dữ liệu — Campaign
 

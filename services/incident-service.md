@@ -819,6 +819,9 @@ Các endpoint `POST|GET /api/v1/campaigns/:id/tasks`, `GET /api/v1/campaigns/tas
 | `CAMPAIGN_FACEBOOK_RECOGNITION` | [CHƯA HOÀN THIỆN] code emit đã bị comment ("TODO: re-enable Facebook recognition outbox event") | — | — | — | — |
 | `REPORT_COMPLETION_GREEN_POINTS`, `REPORT_VOTE_MILESTONE_GREEN_POINTS`, `ORG_OWNER_ONBOARD` | Phần A (report.service, vote.service, organization-application-admin.service, owner-change-executor) | — | — | — | Relay dùng chung: `ORG_OWNER_ONBOARD` → `organizationOwnerOnboardPublisher` (gọi identity, notification); các loại còn lại → SQS reward intake |
 
+| `REPORT_SUBMITTED` | `report.service.ts > createReport()` (cùng transaction tạo report), `verification.orchestrator.ts > failAttempt()` (attempt sau) | Tạo report; attempt xác minh thất bại và còn lượt | `{ reportId, userId, attempt, reportMediaFileIds, media? }` | `REPORT_SUBMITTED:<reportId>:<attempt>` | SQS: `SQS_REPORT_VERIFICATION_QUEUE_URL` khi `REPORT_VERIFICATION_ENABLED=true`, ngược lại `SQS_AI_ANALYSIS_QUEUE_URL` (kiểm trùng cũ ở ai-service) |
+| `REPORT_VERIFIED` | `verification.orchestrator.ts > finalize(), failAttempt()` | Chốt một attempt (hoặc hết lượt) | `{ reportId, userId, reportTitle, verificationId, reportStatus, statusChanged, flag, riskScore, source: "ENGINE", exhausted? }` | `REPORT_VERIFIED:<verificationId>` | Handler nội bộ `verification/report-verified.publisher.ts`: chỉ khi `statusChanged` → 21 REPORT_APPROVED, 2 REPORT_REJECTED (`rejectReason` rỗng), 9 REPORT_IN_REVIEW |
+
 Envelope gửi lên SQS: `{ jobId: <outbox id>, version: 1, jobType: eventType, createdAt, payload }` (`ecolink-server/services/incident-service/src/outbox/outbox-publisher.ts > SqsOutboxPublisher.publish()`).
 
 ### 5.2 Background job qua SQS (`@da2/queue`)
@@ -826,6 +829,7 @@ Envelope gửi lên SQS: `{ jobId: <outbox id>, version: 1, jobType: eventType, 
 | jobType | Người đẩy | Queue (env) | Payload | Người xử lý |
 |---|---|---|---|---|
 | `TRANSLATE_TEXT` | `campaign.service.ts > enqueueCampaignTranslationJob()` gọi trong `createCampaign()` (tạo nháp; fire-and-forget, lỗi chỉ log); phần A: report.service, organization.service | `SQS_INCIDENT_TRANSLATION_QUEUE_URL` | `{ resourceType: "CAMPAIGN", resourceId, translations: [{sourceText: title, viField:"titleVi", enField:"titleEn"}, {sourceText: description, viField:"descriptionVi", enField:"descriptionEn"}?] }` | `ecolink-server/services/incident-service/src/queue/worker/translation-worker.ts > TranslationWorker.process()`: gọi `translateText()` → ai-service, rồi `prisma.campaign/report/organization.update` |
+| `REPORT_SUBMITTED` (chỉ khi `REPORT_VERIFICATION_ENABLED=true`) | Outbox relay (không qua dispatcher, nên dùng `queue/outbox-delivered-job-store.ts`: không có dòng `background_jobs`) | `SQS_REPORT_VERIFICATION_QUEUE_URL` (visibility 60 s, concurrency `REPORT_VERIFICATION_CONCURRENCY` mặc định 2) | `{ reportId, attempt }` | `queue/worker/report-verification-worker.ts` → `verificationOrchestrator.handle()`: 3 check song song, timeout `pipeline.checkTimeoutMs` (10 s) mỗi check, Risk Engine, một transaction chốt. **[CHƯA HOÀN THIỆN]** check là stub NOT_AVAILABLE (P06–P08) |
 | `ANALYZE_REPORT` | Phần A (report.service) | `SQS_REPORT_ANALYSIS_QUEUE_URL` | `{ reportId, reportMediaFileIds[] }` | `queue/worker/report-analysis-worker.ts` → `reportAiAnalysisService.analyzeReport()` (phần A) |
 
 Việc dịch **chỉ** được enqueue khi tạo campaign; `updateCampaign` không enqueue lại và không cập nhật `titleVi/En`. Submission, result có cột `*Vi/*En` nhưng không có job dịch nào ghi vào.
