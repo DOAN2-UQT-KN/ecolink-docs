@@ -323,6 +323,8 @@ Index thêm: `(user_id, created_at)` cho giới hạn gửi report và lịch s�
 
 **ReportMediaFile (`report_media_files`)**: gồm reportId (FK), mediaId (uuid, không có FK), uploadedBy, deletedAt, captureSource (`capture_source`, enum `LIVE` \| `GALLERY`, default GALLERY) và captureId (`capture_id`, uuid?, unique, FK → media_captures, SET NULL). Gắn lúc gửi report (BR-118); client chưa gửi `capture_id` thì mọi ảnh là GALLERY.
 
+**GeoContextCache (`geo_context_cache`)**: cellId (`cell_id`, geohash 7 ký tự cho luật địa điểm, 8 ký tự cho luật địa chỉ), ruleKey (`rule_key` = `<CATEGORY>@<category-rules version>`), places jsonb (`[{ name, keyword, lat, lng }]`), address jsonb? (kết quả Geocode đầu), fetchedAt, expiresAt (+30 ngày, `checks.context.cacheTtlDays`). PK (cell_id, rule_key); index expires_at. Lưu kết quả tra Goong, **không** lưu kết luận. Migration `20261016100100_geo_context_cache`.
+
 **MediaCapture (`media_captures`)**: id, userId (`user_id`), issuedAt, expiresAt (= issuedAt + `CAPTURE_TTL_MINUTES`, mặc định 15 phút), usedAt?. Index (user_id, issued_at). Phiên chụp camera do server cấp, dùng một lần. Migration `20261016100000_media_captures`.
 
 **Media (`media`)**: gồm url (text), type varchar(50) (`REPORT`, `USER`, `REPORT_RESULT`, `AI_PREDICT`, `OTHER`, `CAMPAIGN_RESULT`). Loại `CAMPAIGN_TASK_RESULT` đã bị xoá cùng tính năng Task (migration `20261006100000_drop_campaign_tasks`).

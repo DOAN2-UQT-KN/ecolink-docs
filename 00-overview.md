@@ -95,6 +95,7 @@ flowchart LR
     SMTP["SMTP"]
     FB["Facebook Graph API"]
     DD["Datadog"]
+    GOONG["Goong REST<br/>(Place, Geocode)"]
   end
 
   WEB -->|REST + SSE| GW
@@ -107,6 +108,7 @@ flowchart LR
   RW --- RDB
   AI --- AIDB
 
+  INC -->|ContextCheck, gợi ý category<br/>server-side key| GOONG
   INC -->|enqueue| Q1 & Q2
   Q1 --> INC
   Q2 --> INC
