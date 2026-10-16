@@ -122,7 +122,7 @@ Trạng thái: ✅ đã có · 🟡 đang làm dở / có hạn chế · ❌ ch�
 | AI phân tích ảnh | Tự nhận diện rác trong ảnh và gợi ý cách xử lý (nên mang gì, cảnh báo an toàn, cách phân loại) | Hệ thống | ✅ |
 | Tìm kiếm và bản đồ | Tìm theo trạng thái, mức độ, khoảng cách; bản đồ hiển thị báo cáo, chiến dịch và SOS | Người dùng | ✅ |
 | Sửa, thêm ảnh, xoá báo cáo | Chỉ người gửi; thêm ảnh mở một lần xác minh mới, không đổi trạng thái báo cáo | Người dùng | ✅ |
-| Kiểm duyệt | Quản trị viên duyệt hoặc chặn báo cáo, hoặc đánh dấu "đã xử lý". Mục **Kiểm duyệt report** gom các báo cáo hệ thống chưa chắc (sắp theo điểm rủi ro) và báo cáo bị tự động từ chối; mỗi báo cáo có điểm từng kiểm tra, bằng chứng (ảnh đặt cạnh ảnh trùng, nguồn ảnh, lịch sử người gửi) và nút Chấp nhận / Từ chối kèm lý do | Quản trị viên | ✅ |
+| Kiểm duyệt | Quản trị viên duyệt hoặc chặn báo cáo, hoặc đánh dấu "đã xử lý". Mục **Reports** cho thấy trạng thái xác minh và điểm rủi ro của mọi báo cáo, có bộ lọc nhanh "Cần kiểm duyệt" và "Tự động từ chối" (sắp theo điểm). Mỗi báo cáo có trang chi tiết riêng: tab **Thông tin** và tab **Kiểm duyệt** (khi có kết quả xác minh) với điểm từng kiểm tra, bằng chứng (ảnh đặt cạnh ảnh trùng, nguồn ảnh, lịch sử người gửi), lịch sử xác minh và nút Chấp nhận / Từ chối kèm lý do | Quản trị viên | ✅ |
 | Bình chọn và lưu | Bình chọn lên hoặc xuống, lưu để xem lại | Người dùng | ✅ |
 | Báo cáo qua trợ lý AI | Chat, gửi ảnh, trợ lý tự tạo báo cáo | Người dùng | 🟡 Báo cáo tạo qua chat **không có vị trí thật** |
 

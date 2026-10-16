@@ -622,7 +622,7 @@ sequenceDiagram
 - **File:** `report.service.ts > updateReport(), addReportImages(), deleteReportMediaFile(), deleteReport(), assertReporterMayEditReport()`.
 
 ### F21 — Admin duyệt hoặc ban report
-- `/admin/incidents`:
+- `/admin/reports` (bảng; trang chi tiết `/admin/reports/:id` tab Moderation dùng `POST /reports/:id/moderation`, specs/008):
   - `PUT /reports/:id/verify` → `status=TODO(21)`, `isVerify=true`, xoá rejectReason. Gửi thông báo `REPORT_APPROVED` cho chủ report. Đã duyệt thì no-op.
   - `PUT /reports/:id/ban {reject_reason}` → `status=INACTIVE(2)`. Gửi `REPORT_REJECTED`. Nếu đã ban thì chỉ cập nhật lý do, không gửi thông báo.
 - Report ở TODO mới được gắn vào campaign (F25).
