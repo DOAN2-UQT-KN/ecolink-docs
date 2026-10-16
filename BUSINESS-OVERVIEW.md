@@ -1,6 +1,6 @@
 # Ecolink — Tổng quan nghiệp vụ
 
-> Tài liệu dành cho PM, BA, khách hàng, nhà tài trợ và tình nguyện viên nòng cốt. Nội dung tổng hợp từ bộ tài liệu kỹ thuật trong thư mục `docs/`, và được viết dựa trên **đúng những gì sản phẩm đang làm** tại thời điểm 07/10/2026. Nó không mô tả những gì sản phẩm "dự định" làm.
+> Tài liệu dành cho PM, BA, khách hàng, nhà tài trợ và tình nguyện viên nòng cốt. Nội dung tổng hợp từ bộ tài liệu kỹ thuật trong thư mục `docs/`, và được viết dựa trên **đúng những gì sản phẩm đang làm** tại thời điểm 16/10/2026. Nó không mô tả những gì sản phẩm "dự định" làm.
 > Những chỗ sản phẩm chưa làm xong, hoặc đang làm khác với mong đợi, được nêu rõ ở mục 3 (cột Trạng thái) và mục 10.
 
 ---
@@ -117,11 +117,12 @@ Trạng thái: ✅ đã có · 🟡 đang làm dở / có hạn chế · ❌ ch�
 ### 3.5 Báo cáo sự cố (điểm rác)
 | Tính năng | Mô tả | Ai dùng | Trạng thái |
 |---|---|---|---|
-| Gửi báo cáo | 1–10 ảnh, vị trí trên bản đồ, mức độ nghiêm trọng, mô tả | Người dùng | ✅ |
+| Gửi báo cáo | 1–10 ảnh, vị trí trên bản đồ, **loại báo cáo** (12 loại theo địa điểm, vd kênh rạch, chợ, hẻm) và **loại rác** (chọn nhiều), mức độ nghiêm trọng, mô tả. Có nút **Chụp ảnh** bằng camera (ảnh chụp trực tiếp được tin cậy hơn ảnh thư viện). Sau khi ghim vị trí, form gợi ý loại báo cáo hợp với địa điểm. Vị trí ngoài khu vực hỗ trợ hoặc gửi quá 5 báo cáo trong 24 giờ thì báo ngay trên form; bấm gửi nhiều lần chỉ tạo một báo cáo | Người dùng | ✅ |
+| Theo dõi xác minh | Trang báo cáo của mình hiện tiến trình Đã gửi → Hệ thống kiểm tra → Chờ kiểm duyệt → Kết quả, tự cập nhật; các vấn đề phát hiện (ảnh trùng báo cáo khác, ảnh từ thư viện, loại không hợp địa điểm) kèm cách khắc phục và nút xem / ủng hộ báo cáo tương tự, chụp lại ảnh, rút báo cáo. Không hiện điểm số hay tên người gửi khác | Người dùng | 🟡 Cần bật xác minh tự động ở server; gợi ý loại báo cáo còn chậm |
 | AI phân tích ảnh | Tự nhận diện rác trong ảnh và gợi ý cách xử lý (nên mang gì, cảnh báo an toàn, cách phân loại) | Hệ thống | ✅ |
 | Tìm kiếm và bản đồ | Tìm theo trạng thái, mức độ, khoảng cách; bản đồ hiển thị báo cáo, chiến dịch và SOS | Người dùng | ✅ |
-| Sửa, thêm ảnh, xoá báo cáo | Chỉ người gửi | Người dùng | 🟡 Thêm ảnh vào báo cáo đã duyệt làm báo cáo bị kẹt |
-| Kiểm duyệt | Quản trị viên duyệt hoặc chặn báo cáo, hoặc đánh dấu "đã xử lý" | Quản trị viên | ✅ |
+| Sửa, thêm ảnh, xoá báo cáo | Chỉ người gửi; thêm ảnh mở một lần xác minh mới, không đổi trạng thái báo cáo | Người dùng | ✅ |
+| Kiểm duyệt | Quản trị viên duyệt hoặc chặn báo cáo, hoặc đánh dấu "đã xử lý". Mục **Kiểm duyệt report** gom các báo cáo hệ thống chưa chắc (sắp theo điểm rủi ro) và báo cáo bị tự động từ chối; mỗi báo cáo có điểm từng kiểm tra, bằng chứng (ảnh đặt cạnh ảnh trùng, nguồn ảnh, lịch sử người gửi) và nút Chấp nhận / Từ chối kèm lý do | Quản trị viên | ✅ |
 | Bình chọn và lưu | Bình chọn lên hoặc xuống, lưu để xem lại | Người dùng | ✅ |
 | Báo cáo qua trợ lý AI | Chat, gửi ảnh, trợ lý tự tạo báo cáo | Người dùng | 🟡 Báo cáo tạo qua chat **không có vị trí thật** |
 
@@ -189,7 +190,7 @@ flowchart LR
 
 Các trường hợp thường gặp:
 - Báo cáo bị từ chối (chặn): người gửi nhận thông báo kèm lý do; báo cáo không còn xem được và không sửa được.
-- Thêm ảnh sau khi đã được duyệt: báo cáo quay về "chờ duyệt" và hiện có thể bị kẹt ở trạng thái đó (mục 10).
+- Thêm ảnh sau khi đã được duyệt: báo cáo giữ nguyên trạng thái, ảnh mới được kiểm tra lại trong một lần xác minh mới.
 
 ```mermaid
 flowchart LR
@@ -833,7 +834,7 @@ Phần này viết lại các vấn đề trong `docs/99-open-issues.md` theo g�
 | 28 | **Xác minh email khi đăng ký** | Không có | Có cần không? |
 | 29 | **Mở khoá tài khoản** | Không có | Có cần không, và quy trình thế nào? |
 | 30 | **Báo cáo qua trợ lý AI** | Không lấy vị trí thật, nên không được mời vào chiến dịch gần và không hiện đúng trên bản đồ | Bắt buộc gửi vị trí khi báo cáo qua chat? |
-| 31 | **Thêm ảnh vào báo cáo đã duyệt** | Báo cáo bị đưa về chờ duyệt và có thể kẹt ở đó | Có cần duyệt lại không? |
+| 31 | ~~**Thêm ảnh vào báo cáo đã duyệt**~~ | **Đã giải quyết (16/10/2026):** báo cáo giữ trạng thái, ảnh mới được xác minh lại | — |
 | 32 | **Quản trị viên đánh dấu "đã xử lý"** | Làm được với cả báo cáo chưa duyệt hoặc đã bị chặn, và vẫn cộng điểm | Có giới hạn trạng thái không? |
 | 33 | **Vinh danh trên Facebook** | Đã làm nhưng đang tắt | Có bật lại không? Có cần tình nguyện viên đồng ý trước khi nêu tên không? |
 | 34 | ~~**Chiến dịch bị chặn**~~ | **Đã giải quyết (30/09/2026):** người tạo và owner nhận thông báo kèm lý do | — |
