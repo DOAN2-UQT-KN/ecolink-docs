@@ -321,7 +321,9 @@ erDiagram
 
 Index thêm: `(user_id, created_at)` cho giới hạn gửi report và lịch sử của người gửi.
 
-**ReportMediaFile (`report_media_files`)**: gồm reportId (FK), mediaId (uuid, không có FK), uploadedBy, deletedAt, captureSource (`capture_source`, enum `LIVE` \| `GALLERY`, default GALLERY) và captureId (`capture_id`, uuid?, unique, chưa có FK). **[CHƯA HOÀN THIỆN]** nguồn ảnh chưa được gắn: mọi ảnh hiện là GALLERY cho tới khi có phiên chụp (P03).
+**ReportMediaFile (`report_media_files`)**: gồm reportId (FK), mediaId (uuid, không có FK), uploadedBy, deletedAt, captureSource (`capture_source`, enum `LIVE` \| `GALLERY`, default GALLERY) và captureId (`capture_id`, uuid?, unique, FK → media_captures, SET NULL). Gắn lúc gửi report (BR-118); client chưa gửi `capture_id` thì mọi ảnh là GALLERY.
+
+**MediaCapture (`media_captures`)**: id, userId (`user_id`), issuedAt, expiresAt (= issuedAt + `CAPTURE_TTL_MINUTES`, mặc định 15 phút), usedAt?. Index (user_id, issued_at). Phiên chụp camera do server cấp, dùng một lần. Migration `20261016100000_media_captures`.
 
 **Media (`media`)**: gồm url (text), type varchar(50) (`REPORT`, `USER`, `REPORT_RESULT`, `AI_PREDICT`, `OTHER`, `CAMPAIGN_RESULT`). Loại `CAMPAIGN_TASK_RESULT` đã bị xoá cùng tính năng Task (migration `20261006100000_drop_campaign_tasks`).
 

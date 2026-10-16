@@ -542,7 +542,7 @@ sequenceDiagram
 ### F19 — Tạo báo cáo sự cố và phân tích AI
 - **Actor:** người dùng đã đăng nhập. Tạo qua form web hoặc qua chat AI (F47).
 - **Luồng chính:**
-  1. `/incidents/create`: chọn 1–10 ảnh, nén ảnh, upload Cloudinary lấy URL. Chọn vị trí trên bản đồ, severity 1–5.
+  1. `/incidents/create`: chọn 1–10 ảnh, nén ảnh, upload Cloudinary lấy URL. Chọn vị trí trên bản đồ, severity 1–5. Chụp bằng camera trong app: trước đó gọi `POST /reports/captures`, upload ảnh bằng chữ ký nhận được vào `captures/<capture_id>` rồi gửi `capture_id` kèm ảnh (BR-118). **[CHƯA HOÀN THIỆN]** client chưa làm bước này (spec 007).
   2. `POST /api/v1/reports {title, description?, category?, wasteTypes?, severityLevel, latitude, longitude, detailAddress?, images[{url, captureId?}]}` kèm header `Idempotency-Key?` (BR-100; client cũ gửi `imageUrls`, `wasteType` vẫn được nhận).
   3. `report.service.ts > createReport()`: key đã có → trả report cũ (BR-115); kiểm khu vực phục vụ (BR-113); rồi 1 transaction: khoá theo user, ≤ 5 report / 24 giờ (BR-114), report (status PENDING 12), `media` (type REPORT, không tải ảnh), `report_media_files`, outbox `REPORT_SUBMITTED{attempt: 1}`.
   4. Enqueue `ANALYZE_REPORT` và `TRANSLATE_TEXT` (best-effort; lỗi chỉ ghi log).
@@ -591,7 +591,8 @@ sequenceDiagram
   6. Relay xử lý `REPORT_VERIFIED` tại chỗ → thông báo REPORT_APPROVED / REPORT_IN_REVIEW / REPORT_REJECTED nếu status đổi.
 - **Luồng lỗi:** không check nào hoàn tất → attempt FAILED, outbox `REPORT_SUBMITTED{attempt+1}`; hết 3 attempt → report 9 + `REPORT_VERIFIED{exhausted}`. Lỗi DB giữa chừng → attempt FAILED và lên lịch lần sau, hoặc SQS giao lại và chạy tiếp từ RUNNING.
 - DUPLICATE: ai-service so ảnh với mọi user (pHash toàn cục ≤ 6 → pHash ứng viên 500 m / 7 ngày ≤ 10 → ORB ứng viên), có lật gương; xem `docs/services/ai-service.md` mục 6.
-- **[CHƯA HOÀN THIỆN]** TRUST, CONTEXT còn là stub NOT_AVAILABLE (specs/006 P07, P08): điểm chỉ dựa vào DUPLICATE (trùng → REVIEW, không trùng → ACCEPT).
+- TRUST: nguồn ảnh, lịch sử bị từ chối 90 ngày, tuổi tài khoản (BR-119). Khi client chưa gửi `capture_id`, mọi ảnh là GALLERY nên signal `capture` luôn 0.6 (TRUST cộng khoảng 0.3 cho mọi report).
+- **[CHƯA HOÀN THIỆN]** CONTEXT còn là stub NOT_AVAILABLE (specs/006 P08).
 - **File:** `INC/modules/verification/verification.orchestrator.ts`, `run-check.ts`, `risk-engine.ts`, `checks/*`, `report-verified.publisher.ts`, `INC/queue/worker/report-verification-worker.ts`.
 
 ```mermaid
