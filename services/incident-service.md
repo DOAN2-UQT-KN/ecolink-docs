@@ -558,6 +558,7 @@ Lời gọi identity và notification chạy qua circuit breaker dùng chung the
 | `SQS_REPORT_ANALYSIS_QUEUE_URL`, `SQS_INCIDENT_TRANSLATION_QUEUE_URL` | Queue job | Có |
 | `REPORT_COMPLETION_GREEN_POINTS` | Số điểm trong event mark-done (mặc định 0) | Không |
 | `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` | Ký upload / tải giấy tờ | Có (comment) |
+| `CLOUDINARY_ALLOWED_CLOUD_NAMES` | Cloud khác (phẩy) được chấp nhận trong URL ảnh report, vd tài khoản upload unsigned của web client (`report.validator.ts > isEcolinkImageUrl()`) | Có (comment) |
 | `OTP_RATE_WINDOW_MS`, `OTP_RATE_MAX_PER_EMAIL`, `OTP_RATE_MAX_PER_IP`, `APPLICATION_RATE_WINDOW_MS`, `APPLICATION_RATE_MAX_PER_IP` | Rate limit form đăng ký | Có (comment) |
 | `APPLICATION_RATE_LIMIT_DISABLED` | Tắt rate limit ngoài production | Có (comment) |
 | `SOS_MAX_PER_HOUR` | Số SOS tối đa / người / giờ trượt; không đặt hoặc `0` = không giới hạn (mặc định), `3` = giá trị spec (BR-194) | Có (comment) |
