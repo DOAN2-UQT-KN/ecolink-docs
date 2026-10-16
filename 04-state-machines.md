@@ -24,8 +24,6 @@ stateDiagram-v2
   INPROCESS_22 --> COMPLETED_17: admin duyệt hoàn thành campaign
   TODO_21 --> COMPLETED_17: admin mark-done
   PENDING_12 --> COMPLETED_17: admin mark-done (không kiểm tra)
-  TODO_21 --> PENDING_12: chủ report thêm ảnh
-  INPROCESS_22 --> PENDING_12: chủ report thêm ảnh
   COMPLETED_17 --> [*]
 ```
 
@@ -43,7 +41,7 @@ stateDiagram-v2
 | INPROCESS 22 → TODO 21 | canDelete (xoá campaign), canManage (bỏ report khỏi điểm tập kết khi 12 / 19), admin (block / ban), system (hết hạn) | — | campaignId = null | `syncReportLocks()`, `releaseAllReports()` (gọi từ `deleteCampaign()`, `review()`, `expireOverdue()`) |
 | INPROCESS 22 → COMPLETED 17 | Admin duyệt hoàn thành campaign | Campaign đang ở 7; report `cleaned` / `partial` trong submission (campaign không có submission: mọi report) | **Không** phát outbox điểm cho report | `completion.service.ts > approve()` |
 | INPROCESS 22 → TODO 21 | Admin duyệt hoàn thành (report `unhandled`) hoặc huỷ khi duyệt hoàn thành | Campaign đang ở 7 | campaignId = null | `completion.service.ts > approve(), cancel()` |
-| bất kỳ (không bị ban) → PENDING 12, aiVerified=false | Chủ report | Report không bị ban | Enqueue ANALYZE_REPORT. Nếu `isVerify` đã true thì report bị kẹt (99) | `addReportImages()` |
+| (status không đổi), aiVerified=false | Chủ report thêm ảnh | Report không bị ban | Outbox `REPORT_SUBMITTED` attempt mới + `ANALYZE_REPORT` (BR-105). Trước specs/006 P10 status về PENDING và report đã duyệt bị kẹt | `addReportImages()` |
 | `report_verifications.status`: RUNNING → COMPLETED \| FAILED | Worker xác minh | Một dòng mỗi `(reportId, attempt)` (unique). Giao lặp: dòng đã xong thì bỏ qua, còn RUNNING thì chạy tiếp; bước chốt chỉ cập nhật khi còn RUNNING. FAILED → outbox `REPORT_SUBMITTED{attempt+1}` (tối đa 3) | — | `verification.orchestrator.ts > startAttempt(), finalize(), failAttempt()` |
 | aiVerified false → true | Worker | Có kết quả predict | aiRecommendation, ai_analysis_logs | `report-ai-analysis.service.ts > analyzeReport()` |
 | → xoá mềm | Chủ report | Report không bị ban | — | `deleteReport()` |

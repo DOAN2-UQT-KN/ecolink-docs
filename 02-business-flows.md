@@ -615,10 +615,10 @@ sequenceDiagram
 - Chỉ **chủ report**. Admin bị cấm. Report đã bị ban không sửa được (BR-104).
 - Các thao tác:
   - `PUT /reports/:id`: cập nhật field và enqueue dịch lại.
-  - `POST /reports/:id/media {imageUrls}`: thêm ảnh, đặt lại `status=PENDING` và `aiVerified=false`, enqueue ANALYZE_REPORT cho ảnh mới.
+  - `POST /reports/:id/media {images[{url, captureId?}]}` (legacy `imageUrls`): thêm ảnh, **giữ nguyên status**, `aiVerified=false`; outbox `REPORT_SUBMITTED` lần xác minh mới (F19b) và `ANALYZE_REPORT` cho ảnh mới (BR-105).
   - `DELETE /reports/:id/media/:mediaFileId`: xoá mềm ảnh.
   - `DELETE /reports/:id`: xoá mềm report.
-- **Bug:** thêm ảnh vào report đã được duyệt làm report kẹt ở PENDING, vì verify sẽ là no-op khi `isVerify=true` (99).
+- Lỗi cũ "thêm ảnh vào report đã duyệt làm report kẹt ở PENDING" đã sửa ở specs/006 P10 (status không đổi).
 - **File:** `report.service.ts > updateReport(), addReportImages(), deleteReportMediaFile(), deleteReport(), assertReporterMayEditReport()`.
 
 ### F21 — Admin duyệt hoặc ban report
