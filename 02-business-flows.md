@@ -585,12 +585,12 @@ sequenceDiagram
 - **Luồng chính:**
   1. Outbox relay đẩy `REPORT_SUBMITTED{reportId, attempt}` lên `report-verification`.
   2. `ReportVerificationWorker` → `verification.orchestrator.ts > handle()`: tạo `report_verifications` RUNNING cho `(reportId, attempt)` (đã xong → bỏ qua; còn RUNNING → chạy tiếp).
-  3. Chạy 3 check song song (DUPLICATE, TRUST, CONTEXT), mỗi check timeout 10 s (`verification_configs.pipeline`); quá hạn / lỗi → check FAILED.
+  3. Chạy 3 check song song (DUPLICATE, TRUST, CONTEXT), mỗi check timeout 20 s (`verification_configs.pipeline` 2.4.0; 10 s ở 2.3.0); quá hạn / lỗi → check FAILED.
   4. Risk Engine (`risk-engine.ts > assess()`, cấu hình `engine` rules@3.0.0): điểm < 0.30 ACCEPT, < 0.70 REVIEW, còn lại REJECT; DUPLICATE lỗi → tối thiểu REVIEW.
   5. Một transaction: verification COMPLETED, 3 dòng `verification_checks`, report 12 → 21 / 9 / 2 (chỉ khi còn 12), `latestVerificationId`, outbox `REPORT_VERIFIED`.
   6. Relay xử lý `REPORT_VERIFIED` tại chỗ → thông báo REPORT_APPROVED / REPORT_IN_REVIEW / REPORT_REJECTED nếu status đổi.
 - **Luồng lỗi:** không check nào hoàn tất → attempt FAILED, outbox `REPORT_SUBMITTED{attempt+1}`; hết 3 attempt → report 9 + `REPORT_VERIFIED{exhausted}`. Lỗi DB giữa chừng → attempt FAILED và lên lịch lần sau, hoặc SQS giao lại và chạy tiếp từ RUNNING.
-- DUPLICATE: ai-service so ảnh với mọi user (pHash toàn cục ≤ 6 → pHash ứng viên 500 m / 7 ngày ≤ 10 → ORB ứng viên), có lật gương; xem `docs/services/ai-service.md` mục 6.
+- DUPLICATE: ai-service so ảnh với mọi user (pHash toàn cục ≤ 6 → pHash ứng viên 500 m / 7 ngày ≤ 10 → ORB ứng viên), có lật gương; không khớp thì ảnh thư viện được tìm ngược trên internet (signal `internet`, BR-121, tắt mặc định); xem `docs/services/ai-service.md` mục 6.
 - TRUST: nguồn ảnh, lịch sử bị từ chối 90 ngày, tuổi tài khoản (BR-119). Khi client chưa gửi `capture_id`, mọi ảnh là GALLERY nên signal `capture` luôn 0.6 (TRUST cộng khoảng 0.3 cho mọi report).
 - CONTEXT: category có hợp địa điểm không, tra Goong qua cache ô lưới (BR-120). Chỉ chạy khi `CONTEXT_CHECK_ENABLED=true`; tắt thì NOT_AVAILABLE và engine chỉ dùng DUPLICATE + TRUST. Form gợi ý category qua `GET /reports/context` (spec 007 US5).
 - **File:** `INC/modules/verification/verification.orchestrator.ts`, `run-check.ts`, `risk-engine.ts`, `checks/*`, `report-verified.publisher.ts`, `INC/queue/worker/report-verification-worker.ts`.

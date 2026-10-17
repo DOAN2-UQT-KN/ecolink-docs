@@ -45,7 +45,7 @@ ai-service/app/
 └─ db/                     # models.py (SQLAlchemy), session.py (async engine, init_db)
 ```
 
-Không có Alembic/migration: bảng được tạo bằng `Base.metadata.create_all` khi khởi động nếu `AUTO_CREATE_DB_TABLES` bật (`AI/app/db/session.py > init_db()`).
+Không có Alembic: bảng được tạo bằng `Base.metadata.create_all` khi khởi động nếu `AUTO_CREATE_DB_TABLES` bật, rồi chạy các file SQL idempotent trong `app/db/migrations/` (`AI/app/db/session.py > init_db()`).
 
 ## 3. Cơ chế xác thực & middleware
 
@@ -79,7 +79,7 @@ Gateway chỉ proxy `/api/v1/chat/*` (→ `/api/v1/chat/*`, `parseReqBody: false
 | Method | Path | Auth | Role | Request | Response | Mã lỗi | Handler |
 |---|---|---|---|---|---|---|---|
 | POST | `/internal/v1/translate` | `x-internal-api-key` | Service nội bộ | `{ content: string }` (khác `""`) | Giống `/api/v1/chat/translate` | `400`; `401`; `500` (RuntimeError hoặc lỗi bất ngờ, detail `"<ExceptionType>: <msg>"`) | `internal/router.py > internal_translate()` |
-| POST | `/internal/v1/verification/duplicate` | `x-internal-api-key` | incident-service (worker xác minh) | `{ report_id, user_id?, attempt, latitude?, longitude?, created_at, category, media[{media_id, report_media_file_id, url}], config{version, phash_global_max, phash_candidate_max, candidate_radius_m, candidate_days, orb_min_inliers, orb_min_inlier_ratio, risk{…}} }` | Luôn 200 với một `CheckResult` snake_case (`check: DUPLICATE`, `status`, `risk`, `reasons`, `signals[phash, orb, internet]`, `evidence{candidates_scanned, images_failed, match}`, `error?`, `duration_ms`); lỗi xử lý → `status: FAILED` (`DOWNLOAD_FAILED` / `ERROR`) | `401`; `422` body sai | `internal/router.py > verification_duplicate()` → `verification/duplicate_check/service.py > run_duplicate_check()` |
+| POST | `/internal/v1/verification/duplicate` | `x-internal-api-key` | incident-service (worker xác minh) | `{ report_id, user_id?, attempt, latitude?, longitude?, created_at, category, media[{media_id, report_media_file_id, url, capture_source (LIVE\|GALLERY, mặc định GALLERY)}], config{version, phash_global_max, phash_candidate_max, candidate_radius_m, candidate_days, orb_min_inliers, orb_min_inlier_ratio, risk{…}, web?{enabled, daily_limit, max_images, batch_size, max_candidates, max_results, call_timeout_ms, total_timeout_ms, fetch_timeout_ms, fetch_max_bytes, cache_ttl_days, blocked_hosts, blocked_url_prefixes}} }` (thiếu `web` = signal `internet` tắt) | Luôn 200 với một `CheckResult` snake_case (`check: DUPLICATE`, `status`, `risk`, `reasons`, `signals[phash, orb, internet]`, `evidence{candidates_scanned, images_failed, match, web?}`, `error?`, `duration_ms`); lỗi xử lý → `status: FAILED` (`DOWNLOAD_FAILED` / `ERROR`) | `401`; `422` body sai | `internal/router.py > verification_duplicate()` → `verification/duplicate_check/service.py > run_duplicate_check()` |
 
 ### 4.3 Recommendation (`AI/app/recommendation/router.py`), gateway không proxy
 
@@ -151,11 +151,19 @@ Gọi ra OpenAI (hoặc provider tương thích): `chat.completions.create` ở 
 1. pHash ≤ `phash_global_max` (6) trên **toàn bộ** corpus, tính trong Postgres bằng `bit_count((phash_int # q)::bit(64))` (`corpus.py > SqlCorpus.find_global_phash()`); risk `phash_strict` (0.9), reason `DUP_NEAR_IMAGE_MATCH`.
 2. pHash ≤ `phash_candidate_max` (10) trên ứng viên trong `candidate_radius_m` (500 m) và `candidate_days` (7 ngày) (lọc hộp bao trong SQL + haversine trong Python); risk `phash_loose` (0.75).
 3. ORB + RANSAC (ảnh gốc và bản lật) trên cùng tập ứng viên, cần ≥ `orb_min_inliers` (25) inlier và tỉ lệ ≥ `orb_min_inlier_ratio` (0.3); risk `orb` (0.7), reason `DUP_FEATURE_MATCH`.
-4. `internet`: luôn `NOT_AVAILABLE`.
+4. `internet` (specs/011, `duplicate_check/internet.py > run_internet_signal()`): chỉ chạy khi 1–3 không khớp. Lấy ảnh `capture_source = GALLERY` (tối đa `max_images` = 10, theo thứ tự ảnh), chia lô `batch_size` = 3 ảnh chạy song song; lô sau chỉ chạy khi lô trước không khớp. Mỗi ảnh:
+   - tra `ai_web_detection_cache` theo pHash (còn hạn `cache_ttl_days` = 30 ngày) → có thì không gọi Vision;
+   - không có cache: tăng `ai_web_detection_usage` của ngày hiện tại (giờ Việt Nam) **trước** khi gọi; vượt `daily_limit` → signal `NOT_AVAILABLE`;
+   - gọi Google Cloud Vision `WEB_DETECTION` (`vision.py`, REST, API key, chỉ gửi bytes ảnh, timeout `call_timeout_ms` = 4 s, `max_results` = 20);
+   - lọc ứng viên (`filter_candidates()`): `fullMatchingImages` trước `partialMatchingImages`, bỏ `visuallySimilarImages`, bỏ URL không https, URL thuộc `blocked_hosts` (cả subdomain) hoặc `blocked_url_prefixes` (thư mục Cloudinary của Ecolink, incident-service gửi), khử trùng, tối đa `max_candidates` = 5; lưu vào cache (không lưu ảnh, không lưu kết luận);
+   - tải ứng viên qua `safe_fetch.py > SafeFetcher` (chống SSRF: chỉ https cổng 443, mọi IP phân giải phải `is_global`, kiểm lại sau mỗi redirect (tối đa 2) và kiểm IP peer đã kết nối trước khi đọc body; không cookie / proxy env; chỉ `image/*`; ≤ `fetch_max_bytes` = 5 MB, `fetch_timeout_ms` = 2 s);
+   - đo lại: pHash ≤ `phash_candidate_max` (min với bản lật) rồi ORB + RANSAC cùng ngưỡng tầng 3. Ảnh web chỉ dùng trong bộ nhớ.
 
-Report đã từ chối / xoá bị loại qua incident `POST /internal/v1/reports/inactive-ids`. Report không có toạ độ chỉ chạy tầng 1. Ảnh không khớp được upsert vào corpus (kèm lat/lng/created_at/category); ảnh khớp thì không; lỗi upsert chỉ log. Phần CPU chạy bằng `run_in_threadpool`, DB `await` trực tiếp trên session của request (không dùng `run_coro`).
+   Kết quả: khớp → `COMPLETED`, risk `risk.internet` (0.85), reason `DUP_WEB_IMAGE_MATCH`, `evidence.match{method: "internet", image_index, match_type, verified_by, phash_distance|inliers, flipped, source_url, page_url, page_title}` (lô có nhiều ảnh khớp thì lấy ảnh đứng trước). Không khớp → `COMPLETED` risk 0. Lỗi Vision / bộ đếm, quá `total_timeout_ms` (8 s) cho cả signal, hoặc có full match mà không tải được ảnh nào (ghi `evidence.web.candidates`) → `FAILED` **chỉ ở signal này**, check vẫn `COMPLETED` với kết quả 1–3. Tắt (`web` thiếu / `enabled=false`) hoặc thiếu `GOOGLE_VISION_API_KEY` → `NOT_AVAILABLE`; tầng 1–3 khớp, không có ảnh GALLERY hoặc check lỗi tải ảnh → `SKIPPED`. `evidence.web{status, gallery_sent, cache_hit, vision_candidates, after_filter, downloaded}` ghi mỗi lần signal chạy.
 
-**Migration**: `init_db()` chạy `create_all` rồi `app/db/migrations/__init__.py > run_migrations()` (mọi file `*.sql`, idempotent; `001_corpus_geo_phash_int.sql` thêm cột corpus, xoá dòng SHA256, backfill `phash_int`). **Backfill** một lần trước khi bật cờ: `python -m scripts.backfill_corpus [--dry-run]` (geo/category qua incident `POST /internal/v1/reports/geo-by-ids`).
+Report đã từ chối / xoá bị loại qua incident `POST /internal/v1/reports/inactive-ids`. Report không có toạ độ chỉ chạy tầng 1. Ảnh không khớp được upsert vào corpus (kèm lat/lng/created_at/category); ảnh khớp (kể cả khớp internet) thì không; lỗi upsert chỉ log. Phần CPU chạy bằng `run_in_threadpool`, DB `await` trực tiếp trên session của request (không dùng `run_coro`).
+
+**Migration**: `init_db()` chạy `create_all` rồi `app/db/migrations/__init__.py > run_migrations()` (mọi file `*.sql`, idempotent; `001_corpus_geo_phash_int.sql` thêm cột corpus, xoá dòng SHA256, backfill `phash_int`; `002_web_detection.sql` tạo `ai_web_detection_cache` và `ai_web_detection_usage`). **Backfill** một lần trước khi bật cờ: `python -m scripts.backfill_corpus [--dry-run]` (geo/category qua incident `POST /internal/v1/reports/geo-by-ids`).
 
 ### Luồng chat SSE (`AI/app/chat/service.py > stream_chat_turn()`)
 
@@ -212,12 +220,14 @@ System prompt `translation_assistant` → OpenAI với `response_format=json_obj
 | PostgreSQL (SQLAlchemy async + asyncpg) | Lưu hội thoại, message, chat media | `AI/app/db/session.py` |
 | Nơi host ảnh (client tự upload, ví dụ Cloudinary theo docstring) | ai-service chỉ lưu URL, không upload | `AI/app/db/models.py > AiChatMedia`, `AI/app/chat/router.py > register_chat_media()` |
 | Datadog (`ddtrace`) | APM | `AI/app/main.py` |
+| Google Cloud Vision API (`WEB_DETECTION`, REST, API key) | Signal `internet` của DuplicateCheck: tìm ảnh ngược. Tính phí theo ảnh (1000 ảnh đầu mỗi tháng miễn phí); chỉ gửi bytes ảnh thư viện | `AI/app/verification/duplicate_check/vision.py` |
+| Các trang web bất kỳ (URL ảnh do Vision trả về) | Tải ảnh ứng viên để đo lại, qua `SafeFetcher` | `AI/app/verification/duplicate_check/safe_fetch.py` |
 
 Thư viện: `fastapi 0.115.6`, `uvicorn 0.34.0`, `sqlalchemy[asyncio] 2.0.36`, `asyncpg 0.30.0`, `pydantic-settings 2.7.0`, `openai 1.59.7`, `PyJWT 2.10.1`, `httpx 0.28.1`, `ddtrace 4.10.5` (`AI/requirements.txt`).
 
 ## 8. Biến môi trường
 
-Service không có `.env.example`; danh sách dưới đây lấy từ `AI/app/config.py` và tên biến trong `.env`.
+Danh sách dưới đây lấy từ `AI/app/config.py` và `AI/.env.example`.
 
 | Biến | Ý nghĩa | Mặc định trong code |
 |---|---|---|
@@ -230,6 +240,7 @@ Service không có `.env.example`; danh sách dưới đây lấy từ `AI/app/c
 | `AUTO_CREATE_DB_TABLES` | Chạy `create_all` khi khởi động | `True` |
 | `CORS_ORIGIN` | Origin CORS | `*` |
 | `INCIDENT_API_BASE_URL` | Base URL incident-service cho tool | `http://localhost:3001` |
+| `GOOGLE_VISION_API_KEY` | API key Google Cloud Vision (nên giới hạn chỉ cho Vision API) cho signal `internet`; trống → signal `NOT_AVAILABLE`. Dùng API key thay service account (shortcut ghi trong `config.py`) | `""` |
 | `DD_SERVICE`, `DD_ENV`, `DD_VERSION`, `DD_LOGS_INJECTION` (+ `DD_AGENT_HOST`) | Datadog (`setdefault` trong `main.py`) | `ai-service`, `local`, `dev`, `true` |
 | `SQS_AI_ANALYSIS_QUEUE_URL`, `AWS_REGION`, `AWS_SQS_ENDPOINT`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | Có trong `.env` nhưng **không được code đọc** (`extra="ignore"`) | — |
 
