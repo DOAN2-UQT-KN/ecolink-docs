@@ -592,7 +592,7 @@ sequenceDiagram
 - **Luồng lỗi:** không check nào hoàn tất → attempt FAILED, outbox `REPORT_SUBMITTED{attempt+1}`; hết 3 attempt → report 9 + `REPORT_VERIFIED{exhausted}`. Lỗi DB giữa chừng → attempt FAILED và lên lịch lần sau, hoặc SQS giao lại và chạy tiếp từ RUNNING.
 - DUPLICATE: ai-service so ảnh với mọi user (pHash toàn cục ≤ 6 → pHash ứng viên 500 m / 7 ngày ≤ 10 → ORB ứng viên), có lật gương; không khớp thì ảnh thư viện được tìm ngược trên internet (signal `internet`, BR-121, tắt mặc định); xem `docs/services/ai-service.md` mục 6.
 - TRUST: nguồn ảnh, lịch sử bị từ chối 90 ngày, tuổi tài khoản (BR-119). Khi client chưa gửi `capture_id`, mọi ảnh là GALLERY nên signal `capture` luôn 0.6 (TRUST cộng khoảng 0.3 cho mọi report).
-- CONTEXT: category có hợp địa điểm không, tra Goong qua cache ô lưới (BR-120). Chỉ chạy khi `CONTEXT_CHECK_ENABLED=true`; tắt thì NOT_AVAILABLE và engine chỉ dùng DUPLICATE + TRUST. Form gợi ý category qua `GET /reports/context` (spec 007 US5).
+- CONTEXT: category có hợp địa điểm không, đo khoảng cách tới đối tượng OpenStreetMap thuộc lớp của luật trong PostGIS, không gọi dịch vụ ngoài (BR-120); dữ liệu nạp hằng tuần bằng `npm run osm:import` (BR-122). Chỉ chạy khi `CONTEXT_CHECK_ENABLED=true`; tắt thì NOT_AVAILABLE và engine chỉ dùng DUPLICATE + TRUST. Form gợi ý category qua `GET /reports/context` (spec 007 US5).
 - **File:** `INC/modules/verification/verification.orchestrator.ts`, `run-check.ts`, `risk-engine.ts`, `checks/*`, `report-verified.publisher.ts`, `INC/queue/worker/report-verification-worker.ts`.
 
 ```mermaid

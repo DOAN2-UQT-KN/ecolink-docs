@@ -95,7 +95,7 @@ flowchart LR
     SMTP["SMTP"]
     FB["Facebook Graph API"]
     DD["Datadog"]
-    GOONG["Goong REST<br/>(Place, Geocode)"]
+    GEOFAB["Geofabrik<br/>(bản trích OSM Việt Nam)"]
   end
 
   WEB -->|REST + SSE| GW
@@ -108,7 +108,7 @@ flowchart LR
   RW --- RDB
   AI --- AIDB
 
-  INC -->|ContextCheck, gợi ý category<br/>server-side key| GOONG
+  INC -->|osm:import hằng tuần;<br/>ContextCheck đọc PostGIS| GEOFAB
   INC -->|enqueue| Q1 & Q2
   Q1 --> INC
   Q2 --> INC
