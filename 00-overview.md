@@ -27,10 +27,10 @@ Ecolink là nền tảng cộng đồng về môi trường. Code thể hiện c
 
 - **Báo cáo điểm rác/ô nhiễm (report/incident):** người dùng gửi ảnh, toạ độ và mức độ nghiêm trọng. Hệ thống dùng AI phân tích ảnh và sinh gợi ý xử lý. Admin duyệt hoặc ban report (`incident-service/src/modules/report`).
 - **Tổ chức (organization):** người nộp lập **đơn đăng ký** (xác thực email bằng OTP, lưu nháp, kèm giấy tờ pháp lý và danh sách owner). Mỗi owner tự xác nhận qua email, rồi admin thẩm định; duyệt thì hệ thống tạo tổ chức và gắn vai owner cho từng người (tổ chức **không** có tài khoản đăng nhập riêng). Tổ chức có thể được gắn **Blue Tick** (`trustTier = VERIFIED`) (`incident-service/src/modules/organization_application`).
-- **Chiến dịch (campaign):** owner hoặc quản lý chiến dịch của tổ chức tạo bản nháp chiến dịch dọn dẹp với 1–5 điểm tập kết, mỗi điểm gom các report cần xử lý, rồi gửi duyệt (report bị khoá từ lúc này). Admin duyệt (chiến dịch thành "Sắp diễn ra", tự chuyển "Đang diễn ra" khi tới ngày đầu), yêu cầu chỉnh sửa hoặc chặn; chờ duyệt quá hạn thì hết hạn. Tình nguyện viên đăng ký theo ca (có hiệu lực ngay, không cần duyệt) và điểm danh vào / ra theo từng ca (QR động đổi mỗi 10 phút; quét ngoài 50 m quanh điểm tập trung vẫn được ghi nhưng gắn cờ để người phụ trách / quản lý loại). Sau mỗi ca, người phụ trách nộp kết quả ca (điểm rác đã xử lý kèm ảnh trước / sau upload qua server để chấm EXIF và vị trí ghim, ảnh hoạt động TNV đóng góp, mô tả, khối lượng); ca chỉ "Kết thúc" khi có kết quả và có thể kết thúc sớm. Khi mọi ca đang bật đã Kết thúc, manager gửi hoàn thành; kết quả được **xác thực 3 lớp**: chấm ảnh tự động từng điểm rác "Đã sạch", rồi người báo cáo ban đầu xác nhận và cộng đồng bỏ phiếu có trọng số trong 72 giờ **theo từng điểm tập trung**; hệ thống quyết định từng điểm tập trung rồi tự hoàn thành hoặc từ chối chiến dịch (chỉ mở lại các ca đã nộp điểm rác chưa đạt); admin chỉ xử lý điểm tập trung bị gắn cờ và chiến dịch được chuyển cho admin. Hoàn thành thì người có ca điểm danh đủ nhận **điểm xanh** theo tỉ lệ ca (`incident-service/src/modules/campaign`).
+- **Chiến dịch (campaign):** owner hoặc quản lý chiến dịch của tổ chức tạo bản nháp chiến dịch dọn dẹp với 1–5 điểm tập kết, mỗi điểm gom các report cần xử lý, rồi gửi duyệt (report bị khoá từ lúc này). Admin duyệt (chiến dịch thành "Sắp diễn ra", tự chuyển "Đang diễn ra" khi tới ngày đầu), yêu cầu chỉnh sửa hoặc chặn; chờ duyệt quá hạn thì hết hạn. Tình nguyện viên đăng ký theo ca (có hiệu lực ngay, không cần duyệt) và điểm danh vào / ra theo từng ca (QR động đổi mỗi 10 phút; quét ngoài 50 m quanh điểm tập trung vẫn được ghi nhưng gắn cờ để người phụ trách / quản lý loại). Sau mỗi ca, người phụ trách nộp kết quả ca (điểm rác đã xử lý kèm ảnh trước / sau upload qua server để chấm EXIF và vị trí ghim, ảnh hoạt động TNV đóng góp, mô tả, khối lượng); ca chỉ "Kết thúc" khi có kết quả và có thể kết thúc sớm. Khi mọi ca đang bật đã Kết thúc, manager gửi hoàn thành; kết quả được **xác thực 3 lớp**: chấm ảnh tự động từng điểm rác "Đã sạch", rồi người báo cáo ban đầu xác nhận và cộng đồng bỏ phiếu có trọng số trong 72 giờ **theo từng điểm tập trung**; hệ thống quyết định từng điểm tập trung rồi tự hoàn thành hoặc từ chối chiến dịch (chỉ mở lại các ca đã nộp điểm rác chưa đạt); admin chỉ xử lý điểm tập trung bị gắn cờ và chiến dịch được chuyển cho admin. Hoàn thành thì incident-service gửi số ca đủ điều kiện / số ca đã đăng ký của từng người; reward-service tính **điểm xanh** theo tỉ lệ ca và quy tắc điểm đang hiệu lực (`incident-service/src/modules/campaign`).
 - **SOS:** yêu cầu khẩn cấp phát tại một ca đang chạy của chiến dịch, theo 3 loại (Nhân lực / Dụng cụ, Rác nguy hại, Y tế). Báo ngay cho đội của ca, rồi theo mức ưu tiên tới TNV "Sẵn sàng hỗ trợ SOS" ở gần, tổ chức lân cận và admin; người nhận bấm "Tôi tới giúp" và có bộ đếm người đang đến; job leo thang, hết hạn (`incident-service/src/modules/sos`).
 - **Vote và lưu (bookmark)** cho report và campaign.
-- **Điểm thưởng và gamification:** điểm xanh, ví SP có hạn dùng, điểm xếp hạng CRP/VRP theo season, bảng xếp hạng, badge, đổi quà (`reward-service`).
+- **Điểm thưởng và gamification:** điểm xanh (mức điểm do admin đặt ở **quy tắc điểm** — hoàn thành chiến dịch, mốc upvote report, report hoàn thành — có lịch sử thay đổi), ví SP có hạn dùng, điểm xếp hạng CRP/VRP theo season, bảng xếp hạng, badge, đổi quà (`reward-service`).
 - **Thông báo** in-app và email (`notification-service`).
 - **Đa ngôn ngữ vi/en:** nội dung người dùng nhập được dịch tự động bằng LLM (`translation-worker.md`).
 - **Trợ lý AI (chat):** chatbot có tool để tạo report giúp người dùng (`ai-service`).
@@ -39,7 +39,7 @@ Ecolink là nền tảng cộng đồng về môi trường. Code thể hiện c
 
 | Actor | Nhận diện trong code | Bằng chứng |
 |---|---|---|
-| Khách (chưa đăng nhập) | Không có JWT | Chỉ gọi được các route public: đăng ký, đăng nhập, đơn đăng ký tổ chức, danh sách quà, difficulty, leaderboard… |
+| Khách (chưa đăng nhập) | Không có JWT | Chỉ gọi được các route public: đăng ký, đăng nhập, đơn đăng ký tổ chức, danh sách quà, difficulty (deprecated), leaderboard… |
 | Người dùng (citizen / volunteer) | Tài khoản cá nhân, role `USER` | `identity-service/src/modules/auth/auth.service.ts > signup()` |
 | Admin | Claim JWT `role` so sánh không phân biệt hoa thường với `"admin"` | Ví dụ `identity-service/src/modules/user/user.controller.ts > requireAdmin()`, `reward-service/src/middleware/require-admin.middleware.ts`, các controller của incident |
 | Owner tổ chức | **Không phải role identity.** User thường có membership vai `LEGAL_REPRESENTATIVE` / `OWNER` ở `organization_members` (incident), được gắn khi admin duyệt đơn sau khi owner tự xác nhận. Tổ chức không có tài khoản đăng nhập | `incident-service/src/modules/organization/organization-membership.service.ts`, `organization_member.repository.ts > isOwner()`; thiết kế ở [ORG_OWNERSHIP_FLOW.md](ORG_OWNERSHIP_FLOW.md) |
@@ -164,10 +164,10 @@ Không có gRPC, WebSocket hay message broker nào khác. Không có service nà
 | Tên | Kiểu | Producer | Consumer | Tóm tắt payload |
 |---|---|---|---|---|
 | `ANALYZE_REPORT` | SQS job | incident `report.service.ts > createReport()/addReportImages()` | incident `ReportAnalysisWorker` | `{reportId, reportMediaFileIds[]}` |
-| `TRANSLATE_TEXT` | SQS job | incident (report, organization, campaign), reward (gift, difficulty) | `TranslationWorker` trong chính service đó | `{resourceType, resourceId, translations[]}` |
-| `REPORT_COMPLETION_GREEN_POINTS` | Outbox → SQS | incident `adminMarkReportDone()` | reward `RewardIntakeWorker` | `{reportId, userId, points}` |
+| `TRANSLATE_TEXT` | SQS job | incident (report, organization, campaign), reward (gift, difficulty — deprecated, bỏ ở đợt dọn dẹp) | `TranslationWorker` trong chính service đó | `{resourceType, resourceId, translations[]}` |
+| `REPORT_COMPLETION_GREEN_POINTS` | Outbox → SQS | incident `adminMarkReportDone()` (report đóng do chiến dịch hoàn thành thì không phát) | reward `RewardIntakeWorker` | `{reportId, userId}`; số điểm = `reportCompletionPoints` của quy tắc điểm (0 = tắt) |
 | `REPORT_VOTE_MILESTONE_GREEN_POINTS` | Outbox → SQS | incident `vote.service.ts` | reward | `{reportId, reportCreatorUserId, voteCount}` |
-| `CAMPAIGN_COMPLETION_GREEN_POINTS` | Outbox → SQS | incident `campaign_verification/verification-decision.service.ts > completeCampaign()` (hệ thống hoặc admin duyệt) | reward | `{campaignId, credits:[{userId, points}]}` |
+| `CAMPAIGN_COMPLETION_GREEN_POINTS` | Outbox → SQS | incident `campaign_verification/verification-decision.service.ts > completeCampaign()` (hệ thống hoặc admin duyệt) | reward | `{campaignId, participants:[{userId, eligibleShifts, registeredShifts}]}`; reward tính điểm lúc cộng. Payload cũ `{campaignId, credits:[{userId, points}]}` vẫn nhận trong một bản phát hành |
 | `CAMPAIGN_FACEBOOK_RECOGNITION` | Outbox → SQS | [CHƯA HOÀN THIỆN] emit bị comment | reward | — |
 | `ORG_OWNER_ONBOARD` | Outbox → handler in-process | incident `organization-application-admin.service.ts > approve()` (một event mỗi owner) | incident → identity `POST /internal/v1/users/:id/activation-token`, rồi notification (`ACCOUNT_ACTIVATION` hoặc `ORG_OWNER_ATTACHED`) | `{applicationId, candidateId, organizationId, organizationName, organizationSlug, userId, email, fullName, isLegalRep}` |
 | `SEND_NOTIFICATION` | SQS job | notification `POST /api/v1/notifications/jobs` | notification `NotificationSendWorker` | `{type, kind, userId?, payload?}` |
@@ -209,7 +209,7 @@ Bảng chỉ ghi tên biến và ý nghĩa, không ghi giá trị. Chi tiết c�
 | `GATEWAY_PUBLIC_URL` | gateway | URL công khai ghi vào OpenAPI |
 | `INTERNAL_IDENTITY_API_KEY` | identity (kiểm tra); incident, notification, reward (gửi) | Key cho `/internal/v1/*` của identity |
 | `INTERNAL_INCIDENT_API_KEY` | incident | Key cho `POST /api/v1/organizations` |
-| `INTERNAL_REWARD_API_KEY` | reward (kiểm tra); incident (gửi) | Key cho `/internal/v1/difficulties*` |
+| `INTERNAL_REWARD_API_KEY` | reward (kiểm tra); incident (gửi) | Key cho `/internal/v1/*` của reward (`/point-rules/campaign-completion`; `/difficulties*` deprecated) |
 | `INTERNAL_NOTIFICATION_API_KEY` | notification (kiểm tra); incident, identity (gửi) | Key cho `POST /api/v1/notifications/jobs` |
 | `INTERNAL_AI_API_KEY` | ai (kiểm tra); incident, reward (gửi) | Key cho `POST /internal/v1/translate` |
 | `INCIDENT_API_BASE_URL` | ai | URL incident dùng cho tool call |
@@ -242,7 +242,6 @@ Bảng chỉ ghi tên biến và ý nghĩa, không ghi giá trị. Chi tiết c�
 | `SOS_JOB_INTERVAL_MS`, `SOS_JOB_ENABLED` | incident (worker) | Chu kỳ job SOS (leo thang owner, mở rộng bán kính, hết hạn, chuyển admin; mặc định 60 giây) / `false` thì tắt |
 | `SOS_MAX_PER_HOUR` | incident | Số SOS tối đa / người / giờ trượt; không đặt hoặc `0` = không giới hạn (mặc định hiện tại), `3` = giá trị spec (BR-194) |
 | `SOS_MANPOWER_TTL_H` | incident | Số giờ SOS Nhân lực hết hạn (mặc định 4, kẹp 3–6) |
-| `REPORT_COMPLETION_GREEN_POINTS` | incident | Số điểm xanh khi report được đánh dấu hoàn thành (mặc định 0) |
 | `AI_PREDICT_URL` | incident | Endpoint model nhận diện rác |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` | notification | Gửi email (`SMTP_HOST` rỗng thì không gửi, chỉ lưu DB) |
 | `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `OPENAI_CHAT_MODEL` (mặc định `gpt-4o-mini`), `AUTO_CREATE_DB_TABLES` | ai | LLM |

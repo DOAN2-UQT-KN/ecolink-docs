@@ -54,7 +54,7 @@
 | F36 | Reward nhận event và cộng điểm | Điểm |
 | F37 | Đổi quà | Quà tặng |
 | F38 | Xử lý đơn đổi quà | Quà tặng |
-| F39 | Quản lý quà và mức độ khó (admin) | Quà tặng / Chiến dịch |
+| F39 | Quản lý quà và mức độ khó (admin; mức độ khó deprecated) | Quà tặng / Chiến dịch |
 | F40 | Xem điểm, lịch sử, bảng xếp hạng | Điểm |
 | F41 | Quản lý season và finalize season | Gamification |
 | F42 | Cấu hình rule điểm và badge | Gamification |
@@ -642,7 +642,7 @@ sequenceDiagram
 
 ### F22 — Admin đánh dấu report đã xử lý và cộng điểm
 - `PUT /reports/:id/mark-done` (admin):
-  - Trong 1 transaction: `status=COMPLETED(17)` và outbox `REPORT_COMPLETION_GREEN_POINTS {reportId, userId, points = env REPORT_COMPLETION_GREEN_POINTS (mặc định 0)}`, dedup theo reportId.
+  - Trong 1 transaction: `status=COMPLETED(17)` và outbox `REPORT_COMPLETION_GREEN_POINTS {reportId, userId}`, dedup theo reportId. Số điểm do reward-service quyết định lúc cộng (`reportCompletionPoints` của quy tắc điểm, mặc định 0 = tắt; F36).
   - Sau transaction: gửi thông báo `REPORT_STATUS {status: COMPLETED}` cho chủ report.
 - Không kiểm tra trạng thái nguồn. Report PENDING hoặc đã bị ban vẫn được COMPLETED (99).
 - Report cũng tự chuyển COMPLETED khi campaign chứa nó được duyệt hoàn thành (F34). Nhánh đó **không** phát outbox điểm cho report.
@@ -683,11 +683,10 @@ sequenceDiagram
 - **Actor:** thành viên có quyền `CAMPAIGN_CREATE` trong tổ chức (vai `LEGAL_REPRESENTATIVE`, `OWNER` hoặc `CAMPAIGN_MANAGER`) tạo nháp; người quản lý campaign (BR-159) gửi duyệt.
 - **Điều kiện tiên quyết:**
   - Tổ chức tồn tại và status 1 (BR-151); các giới hạn của tổ chức (BR-163).
-  - Difficulty có tier tương ứng ở reward (BR-152).
   - Report được chọn ở TODO và chưa thuộc campaign nào (BR-110).
 - **Luồng chính — tạo nháp:**
-  1. `/campaigns/create` (hoặc `?organizationId=<id>` từ tab campaign của trang tổ chức / `/campaigns/me`): nút "Tạo chiến dịch" (`CreateCampaignButton`) gọi `GET /api/v1/campaigns/create-eligibility?organizationId=` → `{canCreate, hidden, reasons[], isVerified, maxDifficulty, openCount/openLimit, reviewQueueCount/reviewQueueLimit}`; `hidden` thì ẩn nút, `!canCreate` thì khoá nút và hiện lý do. Form tải tổ chức, report TODO, thành viên tổ chức (chọn người phụ trách ca); upload banner lên Cloudinary.
-  2. "Lưu nháp": `POST /api/v1/campaigns {organizationId, title, description?, banner?, difficulty, contactName?, contactPhone?, safetyNotes?, requirements?, days[], meetingPoints[], shifts[]}`. Lịch là lưới ngày × điểm tập trung (spec 1.4): `days[]` = `{startAt, endAt}` (1–7 ngày); mỗi điểm `{name?, latitude, longitude, detailAddress?, radiusKm, reportIds[]}`; mỗi ca `{dayIndex, meetingPointIndex, gatherAt?, slots, leaderUserId?}` (0 suất = tắt; ô không gửi = tắt). `scheduleFromRequest()` sắp ngày theo giờ bắt đầu và điền đủ lưới.
+  1. `/campaigns/create` (hoặc `?organizationId=<id>` từ tab campaign của trang tổ chức / `/campaigns/me`): nút "Tạo chiến dịch" (`CreateCampaignButton`) gọi `GET /api/v1/campaigns/create-eligibility?organizationId=` → `{canCreate, hidden, reasons[], isVerified, openCount/openLimit, reviewQueueCount/reviewQueueLimit}`; `hidden` thì ẩn nút, `!canCreate` thì khoá nút và hiện lý do. Form tải tổ chức, report TODO, thành viên tổ chức (chọn người phụ trách ca); upload banner lên Cloudinary.
+  2. "Lưu nháp": `POST /api/v1/campaigns {organizationId, title, description?, banner?, contactName?, contactPhone?, safetyNotes?, requirements?, days[], meetingPoints[], shifts[]}`. Lịch là lưới ngày × điểm tập trung (spec 1.4): `days[]` = `{startAt, endAt}` (1–7 ngày); mỗi điểm `{name?, latitude, longitude, detailAddress?, radiusKm, reportIds[]}`; mỗi ca `{dayIndex, meetingPointIndex, gatherAt?, slots, leaderUserId?}` (0 suất = tắt; ô không gửi = tắt). `scheduleFromRequest()` sắp ngày theo giờ bắt đầu và điền đủ lưới.
   3. `campaign.service.ts > createCampaign()`:
      - `campaignEligibilityService.assertCanCreateDraft()` (quyền + tổ chức không bị khoá).
      - `campaignLifecycleService.assertReportsSelectable()` (report TODO, chưa thuộc campaign nào); người phụ trách các ca phải là thành viên active (`assertScheduleUsable()` → `campaignManagerService.assertAllMembers()`).
@@ -695,39 +694,36 @@ sequenceDiagram
   4. Enqueue `TRANSLATE_TEXT` (CAMPAIGN).
   5. Sửa nháp: `/campaigns/:id/edit` → `PUT /campaigns/:id` (F26).
 - **Luồng chính — gửi duyệt:** "Gửi duyệt" (hoặc "Nộp lại" khi NEEDS_REVISION) → `POST /api/v1/campaigns/:id/submit` → `campaign-lifecycle.service.ts > submit()`:
-  1. canManage; kiểm tier difficulty (ngoài transaction, gọi HTTP).
+  1. canManage. Gửi duyệt không gọi reward-service.
   2. Transaction Serializable:
-     - `campaignEligibilityService.assertCanSubmit()` kiểm lại giới hạn (BR-163).
+     - `campaignEligibilityService.assertCanSubmit()` kiểm lại giới hạn (BR-163); campaign đã từng được duyệt (`approvedAt`) thì bỏ qua bước này.
      - `validateCampaignForSubmit()` kiểm toàn bộ nội dung (BR-164); có lỗi → 400 `CAMPAIGN_INVALID` với `details[{field, code, message}]` liệt kê mọi lỗi.
      - `syncReportLocks()` khoá report 21 → 22 bằng compare-and-set (BR-169); bị campaign khác lấy trước → 409 `CAMPAIGN_REPORTS_TAKEN {reportIds}`.
      - Người tạo và người phụ trách các ca đang bật được upsert thành manager.
-     - `transitionCampaign()` event `submit` (4 → 12) hoặc `resubmit` (19 → 12); lưu `submittedAt`, `requirements` (đã thêm mặc định), `lastSubmittedSnapshot`; nộp lại thì diff với snapshot trước vào `campaign_status_logs.changes`.
+     - `transitionCampaign()` event `submit` (4 → 12) hoặc `resubmit` (19 → 12); lưu `submittedAt`, `requirements` (đúng như người tạo nhập), `lastSubmittedSnapshot`; nộp lại thì diff với snapshot trước vào `campaign_status_logs.changes`.
   3. Sau commit: `CAMPAIGN_PENDING_REVIEW` cho admin trong `CAMPAIGN_ADMIN_NOTIFY_USER_IDS`; `CAMPAIGN_CREATED` cho owner + manager (trừ người gửi; **không** gửi khi nộp lại). Thành viên thường chỉ nhận thông báo khi campaign được duyệt (F27).
 - **Luồng lỗi:**
   - 404 không có tổ chức / campaign; 403 `ORG_PERMISSION_DENIED` khi vai không có `CAMPAIGN_CREATE`; 403 `CAMPAIGN_CREATE_NOT_ALLOWED {reasons}`; 403 `CAMPAIGN_PERMISSION_DENIED` khi gửi duyệt mà không phải người quản lý.
-  - 400 difficulty không hợp lệ; 400 lịch không hợp lệ (ca trỏ tới ngày / điểm không có, trùng ô, gửi `startDate`); 422 `CAMPAIGN_MANAGER_NOT_MEMBER` (người phụ trách ca).
+  - 400 lịch không hợp lệ (ca trỏ tới ngày / điểm không có, trùng ô, gửi `startDate`); 422 `CAMPAIGN_MANAGER_NOT_MEMBER` (người phụ trách ca).
   - 400 `CAMPAIGN_INVALID`; 409 `CAMPAIGN_REPORTS_TAKEN`; 409 `CAMPAIGN_INVALID_TRANSITION` (gửi duyệt khi không ở 4 / 19, hoặc có người đổi status cùng lúc).
 - **Client:** lỗi `details` được gắn vào từng trường của form và hiện tóm tắt; `CAMPAIGN_REPORTS_TAKEN` tô các report cần bỏ (`FE/app/(pages)/(main)/campaigns/create/_components/CampaignForm.tsx`).
 - **Dữ liệu thay đổi:** `campaigns`, `campaign_managers`, `campaign_days`, `campaign_meeting_points`, `campaign_meeting_point_reports`, `campaign_shifts`, `campaign_status_logs`, `reports` (khi gửi duyệt), `background_jobs`.
-- **File:** `INC/modules/campaign/campaign.controller.ts > createCampaign, getCreateEligibility, submitCampaign`, `campaign.service.ts > createCampaign(), submitCampaign()`, `campaign-eligibility.service.ts`, `campaign-lifecycle.service.ts > submit(), syncReportLocks(), notifySubmitted()`, `campaign-submit-validation.ts > validateCampaignForSubmit()`, `campaign-state-machine.ts > transitionCampaign()`, `INC/modules/reward/reward-service.client.ts`.
+- **File:** `INC/modules/campaign/campaign.controller.ts > createCampaign, getCreateEligibility, submitCampaign`, `campaign.service.ts > createCampaign(), submitCampaign()`, `campaign-eligibility.service.ts`, `campaign-lifecycle.service.ts > submit(), syncReportLocks(), notifySubmitted()`, `campaign-submit-validation.ts > validateCampaignForSubmit()`, `campaign-state-machine.ts > transitionCampaign()`.
 
 ```mermaid
 sequenceDiagram
   actor O as Thành viên (LR / OWNER / CAMPAIGN_MANAGER)
   participant INC as incident
-  participant RW as reward
   participant Q as SQS
   participant NS as notification
   O->>INC: GET /campaigns/create-eligibility?organizationId
   INC-->>O: canCreate, hidden, reasons
   O->>INC: POST /api/v1/campaigns (lưu nháp)
   INC->>INC: assertCanCreateDraft
-  INC->>RW: GET /internal/v1/difficulties/level/:l
   INC->>INC: TX: campaign(4), manager, meeting points (report không khoá)
   INC->>Q: TRANSLATE_TEXT
   INC-->>O: 201
   O->>INC: POST /campaigns/:id/submit
-  INC->>RW: GET /internal/v1/difficulties/level/:l
   INC->>INC: TX Serializable: eligibility, validate, khoá report 21→22 (CAS), 4|19→12, log
   alt có lỗi
     INC-->>O: 400 CAMPAIGN_INVALID details / 409 CAMPAIGN_REPORTS_TAKEN
@@ -741,8 +737,8 @@ sequenceDiagram
 ### F26 — Sửa và xoá chiến dịch
 - **Sửa:** `PUT /campaigns/:id`, người quản lý campaign (người tạo, manager, hoặc LR / OWNER của tổ chức; đều phải còn là thành viên active — BR-159). Body **không** được có `status` (400). Trước khi duyệt (4 / 12 / 19) sửa được mọi trường, kể cả `meetingPoints` (thay toàn bộ), `managerIds` (đồng bộ, luôn giữ người tạo; mọi người phải là thành viên active, BR-155). Khi đang 12 / 19, khoá report đi theo điểm tập kết ngay (`syncReportLocks()`: report bị bỏ về TODO, report mới bị khoá, bị lấy mất → 409 `CAMPAIGN_REPORTS_TAKEN`) và diff được ghi log `EDIT` (`logCampaignEdit()`). Khi sửa **không enqueue dịch lại**.
 - **Sau khi duyệt (spec 3.5, BR-352..BR-355):** campaign đã từng được duyệt (`approvedAt`) ở UPCOMING 27, hoặc đang PENDING_REVIEW 12 / NEEDS_REVISION 19 sau một lần sửa, đi `campaign-post-approval-edit.ts > applyPostApprovalEdit()`: ngày / điểm tập trung khớp theo `id`, sửa tại chỗ (không `replaceSchedule`), nên đăng ký giữ nguyên.
-  1. Tự do: title, description, banner, contact*, safetyNotes, minVolunteersReason. Số người của ca: min / max / người phụ trách. Hai nhóm này lưu ngay, log `EDIT / edit`, không báo ai.
-  2. Quan trọng: difficulty, requirements, thêm / bớt / sửa điểm tập trung hoặc điểm rác, thêm / bớt ngày, đổi ngày giờ của ngày hoặc giờ của ca đã có (≥ now + 48h, chưa bắt đầu). Kiểm lại bằng rule gửi duyệt (bỏ `START_TOO_SOON` nếu ngày đầu không mới và không đổi giờ); UPCOMING → PENDING_REVIEW qua `edit_major` (log có `changes`, đặt lại `lastSubmittedSnapshot`); outbox `CAMPAIGN_UPDATED_NEEDS_REVIEW` cho mọi TNV còn đăng ký; admin nhận `CAMPAIGN_PENDING_REVIEW` (`isResubmission`). Ca của ngày / điểm bị bỏ bị xoá cùng đăng ký của nó; TNV của ca đó nhận `CAMPAIGN_SHIFT_CLOSED`.
+  1. Tự do: title, description, banner, contact*, safetyNotes. Số người của ca: min / max / người phụ trách. Hai nhóm này lưu ngay, log `EDIT / edit`, không báo ai.
+  2. Quan trọng: requirements, thêm / bớt / sửa điểm tập trung hoặc điểm rác, thêm / bớt ngày, đổi ngày giờ của ngày hoặc giờ của ca đã có (≥ now + 48h, chưa bắt đầu). Kiểm lại bằng rule gửi duyệt (bỏ `START_TOO_SOON` nếu ngày đầu không mới và không đổi giờ); UPCOMING → PENDING_REVIEW qua `edit_major` (log có `changes`, đặt lại `lastSubmittedSnapshot`); outbox `CAMPAIGN_UPDATED_NEEDS_REVIEW` cho mọi TNV còn đăng ký; admin nhận `CAMPAIGN_PENDING_REVIEW` (`isResubmission`). Ca của ngày / điểm bị bỏ bị xoá cùng đăng ký của nó; TNV của ca đó nhận `CAMPAIGN_SHIFT_CLOSED`.
   3. Đổi giờ ngày / ca đã bắt đầu → 409 `SHIFT_ALREADY_STARTED`; hạ min của ca đang bật về 0 → 422 `SHIFT_MIN_REQUIRED`; `managerIds` → 409 `CAMPAIGN_NOT_EDITABLE`.
   4. Trong lúc duyệt lại: TNV đã đăng ký vẫn xem được campaign và rời ca được; người mới không đăng ký được (409 `CAMPAIGN_NOT_REGISTRABLE`), campaign không công khai. Admin duyệt → UPCOMING (`approvedAt` giữ nguyên; không mời lại người dân; CAMPAIGN_APPROVED cho owner, manager, TNV còn đăng ký). Hết hạn duyệt khi tới ngày → EXPIRED như thường, TNV nhận `CAMPAIGN_REREVIEW_EXPIRED`.
 - **Đang diễn ra trở đi** (ACTIVE 1 và sau đó): `PUT /:id` luôn 409 `CAMPAIGN_NOT_EDITABLE`, kể cả trường tự do.
@@ -865,7 +861,7 @@ Spec -8 4.1. Điểm danh theo **từng ca**, check-in và check-out; thay QR th
 8. Loại / khôi phục (BR-368): người phụ trách ca hoặc người quản lý xem các dòng gắn cờ rồi `POST /campaigns/:id/shifts/:shiftId/attendance/:userId/exclude {reason}` (ghi `excludedAt`, `excludedBy`, `excludeReason`, log `attendance_excluded`) hoặc `.../restore` (xoá các cột đó, log `attendance_restored`); không có dòng → 404; campaign COMPLETED → 409 `CAMPAIGN_NOT_EDITABLE`. Dòng gắn cờ mà không bị loại vẫn được tính điểm (quyết định sản phẩm).
 - **Ý nghĩa:** một ca đủ điều kiện khi có check-out, thời gian có mặt trong giờ ca ≥ 60% độ dài ca và không bị loại (BR-365); điểm khi hoàn thành chia theo tỉ lệ ca đủ điều kiện / ca đã đăng ký (F34, BR-167).
 - Kết quả và trạng thái ca (spec -8 4.2): F31b. Xử lý chiến dịch quá ngày kết thúc (spec -8 4.4) **[CHƯA HOÀN THIỆN]**.
-- **File:** `INC/modules/campaign/campaign_attendance/shift-attendance.service.ts > openSession(), issueQr(), scan(), closeSession(), addManual(), setExcluded(), listForShift(), completionCredits()`, `shift-attendance-qr.ts > signShiftQr(), verifyShiftQr()`, `campaign_attendance.repository.ts`, `DC/campaign-lifecycle.ts` (hằng `CAMPAIGN_ATTENDANCE_*`), `FE/app/(pages)/(main)/campaigns/[id]/_components/ShiftAttendancePanel.tsx`, `CampaignAttendanceCheckInHandler.tsx`.
+- **File:** `INC/modules/campaign/campaign_attendance/shift-attendance.service.ts > openSession(), issueQr(), scan(), closeSession(), addManual(), setExcluded(), listForShift(), completionAttendance()`, `shift-attendance-qr.ts > signShiftQr(), verifyShiftQr()`, `campaign_attendance.repository.ts`, `DC/campaign-lifecycle.ts` (hằng `CAMPAIGN_ATTENDANCE_*`), `FE/app/(pages)/(main)/campaigns/[id]/_components/ShiftAttendancePanel.tsx`, `CampaignAttendanceCheckInHandler.tsx`.
 
 ```mermaid
 sequenceDiagram
@@ -1030,18 +1026,18 @@ sequenceDiagram
   - có điểm tập trung Rejected, đã bị từ chối 3 lần → giữ 7, `completionAwaitingAdmin = true`, báo admin `CAMPAIGN_COMPLETION_PENDING_ADMIN {reason: rejection_limit}`.
 - **Điểm tập trung bị Rejected** bất kỳ lúc nào: ghi `failedReportIds` (admin chọn; `layer1_fail` → điểm Layer 1 `fail`; `flag_timeout` → điểm bị downvote có trọng số chỉ ra, không có thì mọi điểm của vòng; BR-397) và báo `CAMPAIGN_MEETING_POINT_REJECTED {meetingPointName, reason, failedReports}` cho owner, người tạo, manager. Flagged quá 48h → Rejected "Admin không xử lý kịp" (BR-391).
 - **Admin xử lý điểm tập trung bị gắn cờ** (`CAMPAIGN_MEETING_POINT_FLAGGED`): mở `CompletionReviewDialog`, dữ liệu `GET /campaigns/:id/completion-review` gồm `verification.meeting_points` (từng điểm tập trung với các điểm rác và Layer 1 chi tiết, mọi phiếu kèm trọng số, ghi chú, ảnh và điểm rác bị chỉ ra `flagged_report_ids`), `awaiting_admin`, `awaiting_admin_reason`, `can_approve`. `PUT /campaigns/:id/verification/:meetingPointId/decision {decision: verify|reject, reason?, report_ids?}`: reject cần lý do (400 `VALIDATION_ERROR`) và ≥ 1 điểm rác chưa đạt của vòng (422 `MEETING_POINT_REJECT_REPORTS_REQUIRED`); chỉ điểm đang Flagged (409 `MEETING_POINT_NOT_FLAGGED`) (BR-392), rồi quyết định chiến dịch.
-- **Admin quyết định cả campaign** `PUT /campaigns/:id/completion-review {decision: approve|cancel, rejectReason?, difficulty?}` (BR-166): `reject` theo ca và `shiftIds` **đã bỏ**.
-  - **Approve** chỉ khi `completionAwaitingAdmin` (không thì 409 `CAMPAIGN_COMPLETION_NOT_AWAITING_ADMIN`); `difficulty` tuỳ chọn để chốt mức độ khó lần cuối. Báo `CAMPAIGN_DONE` và `CAMPAIGN_COMPLETION_APPROVED_BY_ADMIN` sau commit.
+- **Admin quyết định cả campaign** `PUT /campaigns/:id/completion-review {decision: approve|cancel, rejectReason?}` (BR-166): `reject` theo ca và `shiftIds` **đã bỏ**.
+  - **Approve** chỉ khi `completionAwaitingAdmin` (không thì 409 `CAMPAIGN_COMPLETION_NOT_AWAITING_ADMIN`); không còn chốt mức độ khó (không ghi `changes.difficulty`). Báo `CAMPAIGN_DONE` và `CAMPAIGN_COMPLETION_APPROVED_BY_ADMIN` sau commit.
   - **Cancel** (BR-379; cần lý do; luôn được): `cancel_by_admin` → CANCELLED (11), nhả mọi điểm rác, không cộng điểm; outbox `CAMPAIGN_CANCELLED` (`byAdmin`) tới TNV và đội.
 - **Hoàn thành** (dùng chung cho hệ thống và admin, `completeCampaign()`):
-  1. Lấy tier theo mức độ khó (đã chốt nếu admin duyệt) từ reward; `shift-attendance.service.ts > completionCredits()`: mỗi người có ≥ 1 ca đủ điều kiện (BR-365) nhận `round(tier.greenPoints × min(1, số ca đủ điều kiện / số ca đăng ký đang hiệu lực))`, 0 ca đăng ký tính là 1 (BR-167).
+  1. `verification-decision.service.ts > prepareCompletionPayout()` → `shift-attendance.service.ts > completionAttendance()`: mỗi người có ≥ 1 ca đủ điều kiện (BR-365) kèm `eligibleShifts` (số ca đủ điều kiện, ca có mặt mà không đăng ký vẫn tính) và `registeredShifts` (số ca đăng ký chưa rời). Incident-service **không tính điểm** và không gọi reward-service; reward-service tính lúc cộng (F36, BR-167).
   2. Transaction Serializable:
-     - campaign → COMPLETED (17), rejectReason=null, `completionAwaitingAdmin = false`, difficulty = mức đã chốt.
+     - campaign → COMPLETED (17), rejectReason=null, `completionAwaitingAdmin = false`.
      - Điểm rác `cleaned` trong submission → 17; `partial`, `unhandled` và điểm rác còn lại → TODO, bỏ `campaignId` (BR-168).
      - SOS còn sống → `resolved` / `handled`, `status = 17`; người đang trên đường → `cancelled` (BR-426).
-     - Outbox `CAMPAIGN_COMPLETION_GREEN_POINTS {campaignId, credits[]}` (nếu có người nhận), dedup theo campaignId.
-  3. `CAMPAIGN_DONE` tới mọi người đang đăng ký ca **cộng** mọi người được cộng điểm.
-  4. Relay đẩy event lên SQS `reward-intake`; reward cộng điểm (F36). Reward-service không phản hồi lúc lấy tier thì lần quyết định đó lỗi (log), lần sau (phiếu / job) thử lại.
+     - Outbox `CAMPAIGN_COMPLETION_GREEN_POINTS {campaignId, participants[{userId, eligibleShifts, registeredShifts}]}` (nếu có người có ca đủ điều kiện), dedup theo campaignId.
+  3. `CAMPAIGN_DONE` tới mọi người đang đăng ký ca **cộng** mọi người có ca đủ điều kiện.
+  4. Relay đẩy event lên SQS `reward-intake`; reward tính và cộng điểm (F36).
 - **[CHƯA HOÀN THIỆN]:** spec 5.4 (trang công khai kết quả, đánh giá, chia sẻ Facebook) chưa làm; outbox `CAMPAIGN_FACEBOOK_RECOGNITION` bị comment (F48). Khiếu nại sau khi bị từ chối chưa làm.
 - **File:** `INC/modules/campaign/campaign_verification/verification-decision.service.ts > latestRounds(), decideCampaign(), reject(), completeCampaign(), markAwaitingAdmin()`, `verification.service.ts > decide(), transitionPoint(), pointsForReview()`, `verification-rules.ts > failedReportsOf()`, `verification-jobs.ts`, `campaign.service.ts > adminReviewCampaignCompletion()` → `campaign_completion/completion.service.ts > review(), approve(), cancel()`, `campaign-lifecycle.service.ts > emitCancelledNotices()`, `INC/outbox/*`.
 
@@ -1057,13 +1053,13 @@ sequenceDiagram
   INC->>NS: CAMPAIGN_MEETING_POINT_FLAGGED → admin
   A->>INC: PUT /campaigns/:id/verification/:meetingPointId/decision verify
   INC->>INC: decideCampaign(): mọi điểm tập trung verified
-  INC->>RW: GET difficulty tier (greenPoints)
+  INC->>INC: prepareCompletionPayout(): eligibleShifts / registeredShifts từng người
   INC->>INC: TX Serializable: campaign=17, report cleaned=17 / còn lại→TODO, sos còn sống → resolved + outbox CAMPAIGN_COMPLETION_GREEN_POINTS
   INC->>NS: CAMPAIGN_DONE → volunteers, CAMPAIGN_RESULT_VERIFIED → đội
   INC-->>A: 200 {meeting_point, campaign_status}
   RL->>Q: publish envelope
   Q->>RW: RewardIntakeWorker
-  RW->>RW: green point + SP + VRP
+  RW->>RW: đọc quy tắc điểm (trong TX), tính điểm, green point + SP + VRP
 ```
 
 ### F35 — Submission kết quả chiến dịch
@@ -1086,15 +1082,21 @@ sequenceDiagram
   - `REPORT_VOTE_MILESTONE_GREEN_POINTS` (F23)
   - `CAMPAIGN_COMPLETION_GREEN_POINTS` (F34)
 - **Luồng:**
-  1. `RewardIntakeWorker` (2 instance) nhận message từ `SQS_REWARD_INTAKE_QUEUE_URL` → `greenPointService.applyQueuedJob` → strategy theo jobType → validate payload.
-  2. Transaction Serializable, cho mỗi credit:
-     - Insert `green_point_transactions`. Trùng (user, type, resource) thì bỏ qua (BR-240).
-     - Upsert `user_green_point_balances += points`.
-     - **SP:** ghi sổ và lô ví, hết hạn sau `expirationDays` (mặc định 90).
-     - **RP:** `CAMPAIGN_COMPLETION` → VRP; report hoặc mốc vote → CRP. Gắn vào season hiện tại (không có season thì bỏ qua RP). Cập nhật `user_season_rp_totals`.
-  3. Với mốc vote: điểm = `baseReportPoint × (vị trí ngưỡng + 1)` cho mỗi ngưỡng ≤ voteCount (`gamification-config.service.ts > resolveReportVoteMilestoneCredits()`).
+  1. `RewardIntakeWorker` (2 instance) nhận message từ `SQS_REWARD_INTAKE_QUEUE_URL` → `greenPointService.applyQueuedJob` → strategy theo jobType (chỉ còn 3 strategy: campaign completion, report completion, report vote milestone; `UPVOTE_ADDING_GREEN_POINTS` và `REFERRAL_ADDING_GREEN_POINTS` đã bỏ) → validate payload.
+  2. Transaction Serializable:
+     - Strategy đọc quy tắc điểm đang hiệu lực **trong transaction** (`gamification-config.service.ts > loadActivePointRules(tx)`), nên mức điểm dùng là mức tại lúc cộng (F42). Không có quy tắc nào → log cảnh báo, không cộng gì, **không retry** (`green-point-ledger.util.ts > warnNoPointRules()`).
+     - Tính điểm (BR-244, BR-255, BR-256):
+       - Hoàn thành chiến dịch: mỗi người `round(campaignCompletionPoints × min(1, eligibleShifts / max(1, registeredShifts)))`, 0 điểm thì bỏ (`resolveCampaignCompletionCredits()`). Payload kiểu cũ `{campaignId, credits[{userId, points}]}` (event xếp hàng trước khi triển khai) vẫn được nhận trong một bản phát hành: dùng `points` có sẵn, metadata `legacyPayload: true`.
+       - Report hoàn thành: `reportCompletionPoints` cho chủ report; 0 thì không cộng (`resolveReportCompletionCredits()`). Trường `points` của payload cũ bị bỏ qua.
+       - Mốc vote: mỗi ngưỡng ≤ voteCount, ngưỡng thứ i (1-based, tăng dần) được `baseReportPoint × i`; mỗi (report, ngưỡng) chỉ trả một lần (`resolveReportVoteMilestoneCredits()`).
+     - Cho mỗi credit (`applyResolvedCredits()` → `applyGreenPointLedgerCredit()`):
+       - Insert `green_point_transactions` với `metadata` gồm `ruleId` và các đầu vào (BR-257). Trùng (user, type, resource) thì bỏ qua (BR-240).
+       - Upsert `user_green_point_balances += points`.
+       - **SP:** ghi sổ và lô ví, hết hạn sau `expirationDays` (mặc định 90).
+       - **RP:** `CAMPAIGN_COMPLETION` → VRP; report hoặc mốc vote → CRP. Gắn vào season hiện tại (không có season thì bỏ qua RP). Cập nhật `user_season_rp_totals`.
+       - `sourceType` của dòng SP / RP: `CAMPAIGN` cho campaign, `REPORT` cho report **và mốc vote** (trước đây mốc vote là `SYSTEM`; `point-source.util.ts > isReportResourceType()`).
 - **Lỗi:** payload sai hoặc lỗi DB → retry với backoff, sau 5 lần thì xoá message. Queue intake **không ghi trạng thái job** (dùng NoopStore).
-- **File:** `RW/queue/green-point-queue.bootstrap.ts`, `RW/modules/green-point/*`, `RW/modules/gamification/sp-credit.util.ts`, `rp-credit.util.ts`.
+- **File:** `RW/queue/green-point-queue.bootstrap.ts`, `RW/modules/green-point/*` (`strategies/campaign-completion-green-point.strategy.ts`, `report-completion-green-point.strategy.ts`, `report-vote-milestone-green-point.strategy.ts`, `green-point-ledger.util.ts`), `RW/modules/gamification/gamification-config.service.ts > loadActivePointRules()`, `point-source.util.ts`, `sp-credit.util.ts`, `rp-credit.util.ts`.
 
 ```mermaid
 sequenceDiagram
@@ -1105,6 +1107,7 @@ sequenceDiagram
   INC->>Q: {jobType, payload}
   Q->>W: receive
   W->>W: chọn strategy, validate
+  W->>DB: TX: loadActivePointRules(tx), tính điểm
   W->>DB: TX: green_point_transactions, balances, user_sp_wallet, user_point_transactions(SP, CRP/VRP), user_season_rp_totals
   alt lỗi
     W->>Q: retry (backoff, tối đa 5)
@@ -1153,9 +1156,9 @@ sequenceDiagram
 - Người dùng xem đơn của mình ở `/profile/orders` qua `GET /me/redemptions`.
 - **File:** `gift.service.ts > updateRedemptionStatus()`.
 
-### F39 — Quản lý quà và mức độ khó (admin)
+### F39 — Quản lý quà và mức độ khó (admin; mức độ khó deprecated)
 - Quà: `POST /api/v1/gifts`, `PUT /api/v1/gifts/:id` (admin). Ảnh được tạo thành Media GIFT. Sau khi ghi thì enqueue dịch (F45). Không có API xoá quà.
-- Mức độ khó: `GET /api/v1/difficulties` (public), `PUT /api/v1/difficulties/:id` (admin) để sửa tên, `maxVolunteers`, `greenPoints`. Không có API tạo hoặc xoá.
+- Mức độ khó (**deprecated**, bỏ ở đợt dọn dẹp — đợt C; incident-service và client không còn gọi): `GET /api/v1/difficulties` (public), `PUT /api/v1/difficulties/:id` (admin) để sửa tên, `maxVolunteers`, `greenPoints`. Không có API tạo hoặc xoá.
 - **Bug:** PUT difficulty mà không gửi tên thì tên vi/en bị ghi thành chuỗi rỗng (99).
 - **File:** `RW/modules/gift/*`, `RW/modules/difficulty/*`.
 
@@ -1164,7 +1167,7 @@ sequenceDiagram
 - Gamification:
   - `GET /me/gamification/summary`, `point-transactions?kind=CRP|VRP|SP`, `points-by-season`, `GET /me/badges`.
   - `GET /gamification/leaderboards/:metric` (crp / vrp / org_aggregate): season đang ACTIVE lấy dữ liệu live; season INACTIVE lấy snapshot.
-  - `GET /gamification/campaign-reward-estimate?difficultyLevel` để ước tính điểm thưởng.
+  - `GET /gamification/campaign-reward-estimate?difficultyLevel` để ước tính điểm thưởng (**deprecated**, bỏ ở đợt C; `estimatedBonusMax` luôn 0). Điểm của chiến dịch hiển thị bằng trường `greenPoints` của campaign (= `campaignCompletionPoints` hiện hành).
 - **Client:** chỉ có `/profile/points` (dùng API legacy). **Chưa có UI** cho leaderboard, season, badge (06-frontend.md).
 - **File:** `RW/modules/user-points/*`, `RW/modules/gamification/gamification.controller.ts`, `gamification-leaderboard.service.ts`.
 
@@ -1195,7 +1198,7 @@ sequenceDiagram
 
 ### F42 — Cấu hình rule điểm và badge
 - Admin (`/api/v1/admin/gamification/*`):
-  - point-rules: `baseReportPoint`, ngưỡng mốc vote. Khi lưu sẽ đồng bộ sang `report_vote_green_point_rules`.
+  - point-rules (trang `/admin/point-rules`, menu "Point rules"): `GET` trả quy tắc đang hiệu lực `{campaignCompletionPoints, baseReportPoint, reportMilestoneThresholds, reportCompletionPoints, effectiveFrom, updatedAt}` (chưa có → 404). `PATCH` gửi đủ 4 giá trị (BR-253); trong một transaction cập nhật dòng đang hiệu lực (hoặc tạo mới) và ghi `gamification_point_rule_history` với `changedBy` = admin (BR-258). Sửa chỉ áp cho điểm cộng sau đó; điểm đã cộng giữ nguyên (BR-257). `GET .../point-rules/history?page&limit` trả lịch sử mới nhất trước kèm `changedByName`. Bảng `report_vote_green_point_rules` và việc đồng bộ sang đó đã bỏ.
   - sp-rules: `expirationDays`.
   - multipliers, season-schedules.
   - payout-tiers (CRUD).
@@ -1203,7 +1206,7 @@ sequenceDiagram
 - **[CHƯA HOÀN THIỆN]:**
   - Không có code nào cấp badge (`evaluateBadge()` không được gọi).
   - Multiplier, season schedule, `bonus_sp`, `perks` chỉ được lưu, không có tác dụng.
-- **File:** `RW/modules/gamification/gamification.controller.ts`, `gamification-config.service.ts`, `badge.service.ts`, `badge-rule-evaluator.service.ts`, `RW/modules/metrics/*`.
+- **File:** `RW/modules/gamification/gamification.controller.ts > adminGetPointRules(), adminPatchPointRules(), adminGetPointRuleHistory()`, `gamification-config.service.ts > upsertPointRules(), listPointRuleHistory()`, `badge.service.ts`, `badge-rule-evaluator.service.ts`, `RW/modules/metrics/*`, `FE/app/(pages)/(admin)/admin/point-rules/*`, `FE/apis/gamification/*`.
 
 ---
 
@@ -1315,7 +1318,7 @@ sequenceDiagram
   - Tạo hoặc sửa report.
   - Tạo hoặc sửa tổ chức (chỉ phần mô tả).
   - **Tạo** campaign (sửa thì không dịch).
-  - Tạo hoặc sửa quà, sửa difficulty.
+  - Tạo hoặc sửa quà, sửa difficulty (deprecated).
 - **Luồng:**
   1. Trước khi ghi DB, service điền tạm các cột ngôn ngữ còn thiếu bằng text gốc.
   2. Enqueue `TRANSLATE_TEXT {resourceType, resourceId, translations[{sourceText, viField?, enField?}]}` vào queue translation của chính service (incident hoặc reward).

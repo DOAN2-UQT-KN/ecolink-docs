@@ -45,7 +45,7 @@ Mọi nơi enqueue đều theo mẫu "best-effort": gọi `backgroundJobDispatch
 |---|---|---|---|---|
 | Admin tạo Gift (`POST /api/v1/gifts`) | `gift.service.ts > create()` → `enqueueGiftTranslationJob()` | name: `nameVi` ‖ `nameEn` ‖ `name`; description: `descriptionVi` ‖ `descriptionEn` ‖ `description` | Thiếu `nameVi` hoặc `nameEn` (tương tự cho description) | `nameVi`/`nameEn`, `descriptionVi`/`descriptionEn` (chỉ cột mà người dùng không gửi) |
 | Admin sửa Gift (`PUT /api/v1/gifts/:id`) | `gift.service.ts > updateById()` → `enqueueGiftTranslationJob()` | như trên, chỉ khi có gửi field tương ứng | như trên | như trên |
-| Admin sửa Difficulty (`PUT /api/v1/difficulties/:id`) | `difficulty.service.ts > updateById()` → `enqueueDifficultyTranslationJob()` | `nameVi` ‖ `nameEn` ‖ `name` | Có text nguồn và thiếu `nameVi` hoặc `nameEn` | `nameVi`/`nameEn` |
+| Admin sửa Difficulty (`PUT /api/v1/difficulties/:id`; **deprecated** — difficulty không còn được incident-service / client dùng, route và luồng dịch này bỏ ở đợt dọn dẹp) | `difficulty.service.ts > updateById()` → `enqueueDifficultyTranslationJob()` | `nameVi` ‖ `nameEn` ‖ `name` | Có text nguồn và thiếu `nameVi` hoặc `nameEn` | `nameVi`/`nameEn` |
 
 Trước khi enqueue, service ghi tạm text nguồn vào cột còn thiếu ("pre-fill") để bản ghi đọc ra không rỗng trong lúc chờ worker (`gift.service.ts > create()`, `updateById()`; `difficulty.service.ts > updateById()`).
 
@@ -129,7 +129,7 @@ Cùng hàm `translate_text()` còn được phục vụ cho client qua `POST /ap
 | Resource | Bảng | Cột có thể bị ghi |
 |---|---|---|
 | `GIFT` | `gifts` (reward) | `name_vi`, `name_en`, `description_vi`, `description_en` |
-| `DIFFICULTY` | `difficulties` (reward) | `name_vi`, `name_en` |
+| `DIFFICULTY` (deprecated, bỏ ở đợt dọn dẹp) | `difficulties` (reward) | `name_vi`, `name_en` |
 | `REPORT` | reports (incident) | `titleVi`, `titleEn`, `descriptionVi`, `descriptionEn` |
 | `ORGANIZATION` | organizations (incident) | `descriptionVi`, `descriptionEn` |
 | `CAMPAIGN` | campaigns (incident) | `titleVi`, `titleEn`, `descriptionVi`, `descriptionEn` |

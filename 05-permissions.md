@@ -25,7 +25,7 @@
 |---|---|---|---|
 | `x-internal-api-key` | `INTERNAL_IDENTITY_API_KEY` | identity `/internal/v1/*` | incident, notification, reward (dùng chung 1 key) |
 | `x-internal-api-key` | `INTERNAL_INCIDENT_API_KEY` | incident `POST /api/v1/organizations` | Không tìm thấy service nào gọi. Tool `create_organization` của ai-service gọi route này bằng Bearer nên bị 401 |
-| `x-internal-api-key` | `INTERNAL_REWARD_API_KEY` | reward `/internal/v1/difficulties*` | incident |
+| `x-internal-api-key` | `INTERNAL_REWARD_API_KEY` | reward `/internal/v1/*` (`/point-rules/campaign-completion`; `/difficulties*` deprecated) | incident |
 | `x-internal-api-key` | `INTERNAL_NOTIFICATION_API_KEY` | notification `POST /api/v1/notifications/jobs` | incident |
 | `x-internal-api-key` | `INTERNAL_AI_API_KEY` | ai `POST /internal/v1/translate` | incident, reward |
 
@@ -229,14 +229,14 @@ Phía client, SOS: tab **SOS** của trang campaign (`FE/app/(pages)/(main)/camp
 
 | Hành động | Khách | User | Admin | Nơi kiểm tra |
 |---|---|---|---|---|
-| Xem quà, chi tiết quà, difficulty, leaderboard, season hiện tại, ước tính thưởng, bảng xếp hạng gamification | ✅ | ✅ | ✅ | Không có guard |
+| Xem quà, chi tiết quà, difficulty (deprecated), leaderboard, season hiện tại, ước tính thưởng (deprecated), bảng xếp hạng gamification | ✅ | ✅ | ✅ | Không có guard |
 | Lọc quà theo `isActive` | ❌ | ❌ | ✅ | `gift.api.routes.ts` (tryAuthenticate) |
 | Đổi quà; xem điểm, lịch sử, đơn, badge, tổng hợp của mình | ❌ | ✅ | ✅ | `authenticate` |
 | Xem metric tables và columns | ❌ | ✅ | ✅ | `authenticate` |
-| Tạo và sửa quà; sửa difficulty; xem mọi đơn đổi quà | ❌ | ❌ | ✅ | `requireAdmin` |
+| Tạo và sửa quà; sửa difficulty (deprecated); xem mọi đơn đổi quà | ❌ | ❌ | ✅ | `requireAdmin` |
 | **Đổi trạng thái đơn đổi quà** | ❌ | 🔓 | ✅ | Thiếu `requireAdmin` (`gift.api.routes.ts`) |
-| Mọi `/admin/gamification/*`, `/admin/seasons/*` | ❌ | ❌ | ✅ | `requireAdmin` |
-| `/internal/v1/difficulties*` | Chỉ service có `INTERNAL_REWARD_API_KEY` | | | `requireInternalRewardApiKey` |
+| Mọi `/admin/gamification/*` (gồm xem / sửa quy tắc điểm và lịch sử thay đổi `point-rules`, `point-rules/history`), `/admin/seasons/*` | ❌ | ❌ | ✅ | `requireAdmin` |
+| `/internal/v1/*` của reward (`/point-rules/campaign-completion`, `/difficulties*` deprecated) | Chỉ service có `INTERNAL_REWARD_API_KEY` | | | `requireInternalRewardApiKey` |
 
 ### 2.7 Thông báo
 

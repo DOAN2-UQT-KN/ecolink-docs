@@ -8,7 +8,7 @@
 > - `ecolink-server/services/ai-service/app/db/models.py`
 > - Enum số / chuỗi dùng chung: `ecolink-server/shared/da2-constants/src/*`
 >
-> Mỗi service có một DB riêng trên cùng instance PostgreSQL. **Không có khoá ngoại giữa các DB**. Các cột `userId`, `organization_members.userId`, `volunteerId`, `createdBy`… chỉ lưu UUID user của identity-service. Liên kết `campaigns.difficulty` sang `rewarddb.difficulties.level` cũng là liên kết logic, không có FK.
+> Mỗi service có một DB riêng trên cùng instance PostgreSQL. **Không có khoá ngoại giữa các DB**. Các cột `userId`, `organization_members.userId`, `volunteerId`, `createdBy`… chỉ lưu UUID user của identity-service. Cột `campaigns.difficulty` (từng là liên kết logic sang `rewarddb.difficulties.level`, không có FK) không còn được code dùng.
 
 Quy ước chung:
 - `id` là UUID, default `uuid()` hoặc `gen_random_uuid()`, trừ khi ghi khác.
@@ -152,7 +152,6 @@ erDiagram
     uuid id PK
     uuid organizationId FK
     int status
-    int difficulty "level ở reward"
     float latitude
     float longitude
     datetime revisionDeadline
@@ -356,8 +355,8 @@ Index thêm: `(user_id, created_at)` cho giới hạn gửi report và lịch s�
 | contactName | varchar(120)? | | Người liên hệ (bắt buộc khi gửi duyệt) |
 | contactPhone | varchar(20)? | | SĐT liên hệ; chỉ trả cho người quản lý, admin, volunteer đã được duyệt |
 | safetyNotes | text? | | Dụng cụ, trang phục, rủi ro |
-| requirements | jsonb? | | `{minAge, skills[], bringOwnTools}`; difficulty ≥ 3 thì mặc định minAge 18 |
-| minVolunteersReason | text? | | Lý do khi tổng TNV tối thiểu của một ngày thấp hơn mức gợi ý của độ khó; bắt buộc khi đó lúc gửi duyệt (BR-164) |
+| requirements | jsonb? | | `{minAge, skills[], bringOwnTools}`; lúc gửi duyệt lưu đúng như người tạo nhập (không còn tự đặt minAge 18) |
+| minVolunteersReason | text? (`min_volunteers_reason`) | | **Không còn dùng** (bỏ cùng độ khó, spec 013): API không nhận / không trả, không kiểm tra lúc gửi duyệt. Cột còn trong DB, sẽ drop ở bản dọn dẹp sau |
 | lastNearbyInviteAt | timestamp? | | Lần cuối manager mời lại người dân gần đó (`POST /:id/invite-nearby`); mời lại cách nhau ≥ 24h (spec 3.2) |
 | completionSubmittedAt | datetime? (`completion_submitted_at`) | | Lần cuối manager báo hoàn thành (BR-165), migration `20261007100000_completion_review` |
 | completionRejectionCount | int (`completion_rejection_count`) | default 0 | Số lần hoàn thành bị từ chối (do xác thực kết quả, hoặc admin trước khi có xác thực); đủ 3 thì lần sau campaign chuyển admin quyết định (BR-394) |
@@ -366,7 +365,7 @@ Index thêm: `(user_id, created_at)` cho giới hạn gửi report và lịch s�
 | submittedAt | datetime? | | Lần gửi duyệt gần nhất |
 | approvedAt | datetime? (`approved_at`) | | Lần admin duyệt đầu tiên (migration `20261002160000_campaign_approved_at`, backfill theo log `approve` hoặc `updated_at` của campaign đã qua duyệt). Có giá trị thì sửa sau này đi theo id và có thể đưa campaign về duyệt lại (BR-352). Migration `20261002180000_campaign_upcoming_backfill` chuyển các campaign ACTIVE 1 chưa tới ngày đầu (duyệt trước khi có UPCOMING) sang 27, log `backfill_upcoming` |
 | lastSubmittedSnapshot | jsonb? | | Nội dung đã gửi duyệt lần trước; nộp lại thì diff với bản này được ghi vào `campaign_status_logs.changes` |
-| difficulty | int | default 1 | Level bên reward-service `difficulties.level` |
+| difficulty | int | default 1 | **Không còn dùng** (bỏ độ khó, spec 013): tạo / sửa / duyệt hoàn thành không ghi, response không trả. Cột còn trong DB, sẽ drop ở bản dọn dẹp sau |
 | organizationId | uuid | NOT NULL, FK → organizations | |
 | createdBy | uuid? | index | Người tạo, được coi là "owner" của campaign |
 
@@ -578,9 +577,9 @@ Hệ thống có 3 sổ song song:
 
 | Bảng | Field | Ràng buộc / ghi chú |
 |---|---|---|
-| Difficulty (`difficulties`) | level (**unique**), name/nameVi/nameEn varchar(64), maxVolunteers? (null nghĩa là không giới hạn; **không còn dùng** để giới hạn việc tham gia — đăng ký ca không giới hạn), suggestedMinVolunteers? (`suggested_min_volunteers`, TNV tối thiểu gợi ý mỗi ngày của campaign: 5 / 10 / 20 / 30 theo level), greenPoints, deletedAt | Mức khó của campaign: quyết định sức chứa tình nguyện viên và số điểm thưởng |
+| Difficulty (`difficulties`) | level (**unique**), name/nameVi/nameEn varchar(64), maxVolunteers?, suggestedMinVolunteers? (`suggested_min_volunteers`), greenPoints, deletedAt | **Deprecated**: incident-service và client không còn đọc (điểm hoàn thành chiến dịch lấy từ `gamification_point_rules`). Bảng và API `/difficulties` còn tới đợt dọn dẹp (đợt C) |
 | UserGreenPointBalance (`user_green_point_balances`) | userId (PK), balance (default 0) | Không bị trừ khi đổi quà |
-| GreenPointTransaction (`green_point_transactions`) | userId, type (`CAMPAIGN_COMPLETION`, `REPORT_COMPLETION`, `UPVOTE`, `REPORT_VOTE_MILESTONE`, `REFERRAL`, `GIFT_REDEEM`, `GIFT_REDEEM_REFUND`), resourceId, resourceType, points (âm là chi), metadata | **partial unique (user_id, type, resource_id, resource_type) WHERE deleted_at IS NULL**, dùng để chống cộng trùng |
+| GreenPointTransaction (`green_point_transactions`) | userId, type (`CAMPAIGN_COMPLETION`, `REPORT_COMPLETION`, `UPVOTE`, `REPORT_VOTE_MILESTONE`, `REFERRAL`, `GIFT_REDEEM`, `GIFT_REDEEM_REFUND`; `UPVOTE`, `REFERRAL` còn là hằng số nhưng không còn code ghi), resourceId, resourceType (mốc upvote: `REPORT_VOTE_MILESTONE_<threshold>`), points (âm là chi), metadata (dòng cộng điểm từ quy tắc ghi `ruleId` và các đầu vào để tính lại được; payload chiến dịch kiểu cũ ghi `legacyPayload: true`) | **partial unique (user_id, type, resource_id, resource_type) WHERE deleted_at IS NULL**, dùng để chống cộng trùng |
 | UserSpWalletEntry (`user_sp_wallet`) | userId, amount, remaining, sourceType, sourceId?, expiresAt | Trừ theo FIFO dựa trên `expiresAt` |
 | UserPointTransaction (`user_point_transactions`) | userId, kind (`PointKind`), amount (âm là debit), sourceType (`PointSourceType`), sourceId?, seasonId? (bắt buộc với RP), metadata, idempotencyKey varchar(256)? | **partial unique (user_id, idempotency_key) WHERE idempotency_key IS NOT NULL** |
 | UserSeasonRpTotal (`user_season_rp_totals`) | PK (userId, seasonId), citizenRp, volunteerRp | |
@@ -600,7 +599,8 @@ Hệ thống có 3 sổ song song:
 | Bảng | Field | Ghi chú |
 |---|---|---|
 | Season (`seasons`) | label?, kind (`SeasonKind`), status Int (1 ACTIVE / 2 INACTIVE), startsAt, endsAt | |
-| GamificationPointRules | baseReportPoint, reportMilestoneThresholds Int[], volunteerBonusCapByDifficulty json?, isActive, effectiveFrom | |
+| GamificationPointRules (`gamification_point_rules`) | campaignCompletionPoints (`campaign_completion_points`, default 20), baseReportPoint, reportMilestoneThresholds Int[] (lưu tăng dần), reportCompletionPoints (`report_completion_points`, default 0 = tắt), isActive, effectiveFrom | Quy tắc điểm đang hiệu lực = dòng `isActive` có `effectiveFrom` mới nhất; worker đọc lúc cộng điểm. Cột `volunteer_bonus_cap_by_difficulty` đã drop (migration `RW/prisma/migrations/20261021100000_point_rules_earning`) |
+| GamificationPointRuleHistory (`gamification_point_rule_history`) | ruleId (FK → gamification_point_rules, restrict), changedBy (uuid admin), before jsonb? (null khi chưa có quy tắc), after jsonb, changedAt | Chỉ insert; một dòng mỗi lần admin lưu, ghi trong cùng transaction. Index (ruleId, changedAt desc) |
 | SpendablePointRules | expirationDays (default 90), isActive, effectiveFrom | Hạn dùng của SP |
 | VolunteerOrgMultiplierRule | code (**unique**), multiplier Decimal(4,2), priority, isActive | Chỉ có CRUD, không có code dùng |
 | SeasonScheduleRules | kind (**unique**), autoRotate, metadata | Chỉ có CRUD, không có cron |
@@ -609,7 +609,6 @@ Hệ thống có 3 sổ song song:
 | UserBadgeGrant | userId, badgeId (cascade), seasonId?, grantedAt, metadata | [CHƯA HOÀN THIỆN] không có code tạo |
 | LeaderboardSnapshot | seasonId, subjectKind, subjectId, metric, score, rank | **unique (seasonId, subjectKind, subjectId, metric)** |
 | MetricTable / MetricColumn | key (**unique**) / (tableId, key) **unique**, label, valueType, isActive | Metadata cho rule builder của badge |
-| ReportVoteGreenPointRule | threshold (**unique**), points, isActive | Chỉ được đồng bộ từ point-rules; worker không đọc bảng này |
 | RewardBackgroundJob (`reward_background_jobs`) | jobType, payload, status (12/22/17/23), attempts, maxAttempts, processedAt | |
 
 ---
@@ -778,5 +777,5 @@ Các key preference (tất cả mặc định `true`): `campaignNew`, `campaignN
 | `AppLocale` | `en`, `vi` | `da2-constants/src/i18n.ts` |
 | Outbox `OutboxEventType` | REPORT_COMPLETION_GREEN_POINTS, CAMPAIGN_COMPLETION_GREEN_POINTS, REPORT_VOTE_MILESTONE_GREEN_POINTS, CAMPAIGN_FACEBOOK_RECOGNITION, ORG_OWNER_ONBOARD, WEBSITE_NOTIFICATION | `incident-service/src/outbox/outbox.types.ts` |
 | Job type (incident) | ANALYZE_REPORT, TRANSLATE_TEXT | `incident-service/src/constants/job-type.enum.ts` |
-| Job type (reward) | CAMPAIGN_COMPLETION_GREEN_POINTS, REPORT_COMPLETION_GREEN_POINTS, REPORT_VOTE_MILESTONE_GREEN_POINTS, UPVOTE_ADDING_GREEN_POINTS, REFERRAL_ADDING_GREEN_POINTS, CAMPAIGN_FACEBOOK_RECOGNITION, TRANSLATE_TEXT | reward-service `src/queue/*` |
+| Job type (reward) | CAMPAIGN_COMPLETION_GREEN_POINTS, REPORT_COMPLETION_GREEN_POINTS, REPORT_VOTE_MILESTONE_GREEN_POINTS, CAMPAIGN_FACEBOOK_RECOGNITION, TRANSLATE_TEXT | reward-service `src/queue/*` |
 | ai `ChatMessageRole` | system, user, assistant, tool | `ai-service/app/db/models.py` |
