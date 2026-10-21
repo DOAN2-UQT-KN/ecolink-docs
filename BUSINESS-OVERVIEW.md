@@ -131,8 +131,11 @@ Trạng thái: ✅ đã có · 🟡 đang làm dở / có hạn chế · ❌ ch�
 |---|---|---|---|
 | Điểm xanh | Loại điểm duy nhất. Nhận khi chiến dịch hoàn thành, khi báo cáo đạt mốc bình chọn, và khi báo cáo được xử lý (nếu quản trị viên bật). Mọi chiến dịch có cùng mức điểm. Mỗi lần nhận là một "lô" điểm **hết hạn sau 90 ngày** (quản trị viên đổi được); điểm hết hạn bị trừ tự động và hiện trong lịch sử | Người dùng | ✅ |
 | Quy tắc điểm | Quản trị viên đặt số điểm cho: hoàn thành chiến dịch (mặc định 20, nhân tỉ lệ ca tham gia), điểm cơ bản và các mốc bình chọn của báo cáo, báo cáo được xử lý (mặc định 0 = tắt), và số ngày điểm hết hạn (mặc định 90). Thay đổi chỉ áp cho điểm cộng sau đó; mỗi lần lưu được ghi vào lịch sử (ai đổi, lúc nào, trước / sau) | Quản trị viên | ✅ |
-| Cửa hàng quà | Xem quà, đổi quà theo đúng giá niêm yết (nhập số điện thoại và nơi nhận); điểm sắp hết hạn được trừ trước | Người dùng | ✅ |
-| Quản lý đơn đổi quà | Chuyển trạng thái đang xử lý → đã gửi → đã giao, hoặc huỷ (hoàn điểm về đúng lô cũ, giữ hạn cũ) | Quản trị viên | 🟡 Đang thiếu kiểm tra quyền (mục 10); không báo cho người đổi |
+| Cửa hàng quà | Xem quà, đổi quà theo đúng giá niêm yết (nhập số điện thoại và nơi nhận); điểm sắp hết hạn được trừ trước. Thẻ quà ghi số còn lại (hết thì không đổi được) và "Tài trợ bởi …" kèm logo của nhà tài trợ được phép hiển thị | Người dùng | ✅ |
+| Nguồn quà | Quản lý nơi quà đến: nhà tài trợ, Ecolink tự mua, quyên góp (tên, người liên hệ, logo, có hiển thị trên trang quà không). Không xoá, chỉ "Ngừng": hàng đã nhập vẫn đổi được | Quản trị viên | ✅ |
+| Kho quà theo lô | Mỗi lần nhận quà là một lô gắn với một nguồn (số lượng, giá trị quy đổi mỗi món, ngày nhận, hạn dùng, số chứng từ). Tồn kho bằng tổng các lô còn hạn, không còn quà "không giới hạn", không sửa tay. Ghi giảm khi hỏng, mất, kiểm kê thiếu, trả lại nguồn. Lô hết hạn tự ghi giảm hằng ngày, lô sắp hết hạn trong 7 ngày được đánh dấu. Lịch sử kho ghi mọi thay đổi, ai làm, lý do | Quản trị viên | ✅ |
+| Báo cáo nguồn | Theo từng nguồn và khoảng ngày: đã nhập, đã trao, đang giữ cho đơn, hao hụt, hết hạn, còn trong kho, tổng giá trị đã trao, số người nhận. Xuất CSV để gửi nhà tài trợ | Quản trị viên | ✅ |
+| Quản lý đơn đổi quà | Chuyển trạng thái đang xử lý → đã gửi → đã giao, hoặc huỷ (hoàn điểm về đúng lô cũ, giữ hạn cũ; huỷ khi đang xử lý thì món quà về lại kho). Bảng đơn có cột nguồn quà, lọc theo nguồn | Quản trị viên | 🟡 Không báo cho người đổi; huỷ đơn đã gửi chưa cho chọn hàng có về kho |
 | Điểm của tôi | Ba con số: điểm hiện có, điểm sắp hết hạn trong 7 ngày (kèm ngày sớm nhất), tổng điểm đã kiếm; lịch sử cộng trừ ghi rõ từng loại (chiến dịch, mốc bình chọn, báo cáo được xử lý, đổi quà, hoàn điểm, hết hạn, điều chỉnh số dư) | Người dùng | ✅ |
 
 ### 3.7 Thông báo
@@ -294,8 +297,8 @@ flowchart LR
 
 ### 4.6 Đổi quà
 1. Người dùng vào "Quà tặng", chọn quà, nhập số điện thoại và nơi nhận.
-2. Hệ thống kiểm tra còn hàng và **điểm xanh còn hạn** đủ để trả giá niêm yết, rồi trừ điểm (điểm sắp hết hạn được trừ trước) và tạo đơn **đang xử lý**.
-3. Quản trị viên cập nhật đơn thành **đã gửi**, rồi **đã giao**. Nếu huỷ, điểm được trả về đúng lô đã trừ và giữ hạn cũ; phần thuộc lô đã hết hạn thì không trả lại (ghi là hết hạn). Đơn đặt trước đợt cập nhật này được hoàn thành một lô mới, hạn 90 ngày từ lúc huỷ.
+2. Hệ thống kiểm tra còn hàng và **điểm xanh còn hạn** đủ để trả giá niêm yết, rồi lấy một món từ lô quà sắp hết hạn trước, trừ điểm (điểm sắp hết hạn được trừ trước) và tạo đơn **đang xử lý**. Đơn ghi món đó thuộc lô của nguồn nào.
+3. Quản trị viên cập nhật đơn thành **đã gửi**, rồi **đã giao**. Nếu huỷ, điểm được trả về đúng lô đã trừ và giữ hạn cũ; phần thuộc lô đã hết hạn thì không trả lại (ghi là hết hạn). Đơn đặt trước đợt cập nhật này được hoàn thành một lô mới, hạn 90 ngày từ lúc huỷ. Huỷ khi đang xử lý thì món quà về lại đúng lô cũ; huỷ khi đã gửi thì kho không đổi.
 
 Các trường hợp thường gặp:
 - Hết hàng: thông báo "hết quà".
@@ -494,14 +497,23 @@ Mã BR-xxx dùng để đối chiếu với `docs/03-business-rules.md`.
 
 ### 5.10 Quà tặng
 - **BR-220:** Người dùng chỉ thấy quà đang được mở bán.
-- **BR-221:** Quà cần tên, ảnh, mô tả, số điểm; tồn kho có thể không giới hạn.
+- **BR-221:** Quà cần tên, ảnh, mô tả, số điểm. Tồn kho không nhập tay: chỉ tăng qua nhập kho theo lô.
 - **BR-222:** Đổi quà cần số điện thoại (7–32 ký tự) và nơi nhận.
-- **BR-223:** Quà phải còn mở bán và còn hàng.
+- **BR-223:** Quà phải còn mở bán và còn hàng trong một lô chưa hết hạn.
+- **BR-224:** Lô quà hết hạn thì không đổi được nữa và được tự động ghi giảm mỗi ngày; lô sắp hết hạn trong 7 ngày được đánh dấu cho quản trị viên.
+- **BR-227:** Báo cáo nguồn tính theo ngày giờ Việt Nam; đơn đặt trước khi có kho theo lô không tính cho nguồn nào.
 - **BR-225:** Phải đủ điểm xanh **còn hạn**; điểm sắp hết hạn được trừ trước.
 - **BR-226:** Mọi người đổi quà theo đúng giá niêm yết, không có giảm giá.
 - **BR-230:** Đơn đi theo thứ tự: đang xử lý → đã gửi → đã giao, và có thể huỷ trước khi giao.
-- **BR-231:** Huỷ đơn thì hoàn điểm đúng một lần (cách hoàn xem BR-263, BR-264), nhưng không hoàn tồn kho.
+- **BR-231:** Huỷ đơn thì hoàn điểm đúng một lần (cách hoàn xem BR-263, BR-264).
 - **BR-232:** (Sắp bỏ) Mức độ khó gồm tên, số tình nguyện viên tối đa và số điểm thưởng; chiến dịch không còn dùng mức độ khó.
+- **BR-233:** Mỗi lần đổi lấy đúng một món, từ lô sắp hết hạn trước; nhiều người tranh món cuối thì chỉ một người được.
+- **BR-234:** Huỷ đơn đang xử lý thì trả món về đúng lô cũ, chỉ một lần; huỷ đơn đã gửi thì kho không đổi.
+- **BR-235:** Số tồn kho luôn bằng tổng các lô còn hạn và khớp với lịch sử kho.
+- **BR-236:** Nguồn quà không bị xoá; nguồn đã ngừng không nhập kho mới được nhưng hàng cũ vẫn đổi được.
+- **BR-237:** Nhập kho cần nguồn đang hợp tác, số lượng từ 1, ngày nhận không ở tương lai, hạn dùng (nếu có) sau ngày nhận và số chứng từ.
+- **BR-238:** Trang quà chỉ ghi tên và logo nhà tài trợ được phép hiển thị và đang còn hàng; không lộ thông tin liên hệ.
+- **BR-239:** Ghi giảm cần lý do và không vượt số còn lại; muốn tăng thì nhập một lô mới.
 
 ### 5.11 Điểm xanh
 - **BR-240:** Mỗi hoạt động chỉ được cộng điểm một lần; mọi lần cộng, trừ, hoàn, hết hạn đều được ghi lại đúng một lần.
@@ -648,7 +660,7 @@ Dấu tích xanh hiện chỉ được gắn một lần khi duyệt hồ sơ, v
 | Bị khoá | Quản trị viên (chưa có chức năng mở khoá) |
 
 ### 6.7 Đơn đổi quà
-Đang xử lý → Đã gửi → Đã giao, hoặc Huỷ (từ Đang xử lý hoặc Đã gửi; hoàn điểm về lô cũ). Người đổi **không nhận thông báo** ở bước nào.
+Đang xử lý → Đã gửi → Đã giao, hoặc Huỷ (từ Đang xử lý hoặc Đã gửi; hoàn điểm về lô cũ; huỷ từ Đang xử lý thì món quà về lại kho). Chỉ quản trị viên đổi được trạng thái. Người đổi **không nhận thông báo** ở bước nào.
 
 ### 6.8 Yêu cầu khẩn cấp
 Đang mở → Đã giải quyết (người hỗ trợ bấm, hoặc tự động khi chiến dịch hoàn thành).
@@ -704,7 +716,7 @@ Có = được · Không = không được · ĐK = có điều kiện
 | Chat với trợ lý AI | Không | Có | Có | Có | Có | Có |
 
 > Cột "Quản lý chiến dịch" ở đây là người quản lý **một chiến dịch** (người tạo và người được thêm, đều phải còn là thành viên tổ chức), trừ dòng "Tạo chiến dịch" là vai "Quản lý chiến dịch" **trong tổ chức**. Cột "Owner tổ chức" quản lý được mọi chiến dịch của tổ chức mình. Vai "Admin" trong tổ chức không có quyền với chiến dịch.
-> Bảng trên là quyền **theo thiết kế thể hiện trong code**. Hiện có một số chỗ hệ thống **cho phép nhiều hơn** thiết kế, ví dụ ai cũng đổi được trạng thái đơn quà. Các chỗ này được liệt kê ở mục 10.
+> Bảng trên là quyền **theo thiết kế thể hiện trong code**. Hiện có một số chỗ hệ thống **cho phép nhiều hơn** thiết kế, ví dụ ai cũng sửa được thông tin người dùng khác. Các chỗ này được liệt kê ở mục 10.
 > Chi tiết kỹ thuật: xem `docs/05-permissions.md`.
 
 ---
@@ -797,7 +809,7 @@ Phần này viết lại các vấn đề trong `docs/99-open-issues.md` theo g�
 | 1 | Chức năng "quên mật khẩu" trả mã đặt lại ngay trên màn hình thay vì gửi qua email | Ai biết email của người khác, kể cả quản trị viên, đều chiếm được tài khoản đó | Gửi mã qua email; tạm khoá chức năng cho tới khi sửa xong |
 | 2 | Người đăng ký tự chọn được vai trò, kể cả quản trị viên; người dùng sửa hoặc xoá được tài khoản người khác; ai cũng chỉnh được danh sách vai trò | Mất kiểm soát toàn hệ thống | Sửa trước khi mở rộng người dùng |
 | 3 | ~~Tổ chức tự đổi được trạng thái chiến dịch (tự duyệt, tự hoàn thành, tự bỏ chặn)~~ | **Đã giải quyết (30/09/2026):** trạng thái chỉ đổi qua gửi duyệt, quản trị viên duyệt và báo hoàn thành | — |
-| 4 | Người dùng bất kỳ đổi được trạng thái đơn đổi quà của người khác | Huỷ đơn người khác, hoặc tự đánh dấu "đã giao" | Chỉ quản trị viên |
+| 4 | ~~Người dùng bất kỳ đổi được trạng thái đơn đổi quà của người khác~~ | **Đã sửa (21/10/2026):** chỉ quản trị viên đổi được | Chỉ quản trị viên |
 | 5 | Người bị khoá vẫn thao tác được thêm một thời gian (tới khi phiên hết hạn, có thể lên đến 30 ngày tuỳ cấu hình) | Khoá tài khoản không có hiệu lực ngay | Có cần hiệu lực tức thì không? |
 | 6 | Mã QR điểm danh có thể chụp và chia sẻ để điểm danh từ xa | **Mới giảm nhẹ (03/10/2026):** mã QR đổi mỗi 10 phút nên ảnh chụp vẫn dùng được tới khoảng 20 phút; điểm danh ở xa vẫn được ghi, chỉ bị gắn cờ để người phụ trách / quản lý loại tay. Người bị gắn cờ mà không ai loại vẫn được điểm | Có chấp nhận rủi ro này không, hay rút ngắn chu kỳ mã / chặn hẳn điểm danh ở xa? |
 | 7 | Một số thông tin cá nhân (email, danh sách thành viên) hiện ai đăng nhập cũng xem được (số điện thoại trong SOS đã được ẩn từ 06/10/2026, chỉ đội và quản trị viên thấy) | Quyền riêng tư | Ai được xem những thông tin này? |
@@ -822,7 +834,7 @@ Phần này viết lại các vấn đề trong `docs/99-open-issues.md` theo g�
 | 21 | **Xác nhận "đã sạch" của cộng đồng** | Chỉ để tham khảo, không ảnh hưởng quyết định | Có dùng làm điều kiện duyệt không? |
 | 22 | **Nộp kết quả (submission)** | Có chức năng nhưng không gắn với luồng hoàn thành | Giữ lại (và gắn vào luồng hoàn thành) hay bỏ? |
 | 23 | ~~SOS báo cho ai~~ | **Đã giải quyết (06/10/2026, theo spec "Cải tiến tính năng SOS"):** đội của ca nhận ngay; rồi tình nguyện viên "Sẵn sàng" ở gần, owner tổ chức (sau 10 phút, Y tế ngay), tổ chức lân cận và quản trị viên theo loại và mức ưu tiên (mục 4.7). Chưa kết nối lực lượng cứu hộ bên ngoài; SOS Y tế nhắc gọi 115 | — |
-| 24 | **Đơn đổi quà** | Không báo cho người đổi; huỷ đơn không trả lại tồn kho. Điểm hoàn được trả về đúng lô cũ và giữ hạn cũ (từ 21/10/2026) | Có thông báo không? Huỷ đơn có trả lại quà vào kho không? |
+| 24 | **Đơn đổi quà** | Không báo cho người đổi. Từ 21/10/2026: điểm hoàn về đúng lô cũ, giữ hạn cũ; huỷ khi đang xử lý thì món quà về lại kho; huỷ khi đã gửi thì kho không đổi | Có thông báo không? Huỷ đơn đã gửi: quản trị viên được chọn hàng có về kho không (dự kiến bước 5–6)? |
 | 25 | ~~Hai hệ điểm song song~~ | **Đã giải quyết (21/10/2026):** chỉ còn một loại điểm xanh có hạn dùng; đổi quà trừ thẳng vào điểm xanh. Khi triển khai, số dư mỗi người được đối soát theo điểm còn hạn và ghi một dòng "điều chỉnh số dư" nếu lệch | — |
 | 26 | ~~Mùa giải và huy hiệu~~ | **Không còn (21/10/2026):** mùa giải, bảng xếp hạng, huy hiệu và giảm giá theo huy hiệu đã bỏ | — |
 | 27 | **Mật khẩu** | Giao diện cho 6 ký tự, hệ thống yêu cầu 8 | Thống nhất một quy định |

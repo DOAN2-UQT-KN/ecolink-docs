@@ -233,7 +233,10 @@ Phía client, SOS: tab **SOS** của trang campaign (`FE/app/(pages)/(main)/camp
 | Lọc quà theo `isActive` | ❌ | ❌ | ✅ | `gift.api.routes.ts` (tryAuthenticate) |
 | Đổi quà; xem điểm (số dư, sắp hết hạn, tổng đã kiếm), lịch sử điểm, đơn của mình | ❌ | ✅ | ✅ | `authenticate` |
 | Tạo và sửa quà; sửa difficulty (deprecated); xem mọi đơn đổi quà | ❌ | ❌ | ✅ | `requireAdmin` |
-| **Đổi trạng thái đơn đổi quà** | ❌ | 🔓 | ✅ | Thiếu `requireAdmin` (`gift.api.routes.ts`) |
+| Đổi trạng thái đơn đổi quà (huỷ đơn đang xử lý còn trả món về lô) | ❌ | ❌ | ✅ | `requireAdmin` (spec 015) |
+| Nguồn quà: xem, tạo, sửa, ngừng / bật lại, xem lô theo nguồn, báo cáo và CSV (`/admin/gift-sources*`) | ❌ | ❌ | ✅ | `requireAdmin` (`gift-source.api.routes.ts`) |
+| Kho: xem lô, nhập kho, ghi giảm, lịch sử kho (`/admin/gifts/:id/stock-*`, `/admin/stock-batches/:id/adjustments`) | ❌ | ❌ | ✅ | `requireAdmin` (`gift-stock.api.routes.ts`) |
+| Thấy `expiringSoon` trong `GET /gifts`, `/gifts/:id` | ❌ | ❌ | ✅ | role từ `tryAuthenticate` (người khác nhận `null`) |
 | `/admin/gamification/point-rules` (xem / sửa, gồm số ngày hết hạn điểm) và `point-rules/history` — các route admin gamification duy nhất còn lại từ spec 014 | ❌ | ❌ | ✅ | `requireAdmin` |
 | `/internal/v1/*` của reward (`/point-rules/campaign-completion`, `/difficulties*` deprecated) | Chỉ service có `INTERNAL_REWARD_API_KEY` | | | `requireInternalRewardApiKey` |
 
@@ -265,7 +268,7 @@ Chi tiết từng vấn đề ở [99-open-issues.md](99-open-issues.md) mục A
 2. `PUT` và `DELETE /users/:id` không kiểm tra chủ sở hữu.
 3. `/api/v1/roles/*` không yêu cầu đăng nhập.
 4. `request-password-reset` trả token reset trong response.
-5. `PATCH /admin/gift-redemptions/:id/status` thiếu kiểm tra admin.
+5. ~~`PATCH /admin/gift-redemptions/:id/status` thiếu kiểm tra admin~~ — đã sửa ở spec 015 (`requireAdmin`).
 6. ~~`PUT /campaigns/:id` cho người quản lý campaign đổi `status` tuỳ ý~~ — đã sửa: body có `status` bị từ chối, mọi chuyển trạng thái đi qua `transitionCampaign()` (04 §2).
 7. Trạng thái job AI không kiểm tra quyền. Danh sách thành viên tổ chức cũng không có guard — cần xác nhận. (Danh sách volunteer đã duyệt và giải quyết SOS đã kiểm quyền từ 2026-09-27; SOS bản 2 lọc dữ liệu cá nhân theo người xem.)
 8. Guard `/admin` phía client bị comment out.

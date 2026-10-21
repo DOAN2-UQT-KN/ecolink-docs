@@ -64,6 +64,9 @@
 | F46 | Dịch theo yêu cầu người dùng | Đa ngôn ngữ |
 | F47 | Chat với trợ lý AI (tạo report qua chat) | AI |
 | F48 | Vinh danh chiến dịch trên Facebook [CHƯA HOÀN THIỆN] | Điểm / Mạng xã hội |
+| F49 | Nguồn quà, nhập kho theo lô, ghi giảm, lịch sử kho | Quà tặng |
+| F50 | Hết hạn lô quà (job nền) và đối soát tồn kho | Quà tặng |
+| F51 | Báo cáo nguồn quà và xuất CSV | Quà tặng |
 
 ---
 
@@ -1113,18 +1116,18 @@ sequenceDiagram
 ```
 
 ### F37 — Đổi quà
-1. `/gifts`: `GET /api/v1/gifts?isActive=true`. Người không phải admin chỉ thấy quà đang active.
+1. `/gifts`: `GET /api/v1/gifts?isActive=true`. Người không phải admin chỉ thấy quà đang active. Mỗi quà có `stockRemaining` = tổng `remaining` các lô còn hạn và `sponsors[]` (nguồn bật `showOnGift` còn lô còn hàng, còn hạn; BR-238).
 2. `POST /api/v1/gifts/:id/redeem {phoneNumber, pickupLocation}` (JWT). `/exchange` là alias giống hệt.
 3. `gift.service.ts > redeem()`:
    - Transaction Serializable:
      - Quà phải active.
-     - Trừ tồn kho theo kiểu nguyên tử (null nghĩa là vô hạn).
      - Giá = `gift.greenPoints` (giá niêm yết, không giảm giá; BR-226).
      - Số dư (tổng `remaining` của lô còn hạn) ≥ giá (BR-225, BR-261).
      - Tạo đơn PROCESSING.
+     - `takeOneFromBatches()`: lấy 1 món từ lô còn hạn của quà theo `expires_at` tăng dần (lô không hạn sau cùng) rồi `received_at`; trừ có điều kiện `remaining > 0`, lô vừa bị lấy hết thì sang lô kế, hết lô thì 422 và rollback cả đơn. Ghi `batch_id` vào đơn, movement `REDEEM_OUT` −1 (actor = người đổi), cache `gifts.stock_remaining` −1 (BR-223, BR-233).
      - `spendLotsFifo()`: trừ lô theo `expires_at` rồi `created_at` tăng dần, mỗi lần trừ có điều kiện `remaining >= phần trừ`, ghi `green_point_lot_spends` (BR-262); ghi sổ `GIFT_REDEEM` −giá (khoá `gift_redeem:<redemptionId>`).
 - **Lỗi:** 404 quà không có hoặc không active; 422 "Gift is out of stock"; 422 "Insufficient green points"; 409 "Please retry" khi xung đột tuần tự hoá (P2034) với một lần đổi khác cùng lúc.
-- **File:** `RW/modules/gift/gift.api.routes.ts`, `gift.service.ts > redeem()`, `RW/modules/green-point/green-point-lot.util.ts > getBalance(), spendLotsFifo()`.
+- **File:** `RW/modules/gift/gift.api.routes.ts`, `gift.service.ts > redeem()`, `RW/modules/gift/gift-stock.util.ts > takeOneFromBatches()`, `RW/modules/green-point/green-point-lot.util.ts > getBalance(), spendLotsFifo()`.
 
 ```mermaid
 sequenceDiagram
@@ -1140,26 +1143,27 @@ sequenceDiagram
   else xung đột Serializable (P2034)
     RW-->>U: 409 Please retry
   else
-    RW->>DB: stock-1, redemption PROCESSING, trừ lô (hạn sớm trước) + lot spends, ledger GIFT_REDEEM
+    RW->>DB: redemption PROCESSING, lô quà -1 (hạn sớm trước) + REDEEM_OUT + cache, trừ lô điểm + lot spends, ledger GIFT_REDEEM
     RW-->>U: 200 redemption
   end
 ```
 
 ### F38 — Xử lý đơn đổi quà
-- `/admin/gifts` → `GET /api/v1/admin/gift-redemptions` (admin) → `PATCH /admin/gift-redemptions/:id/status {status}`.
+- `/admin/gifts` → `GET /api/v1/admin/gift-redemptions` (admin; lọc được theo `sourceId`, mỗi đơn kèm `source`) → `PATCH /admin/gift-redemptions/:id/status {status}` (admin).
 - Chuyển trạng thái: PROCESSING → SHIPPED | CANCELLED; SHIPPED → DELIVERED | CANCELLED (BR-230).
 - Khi CANCELLED và `greenPointsSpent > 0` (`refundRedemptionPoints()`, trong cùng transaction):
   - Ghi `GIFT_REDEEM_REFUND` +đã tiêu (khoá `gift_redeem_refund:<redemptionId>`); đã có thì không làm gì nữa (hoàn đúng 1 lần, BR-231).
   - Đơn có `green_point_lot_spends`: phần của lô còn hạn cộng lại đúng lô đó, giữ hạn cũ; phần của lô đã hết hạn lúc huỷ ghi ngay `EXPIRE` −phần đó (khoá `expire:<lotId>:<redemptionId>`), không cộng lại (BR-263).
   - Đơn tạo trước spec 014 (không có lot spend): tạo một lô mới, hạn đủ `pointExpirationDays` tính từ lúc huỷ (BR-264).
-  - **Không hoàn tồn kho.**
-- **Lỗ hổng:** route PATCH **không có kiểm tra admin**, nên người dùng đăng nhập bất kỳ đều đổi được trạng thái (99, ISSUE-S09).
+- Kho (spec 015, BR-234):
+  - Huỷ đơn đang **PROCESSING** có `batch_id`: `returnToBatch()` ghi `CANCEL_RETURN` +1 (unique `(redemption_id, type)`, nên huỷ lặp chỉ cộng 1), cộng lô +1, cache +1 nếu lô còn hạn. Lô đã hết hạn thì món vẫn về lô, job F50 ghi hết hạn ở lần chạy sau.
+  - Huỷ đơn **SHIPPED** hoặc đơn cũ không có lô: kho không đổi. Việc admin chọn "hàng có về kho" để cho bước 5–6.
 - Không có thông báo gửi cho người đổi.
 - Người dùng xem đơn của mình ở `/profile/orders` qua `GET /me/redemptions`.
-- **File:** `gift.service.ts > updateRedemptionStatus(), refundRedemptionPoints()`, `RW/modules/green-point/green-point-lot.util.ts > planRefund()`.
+- **File:** `gift.service.ts > updateRedemptionStatus(), refundRedemptionPoints()`, `RW/modules/gift/gift-stock.util.ts > returnToBatch()`, `RW/modules/green-point/green-point-lot.util.ts > planRefund()`.
 
 ### F39 — Quản lý quà và mức độ khó (admin; mức độ khó deprecated)
-- Quà: `POST /api/v1/gifts`, `PUT /api/v1/gifts/:id` (admin). Ảnh được tạo thành Media GIFT. Sau khi ghi thì enqueue dịch (F45). Không có API xoá quà.
+- Quà: `POST /api/v1/gifts`, `PUT /api/v1/gifts/:id` (admin). Ảnh được tạo thành Media GIFT. Sau khi ghi thì enqueue dịch (F45). Không có API xoá quà. Body có `stockRemaining` thì bị bỏ qua: tồn kho chỉ đổi qua lô (F49), quà mới có tồn kho 0.
 - Mức độ khó (**deprecated**, bỏ ở đợt dọn dẹp — đợt C; incident-service và client không còn gọi): `GET /api/v1/difficulties` (public), `PUT /api/v1/difficulties/:id` (admin) để sửa tên, `maxVolunteers`, `greenPoints`. Không có API tạo hoặc xoá.
 - **Bug:** PUT difficulty mà không gửi tên thì tên vi/en bị ghi thành chuỗi rỗng (99).
 - **File:** `RW/modules/gift/*`, `RW/modules/difficulty/*`.
@@ -1381,3 +1385,41 @@ sequenceDiagram
 - Code phía reward đã có: `CAMPAIGN_FACEBOOK_RECOGNITION` → caption do ai-service sinh (`POST /api/v1/social/campaign-facebook-caption`, lỗi thì dùng mẫu tiếng Việt) → Facebook Graph `/photos` hoặc `/feed`, và/hoặc webhook.
 - **Phía incident đã comment out đoạn phát event** (`campaign.service.ts` khoảng dòng 1607–1616). Queue `facebook-recognition` riêng cũng không có producer. Tính năng hiện **không chạy**.
 - **File:** `RW/modules/facebook-recognition/facebook-recognition.service.ts`, `AI/social/*`.
+
+### F49 — Nguồn quà, nhập kho theo lô, ghi giảm, lịch sử kho
+- **Actor:** admin (`requireAdmin` trên mọi route).
+- **Nguồn:** `/admin/gift-sources` → `GET/POST /api/v1/admin/gift-sources`, `GET/PUT /api/v1/admin/gift-sources/:id`. Không xoá cứng; "Ngừng" là `PUT {status: "INACTIVE"}` (BR-236). Logo: `logoUrl` (URL Cloudinary) tạo Media `GIFT_SOURCE_LOGO`; `logoUrl: ""` gỡ logo. Chi tiết nguồn: `GET /admin/gift-sources/:id/batches`.
+- **Nhập kho:** `/admin/gifts/:id/stock` → `POST /api/v1/admin/gifts/:id/stock-batches {sourceId, quantity, unitValueVnd, receivedAt, expiresAt?, reference, note?}`. Một transaction: kiểm quà chưa xoá (404), nguồn tồn tại (404) và ACTIVE (422 "Gift source is inactive") → tạo lô `remaining = quantity` → movement `STOCK_IN` +quantity → cache +quantity (BR-237).
+- **Ghi giảm:** `POST /api/v1/admin/stock-batches/:id/adjustments {quantity, reason, note?}`. Trừ có điều kiện `remaining >= quantity` (422 "Not enough stock in batch") → `ADJUST_OUT` −quantity kèm lý do → cache −quantity nếu lô còn hạn. Không có thao tác tăng: thừa hàng thì nhập lô mới (BR-239).
+- **Lịch sử:** `GET /api/v1/admin/gifts/:id/stock-movements?batchId&type`, mới nhất trước; tên người làm lấy qua identity, null là Hệ thống.
+- **File:** `RW/modules/gift/gift-source.api.routes.ts`, `gift-source.service.ts`, `gift-stock.api.routes.ts`, `gift-stock.service.ts`, `gift-stock.util.ts > adjustBatch()`.
+
+```mermaid
+sequenceDiagram
+  actor A as Admin
+  participant RW as reward
+  participant DB as rewarddb
+  A->>RW: POST /admin/gifts/:id/stock-batches
+  RW->>DB: TX: gift chưa xoá? source ACTIVE?
+  alt nguồn ngừng
+    RW-->>A: 422 Gift source is inactive
+  else
+    RW->>DB: INSERT batch (remaining = quantity), STOCK_IN, gifts.stock_remaining += quantity
+    RW-->>A: 201 {batch, stockRemaining}
+  end
+```
+
+### F50 — Hết hạn lô quà (job nền) và đối soát tồn kho
+- Worker RS (`RW/worker.ts`) chạy `startGiftStockExpiryJob()`: một lần khi khởi động, sau đó mỗi `GIFT_STOCK_EXPIRY_INTERVAL_MS` (mặc định 24 giờ); tắt bằng `GIFT_STOCK_EXPIRY_ENABLED=false`.
+- `expireDueBatches()`: duyệt bằng cursor `(expires_at, id)` các lô `expires_at <= now AND remaining > 0`, mỗi lô một transaction: `UPDATE … SET remaining = 0 WHERE remaining = R` rồi movement `EXPIRED` −R (actor null). Lô lỗi ghi log, thử lại lần sau; chạy lại không ghi trùng (BR-224).
+- `reconcileStockCache()`: đặt `gifts.stock_remaining` = tổng `remaining` các lô còn hạn ở mọi quà đang lệch (BR-235).
+- Đổi quà và `GET /gifts` đã bỏ qua lô hết hạn, nên job chậm không làm sai số người dùng thấy; job giữ lịch sử kho và cache khớp.
+- Admin thấy nhãn "Sắp hết hạn" (lô hết hạn trong 7 ngày, còn hàng) ở danh sách quà (`expiringSoon`, chỉ trả cho admin) và trang kho.
+- **File:** `RW/modules/gift/gift-stock-expiry.job.ts`.
+
+### F51 — Báo cáo nguồn quà và xuất CSV
+- `/admin/gift-sources/:id` tab Báo cáo → `GET /api/v1/admin/gift-sources/:id/report?from&to&format=json|csv` (admin).
+- Khoảng ngày theo giờ +07:00, `to` tính tới hết ngày, mặc định 30 ngày gần nhất; `from > to` hoặc sai định dạng → 400.
+- Mỗi quà và tổng: nhập (lô có `received_at` trong khoảng), đã trao (đơn DELIVERED có `status_updated_at` trong khoảng), đang giữ (đơn PROCESSING/SHIPPED hiện tại), hao hụt theo lý do và hết hạn (movement trong khoảng), còn trong kho (lô còn hạn hiện tại), giá trị đã trao (`unit_value_vnd` của lô từng đơn), số người nhận khác nhau. Đơn không có lô không tính cho nguồn nào (BR-227).
+- CSV: BOM UTF-8, dòng `TOTAL` rồi mỗi quà một dòng, không có thông tin người nhận. Client tải bằng `requestApi` `responseType: "blob"`.
+- **File:** `RW/modules/gift/gift-source-report.ts > parseRange(), buildSourceReport(), toCsv(), loadSourceReport()`.

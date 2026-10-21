@@ -420,11 +420,38 @@ stateDiagram-v2
 
 | Từ → sang | Ai (thực tế trong code) | Điều kiện | Side effect | File |
 |---|---|---|---|---|
-| (mới) → PROCESSING | User đăng nhập | BR-222..BR-226 | Trừ tồn kho; trừ lô điểm còn hạn theo hạn sớm nhất trước, ghi `green_point_lot_spends` (BR-262); ghi sổ `GIFT_REDEEM` âm | `RW/modules/gift/gift.service.ts > redeem()` |
-| PROCESSING → SHIPPED; SHIPPED → DELIVERED | **User đăng nhập bất kỳ** (thiếu kiểm tra admin) | BR-230 | statusUpdatedAt | `updateRedemptionStatus()` |
-| PROCESSING / SHIPPED → CANCELLED | như trên | BR-230 | cancelledAt; ghi `GIFT_REDEEM_REFUND` (1 lần); trả điểm về đúng lô còn hạn, phần của lô đã hết hạn ghi `EXPIRE` ngay; đơn cũ không có lot spend thì tạo lô mới (BR-231, BR-263, BR-264); không hoàn tồn kho | `updateRedemptionStatus()` |
+| (mới) → PROCESSING | User đăng nhập | BR-222..BR-226, BR-233 | Lấy 1 món từ lô quà còn hạn (hạn sớm trước), ghi `batch_id`, movement `REDEEM_OUT`, cache tồn kho −1; trừ lô điểm còn hạn theo hạn sớm nhất trước, ghi `green_point_lot_spends` (BR-262); ghi sổ `GIFT_REDEEM` âm | `RW/modules/gift/gift.service.ts > redeem()` |
+| PROCESSING → SHIPPED; SHIPPED → DELIVERED | Admin (`requireAdmin`, spec 015) | BR-230 | statusUpdatedAt | `updateRedemptionStatus()` |
+| PROCESSING / SHIPPED → CANCELLED | như trên | BR-230 | cancelledAt; ghi `GIFT_REDEEM_REFUND` (1 lần); trả điểm về đúng lô còn hạn, phần của lô đã hết hạn ghi `EXPIRE` ngay; đơn cũ không có lot spend thì tạo lô mới (BR-231, BR-263, BR-264). Từ PROCESSING và có lô: trả 1 món về đúng lô (`CANCEL_RETURN`, 1 lần, BR-234); từ SHIPPED hoặc đơn không có lô: kho không đổi | `updateRedemptionStatus()`, `gift-stock.util.ts > returnToBatch()` |
 
 Không có thông báo nào được gửi khi đơn đổi quà đổi trạng thái.
+
+### 11.1 Nguồn quà (`gift_sources.status`) và lô quà (`gift_stock_batches`)
+
+Nguồn: `ACTIVE ⇄ INACTIVE`, do admin đổi qua `PUT /admin/gift-sources/:id {status}`; không xoá cứng. Nguồn INACTIVE không nhập kho mới được, lô đã nhập vẫn đổi được (BR-236).
+
+Lô quà không có cột trạng thái; trạng thái suy ra khi đọc (`gift-stock.util.ts > batchState()`), theo thứ tự ưu tiên:
+
+```mermaid
+stateDiagram-v2
+  [*] --> IN_STOCK: nhập kho (STOCK_IN)
+  IN_STOCK --> EXPIRING_SOON: còn ≤ 7 ngày tới hạn
+  IN_STOCK --> OUT_OF_STOCK: đổi quà / ghi giảm hết
+  EXPIRING_SOON --> OUT_OF_STOCK: đổi quà / ghi giảm hết
+  OUT_OF_STOCK --> IN_STOCK: huỷ đơn PROCESSING trả món (CANCEL_RETURN)
+  IN_STOCK --> EXPIRED: tới expires_at
+  EXPIRING_SOON --> EXPIRED: tới expires_at
+  EXPIRED --> EXPIRED: job ghi EXPIRED, remaining = 0
+```
+
+| Trạng thái | Điều kiện | Tính vào tồn kho | Đổi quà lấy được |
+|---|---|---|---|
+| EXPIRED | `expires_at <= now` | Không | Không |
+| OUT_OF_STOCK | `remaining = 0` | — | Không |
+| EXPIRING_SOON | còn hàng, `expires_at <= now + 7 ngày` | Có | Có |
+| IN_STOCK | còn lại | Có | Có |
+
+Thay đổi `remaining` chỉ qua movement: STOCK_IN, REDEEM_OUT, CANCEL_RETURN, ADJUST_OUT, EXPIRED (BR-233..BR-235, BR-239, BR-224).
 
 ## 12. Lô điểm xanh (`green_point_lots`, tính từ `remaining` và `expires_at`)
 

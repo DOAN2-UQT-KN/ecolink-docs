@@ -523,6 +523,12 @@ Sơ đồ chỉ vẽ các bảng còn được code dùng. Các bảng ranking /
 erDiagram
   Media ||--o{ Gift : "mediaId (restrict)"
   Gift ||--o{ GiftRedemption : "giftId (restrict)"
+  Media ||--o{ GiftSource : "logoMediaId (set null)"
+  GiftSource ||--o{ GiftStockBatch : "sourceId (restrict)"
+  Gift ||--o{ GiftStockBatch : "giftId (restrict)"
+  GiftStockBatch ||--o{ GiftStockMovement : "batchId (restrict)"
+  GiftStockBatch ||--o{ GiftRedemption : "batchId (restrict)"
+  GiftRedemption ||--o{ GiftStockMovement : "redemptionId (restrict)"
   GreenPointTransaction ||--o| GreenPointLot : "transactionId (set null)"
   GreenPointLot ||--o{ GreenPointLotSpend : "lotId (restrict)"
   GiftRedemption ||--o{ GreenPointLotSpend : "redemptionId (restrict)"
@@ -581,9 +587,12 @@ SP (`kind = SP`), RP (`CRP` / `VRP`) trong `user_point_transactions` và số d�
 
 | Bảng | Field | Ghi chú |
 |---|---|---|
-| Media (`media`) | url, type (`GIFT`) | |
-| Gift (`gifts`) | name (255), nameVi/nameEn?, mediaId? (FK restrict), description text (+Vi/En), greenPoints (giá niêm yết, trừ vào lô điểm xanh, không giảm giá), stockRemaining? (null nghĩa là vô hạn), isActive (default true), deletedAt | |
-| GiftRedemption (`gift_redemptions`) | userId, giftId (FK restrict), greenPointsSpent, phoneNumber varchar(32) (default ''), pickupLocation text (default ''), status (`GiftRedemptionStatus`, default PROCESSING), statusUpdatedAt, cancelledAt? | Không có cột updatedAt |
+| Media (`media`) | url, type (`GIFT`, `GIFT_SOURCE_LOGO`), deletedAt | Logo nguồn có `deletedAt` thì coi như không có logo |
+| Gift (`gifts`) | name (255), nameVi/nameEn?, mediaId? (FK restrict), description text (+Vi/En), greenPoints (giá niêm yết, trừ vào lô điểm xanh, không giảm giá), stockRemaining int NOT NULL default 0, isActive (default true), deletedAt | `stockRemaining` chỉ là cache của `SUM(remaining)` các lô còn hạn, cập nhật cùng transaction với movement, đối soát hằng ngày (BR-235). Không còn "không giới hạn" (spec 015) |
+| GiftRedemption (`gift_redemptions`) | userId, giftId (FK restrict), greenPointsSpent, phoneNumber varchar(32) (default ''), pickupLocation text (default ''), status (`GiftRedemptionStatus`, default PROCESSING), statusUpdatedAt, cancelledAt?, batchId? (FK → `gift_stock_batches`, restrict) | Không có cột updatedAt. `batchId` null với đơn trước spec 015; nguồn của đơn suy ra qua `batch.sourceId` |
+| GiftSource (`gift_sources`) | name (255), type (`GiftSourceType`: SPONSOR, ECOLINK, DONATION), contactName?, contactPhone? (32), contactEmail?, logoMediaId? (FK set null), showOnGift (default false), status (`GiftSourceStatus`: ACTIVE, INACTIVE), note?, createdBy?, createdAt, updatedAt | Không xoá cứng, không có `deletedAt`. Index `(status, type)`, `(name)`. Nguồn "Tồn kho trước refactor" (id `00000000-0000-4000-8000-000000000015`, ECOLINK) do migration tạo |
+| GiftStockBatch (`gift_stock_batches`) | giftId (FK restrict), sourceId (FK restrict), quantity, remaining, unitValueVnd, receivedAt, expiresAt?, reference (255), note?, createdBy?, createdAt | **CHECK** `quantity > 0`, `0 ≤ remaining ≤ quantity`, `unit_value_vnd ≥ 0`, `expires_at IS NULL OR expires_at > received_at`. Index partial `(gift_id, expires_at) WHERE remaining > 0`, `(expires_at) WHERE remaining > 0`, `(source_id, received_at)`. Lô còn hạn: `expires_at IS NULL OR expires_at > now` |
+| GiftStockMovement (`gift_stock_movements`) | giftId, batchId, type (`GiftStockMovementType`: STOCK_IN, REDEEM_OUT, CANCEL_RETURN, ADJUST_OUT, EXPIRED), quantity có dấu, reason? (`GiftStockAdjustReason`: DAMAGED, LOST, COUNT_SHORTAGE, RETURN_TO_SOURCE), note?, redemptionId?, actorId?, createdAt | Chỉ thêm, không sửa. **UNIQUE** `(redemption_id, type)`; **CHECK** reason có khi và chỉ khi type = ADJUST_OUT. Bất biến: mỗi lô `SUM(quantity) = remaining`. `actorId`: admin (nhập, ghi giảm, huỷ trả), người đổi (REDEEM_OUT), null = hệ thống |
 
 ### 3.3 Quy tắc điểm và bảng cũ
 

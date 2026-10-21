@@ -247,6 +247,7 @@ Bảng chỉ ghi tên biến và ý nghĩa, không ghi giá trị. Chi tiết c�
 | `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `OPENAI_CHAT_MODEL` (mặc định `gpt-4o-mini`), `AUTO_CREATE_DB_TABLES` | ai | LLM |
 | `FACEBOOK_APP_ID`, `FACEBOOK_APP_SECRET`, `FACEBOOK_ACCESS_TOKEN`, `FACEBOOK_FEED_OBJECT_ID`, `FACEBOOK_GRAPH_API_VERSION`, `FACEBOOK_RECOGNITION_WEBHOOK_URL` | reward | Đăng bài vinh danh lên Facebook |
 | `GREEN_POINT_EXPIRY_INTERVAL_MS`, `GREEN_POINT_EXPIRY_ENABLED` | reward (worker) | Chu kỳ job ghi hết hạn lô điểm xanh (mặc định 1 giờ) / `false` thì tắt |
+| `GIFT_STOCK_EXPIRY_INTERVAL_MS`, `GIFT_STOCK_EXPIRY_ENABLED` | reward (worker) | Chu kỳ job ghi hết hạn lô quà và đối soát tồn kho (mặc định 24 giờ) / `false` thì tắt |
 | `VITE_*` | client | Xem [06-frontend.md](06-frontend.md) |
 
 ## 7. Thư viện dùng chung (`ecolink-server/shared`)
