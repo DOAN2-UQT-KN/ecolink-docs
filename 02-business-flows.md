@@ -1388,7 +1388,7 @@ sequenceDiagram
 
 ### F49 — Nguồn quà, nhập kho theo lô, ghi giảm, lịch sử kho
 - **Actor:** admin (`requireAdmin` trên mọi route).
-- **Nguồn:** `/admin/gift-sources` → `GET/POST /api/v1/admin/gift-sources`, `GET/PUT /api/v1/admin/gift-sources/:id`. Không xoá cứng; "Ngừng" là `PUT {status: "INACTIVE"}` (BR-236). Logo: `logoUrl` (URL Cloudinary) tạo Media `GIFT_SOURCE_LOGO`; `logoUrl: ""` gỡ logo. Chi tiết nguồn: `GET /admin/gift-sources/:id/batches`.
+- **Nguồn:** `/admin/gifts?tab=sources` → `GET/POST /api/v1/admin/gift-sources`, `GET/PUT /api/v1/admin/gift-sources/:id`. Không xoá cứng; "Ngừng" là `PUT {status: "INACTIVE"}` (BR-236). Logo: `logoUrl` (URL Cloudinary) tạo Media `GIFT_SOURCE_LOGO`; `logoUrl: ""` gỡ logo. Chi tiết nguồn (`/admin/gifts/sources/:id`): `GET /admin/gift-sources/:id/batches`.
 - **Nhập kho:** `/admin/gifts/:id/stock` → `POST /api/v1/admin/gifts/:id/stock-batches {sourceId, quantity, unitValueVnd, receivedAt, expiresAt?, reference, note?}`. Một transaction: kiểm quà chưa xoá (404), nguồn tồn tại (404) và ACTIVE (422 "Gift source is inactive") → tạo lô `remaining = quantity` → movement `STOCK_IN` +quantity → cache +quantity (BR-237).
 - **Ghi giảm:** `POST /api/v1/admin/stock-batches/:id/adjustments {quantity, reason, note?}`. Trừ có điều kiện `remaining >= quantity` (422 "Not enough stock in batch") → `ADJUST_OUT` −quantity kèm lý do → cache −quantity nếu lô còn hạn. Không có thao tác tăng: thừa hàng thì nhập lô mới (BR-239).
 - **Lịch sử:** `GET /api/v1/admin/gifts/:id/stock-movements?batchId&type`, mới nhất trước; tên người làm lấy qua identity, null là Hệ thống.
@@ -1418,7 +1418,7 @@ sequenceDiagram
 - **File:** `RW/modules/gift/gift-stock-expiry.job.ts`.
 
 ### F51 — Báo cáo nguồn quà và xuất CSV
-- `/admin/gift-sources/:id` tab Báo cáo → `GET /api/v1/admin/gift-sources/:id/report?from&to&format=json|csv` (admin).
+- `/admin/gifts/sources/:id` tab Báo cáo → `GET /api/v1/admin/gift-sources/:id/report?from&to&format=json|csv` (admin).
 - Khoảng ngày theo giờ +07:00, `to` tính tới hết ngày, mặc định 30 ngày gần nhất; `from > to` hoặc sai định dạng → 400.
 - Mỗi quà và tổng: nhập (lô có `received_at` trong khoảng), đã trao (đơn DELIVERED có `status_updated_at` trong khoảng), đang giữ (đơn PROCESSING/SHIPPED hiện tại), hao hụt theo lý do và hết hạn (movement trong khoảng), còn trong kho (lô còn hạn hiện tại), giá trị đã trao (`unit_value_vnd` của lô từng đơn), số người nhận khác nhau. Đơn không có lô không tính cho nguồn nào (BR-227).
 - CSV: BOM UTF-8, dòng `TOTAL` rồi mỗi quà một dòng, không có thông tin người nhận. Client tải bằng `requestApi` `responseType: "blob"`.
