@@ -225,17 +225,16 @@ Phía client, SOS: tab **SOS** của trang campaign (`FE/app/(pages)/(main)/camp
 
 `GET /campaigns/my?is_owner=true` của Owner tổ chức gồm cả mọi campaign của tổ chức đó (BR-185). Response campaign có người xem kèm `can_manage_campaign`, `can_delete_campaign`.
 
-### 2.6 Điểm, quà tặng, gamification (reward)
+### 2.6 Điểm xanh, quà tặng, quy tắc điểm (reward)
 
 | Hành động | Khách | User | Admin | Nơi kiểm tra |
 |---|---|---|---|---|
-| Xem quà, chi tiết quà, difficulty (deprecated), leaderboard, season hiện tại, ước tính thưởng (deprecated), bảng xếp hạng gamification | ✅ | ✅ | ✅ | Không có guard |
+| Xem quà, chi tiết quà, difficulty (deprecated) | ✅ | ✅ | ✅ | Không có guard |
 | Lọc quà theo `isActive` | ❌ | ❌ | ✅ | `gift.api.routes.ts` (tryAuthenticate) |
-| Đổi quà; xem điểm, lịch sử, đơn, badge, tổng hợp của mình | ❌ | ✅ | ✅ | `authenticate` |
-| Xem metric tables và columns | ❌ | ✅ | ✅ | `authenticate` |
+| Đổi quà; xem điểm (số dư, sắp hết hạn, tổng đã kiếm), lịch sử điểm, đơn của mình | ❌ | ✅ | ✅ | `authenticate` |
 | Tạo và sửa quà; sửa difficulty (deprecated); xem mọi đơn đổi quà | ❌ | ❌ | ✅ | `requireAdmin` |
 | **Đổi trạng thái đơn đổi quà** | ❌ | 🔓 | ✅ | Thiếu `requireAdmin` (`gift.api.routes.ts`) |
-| Mọi `/admin/gamification/*` (gồm xem / sửa quy tắc điểm và lịch sử thay đổi `point-rules`, `point-rules/history`), `/admin/seasons/*` | ❌ | ❌ | ✅ | `requireAdmin` |
+| `/admin/gamification/point-rules` (xem / sửa, gồm số ngày hết hạn điểm) và `point-rules/history` — các route admin gamification duy nhất còn lại từ spec 014 | ❌ | ❌ | ✅ | `requireAdmin` |
 | `/internal/v1/*` của reward (`/point-rules/campaign-completion`, `/difficulties*` deprecated) | Chỉ service có `INTERNAL_REWARD_API_KEY` | | | `requireInternalRewardApiKey` |
 
 ### 2.7 Thông báo

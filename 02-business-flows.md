@@ -55,9 +55,9 @@
 | F37 | Đổi quà | Quà tặng |
 | F38 | Xử lý đơn đổi quà | Quà tặng |
 | F39 | Quản lý quà và mức độ khó (admin; mức độ khó deprecated) | Quà tặng / Chiến dịch |
-| F40 | Xem điểm, lịch sử, bảng xếp hạng | Điểm |
-| F41 | Quản lý season và finalize season | Gamification |
-| F42 | Cấu hình rule điểm và badge | Gamification |
+| F40 | Xem điểm, sắp hết hạn, lịch sử | Điểm |
+| F41 | Hết hạn điểm xanh (job nền) và đối soát khi triển khai | Điểm |
+| F42 | Cấu hình quy tắc điểm | Điểm |
 | F43 | Gửi thông báo (in-app và email) | Thông báo |
 | F44 | Xem và đánh dấu đã đọc thông báo | Thông báo |
 | F45 | Dịch nội dung tự động | Đa ngôn ngữ |
@@ -1059,7 +1059,7 @@ sequenceDiagram
   INC-->>A: 200 {meeting_point, campaign_status}
   RL->>Q: publish envelope
   Q->>RW: RewardIntakeWorker
-  RW->>RW: đọc quy tắc điểm (trong TX), tính điểm, green point + SP + VRP
+  RW->>RW: đọc quy tắc điểm (trong TX), tính điểm, 1 dòng sổ + 1 lô điểm xanh
 ```
 
 ### F35 — Submission kết quả chiến dịch
@@ -1073,7 +1073,7 @@ sequenceDiagram
 
 ---
 
-## E. Điểm, quà tặng, gamification
+## E. Điểm xanh và quà tặng
 
 ### F36 — Reward nhận event và cộng điểm
 - **Actor:** hệ thống.
@@ -1089,14 +1089,12 @@ sequenceDiagram
        - Hoàn thành chiến dịch: mỗi người `round(campaignCompletionPoints × min(1, eligibleShifts / max(1, registeredShifts)))`, 0 điểm thì bỏ (`resolveCampaignCompletionCredits()`). Payload kiểu cũ `{campaignId, credits[{userId, points}]}` (event xếp hàng trước khi triển khai) vẫn được nhận trong một bản phát hành: dùng `points` có sẵn, metadata `legacyPayload: true`.
        - Report hoàn thành: `reportCompletionPoints` cho chủ report; 0 thì không cộng (`resolveReportCompletionCredits()`). Trường `points` của payload cũ bị bỏ qua.
        - Mốc vote: mỗi ngưỡng ≤ voteCount, ngưỡng thứ i (1-based, tăng dần) được `baseReportPoint × i`; mỗi (report, ngưỡng) chỉ trả một lần (`resolveReportVoteMilestoneCredits()`).
-     - Cho mỗi credit (`applyResolvedCredits()` → `applyGreenPointLedgerCredit()`):
-       - Insert `green_point_transactions` với `metadata` gồm `ruleId` và các đầu vào (BR-257). Trùng (user, type, resource) thì bỏ qua (BR-240).
-       - Upsert `user_green_point_balances += points`.
-       - **SP:** ghi sổ và lô ví, hết hạn sau `expirationDays` (mặc định 90).
-       - **RP:** `CAMPAIGN_COMPLETION` → VRP; report hoặc mốc vote → CRP. Gắn vào season hiện tại (không có season thì bỏ qua RP). Cập nhật `user_season_rp_totals`.
-       - `sourceType` của dòng SP / RP: `CAMPAIGN` cho campaign, `REPORT` cho report **và mốc vote** (trước đây mốc vote là `SYSTEM`; `point-source.util.ts > isReportResourceType()`).
+     - Cho mỗi credit (`applyResolvedCredits()` → `creditPoints()`):
+       - `insertLedgerOnce()`: insert `green_point_transactions` với `idempotency_key` (`campaign_completion:<campaignId>`, `report_completion:<reportId>`, `vote_milestone:<reportId>:<threshold>`) và `metadata` gồm `ruleId` và các đầu vào (BR-257); `ON CONFLICT (user_id, idempotency_key) DO NOTHING` nên trùng thì bỏ qua mà transaction không bị abort (BR-240).
+       - Có dòng mới thì tạo 1 lô `green_point_lots` (`transactionId` = dòng sổ, `amount = remaining = points`, `expires_at = now + pointExpirationDays`, mặc định 90; BR-260).
+       - Không còn ghi `user_green_point_balances`, SP, CRP / VRP hay season (spec 014).
 - **Lỗi:** payload sai hoặc lỗi DB → retry với backoff, sau 5 lần thì xoá message. Queue intake **không ghi trạng thái job** (dùng NoopStore).
-- **File:** `RW/queue/green-point-queue.bootstrap.ts`, `RW/modules/green-point/*` (`strategies/campaign-completion-green-point.strategy.ts`, `report-completion-green-point.strategy.ts`, `report-vote-milestone-green-point.strategy.ts`, `green-point-ledger.util.ts`), `RW/modules/gamification/gamification-config.service.ts > loadActivePointRules()`, `point-source.util.ts`, `sp-credit.util.ts`, `rp-credit.util.ts`.
+- **File:** `RW/queue/green-point-queue.bootstrap.ts`, `RW/modules/green-point/*` (`strategies/campaign-completion-green-point.strategy.ts`, `report-completion-green-point.strategy.ts`, `report-vote-milestone-green-point.strategy.ts`, `green-point-ledger.util.ts > insertLedgerOnce(), creditPoints(), applyResolvedCredits()`, `green-point-transaction.constants.ts > IdempotencyKey`), `RW/modules/gamification/gamification-config.service.ts > loadActivePointRules()`.
 
 ```mermaid
 sequenceDiagram
@@ -1108,7 +1106,7 @@ sequenceDiagram
   Q->>W: receive
   W->>W: chọn strategy, validate
   W->>DB: TX: loadActivePointRules(tx), tính điểm
-  W->>DB: TX: green_point_transactions, balances, user_sp_wallet, user_point_transactions(SP, CRP/VRP), user_season_rp_totals
+  W->>DB: TX: green_point_transactions (ON CONFLICT DO NOTHING), green_point_lots
   alt lỗi
     W->>Q: retry (backoff, tối đa 5)
   end
@@ -1118,17 +1116,15 @@ sequenceDiagram
 1. `/gifts`: `GET /api/v1/gifts?isActive=true`. Người không phải admin chỉ thấy quà đang active.
 2. `POST /api/v1/gifts/:id/redeem {phoneNumber, pickupLocation}` (JWT). `/exchange` là alias giống hệt.
 3. `gift.service.ts > redeem()`:
-   - Lấy mức giảm giá tốt nhất từ badge (luôn = 0, vì chưa có ai được cấp badge).
    - Transaction Serializable:
      - Quà phải active.
      - Trừ tồn kho theo kiểu nguyên tử (null nghĩa là vô hạn).
-     - Tính giá = `ceil(greenPoints × (10000 − discountBps)/10000)`.
-     - Kiểm tra số SP khả dụng (lô chưa hết hạn) ≥ giá.
+     - Giá = `gift.greenPoints` (giá niêm yết, không giảm giá; BR-226).
+     - Số dư (tổng `remaining` của lô còn hạn) ≥ giá (BR-225, BR-261).
      - Tạo đơn PROCESSING.
-     - Trừ SP theo FIFO của hạn dùng; ghi sổ SP âm và `GIFT_REDEEM` âm.
-- **Lỗi:** 404 quà không có hoặc không active; 422 hết hàng; 422 không đủ SP.
-- **Lưu ý:** không trừ `user_green_point_balances` (99).
-- **File:** `RW/modules/gift/gift.api.routes.ts`, `gift.service.ts > redeem()`, `RW/modules/gamification/sp-wallet.util.ts`.
+     - `spendLotsFifo()`: trừ lô theo `expires_at` rồi `created_at` tăng dần, mỗi lần trừ có điều kiện `remaining >= phần trừ`, ghi `green_point_lot_spends` (BR-262); ghi sổ `GIFT_REDEEM` −giá (khoá `gift_redeem:<redemptionId>`).
+- **Lỗi:** 404 quà không có hoặc không active; 422 "Gift is out of stock"; 422 "Insufficient green points"; 409 "Please retry" khi xung đột tuần tự hoá (P2034) với một lần đổi khác cùng lúc.
+- **File:** `RW/modules/gift/gift.api.routes.ts`, `gift.service.ts > redeem()`, `RW/modules/green-point/green-point-lot.util.ts > getBalance(), spendLotsFifo()`.
 
 ```mermaid
 sequenceDiagram
@@ -1139,10 +1135,12 @@ sequenceDiagram
   RW->>DB: TX Serializable
   alt hết hàng
     RW-->>U: 422 out of stock
-  else không đủ SP
-    RW-->>U: 422 insufficient SP
+  else không đủ điểm còn hạn
+    RW-->>U: 422 Insufficient green points
+  else xung đột Serializable (P2034)
+    RW-->>U: 409 Please retry
   else
-    RW->>DB: stock-1, redemption PROCESSING, trừ SP FIFO, ledger
+    RW->>DB: stock-1, redemption PROCESSING, trừ lô (hạn sớm trước) + lot spends, ledger GIFT_REDEEM
     RW-->>U: 200 redemption
   end
 ```
@@ -1150,11 +1148,15 @@ sequenceDiagram
 ### F38 — Xử lý đơn đổi quà
 - `/admin/gifts` → `GET /api/v1/admin/gift-redemptions` (admin) → `PATCH /admin/gift-redemptions/:id/status {status}`.
 - Chuyển trạng thái: PROCESSING → SHIPPED | CANCELLED; SHIPPED → DELIVERED | CANCELLED (BR-230).
-- Khi CANCELLED: **hoàn SP** (tạo lô mới với hạn mới), ghi `GIFT_REDEEM_REFUND`. **Không hoàn tồn kho.**
+- Khi CANCELLED và `greenPointsSpent > 0` (`refundRedemptionPoints()`, trong cùng transaction):
+  - Ghi `GIFT_REDEEM_REFUND` +đã tiêu (khoá `gift_redeem_refund:<redemptionId>`); đã có thì không làm gì nữa (hoàn đúng 1 lần, BR-231).
+  - Đơn có `green_point_lot_spends`: phần của lô còn hạn cộng lại đúng lô đó, giữ hạn cũ; phần của lô đã hết hạn lúc huỷ ghi ngay `EXPIRE` −phần đó (khoá `expire:<lotId>:<redemptionId>`), không cộng lại (BR-263).
+  - Đơn tạo trước spec 014 (không có lot spend): tạo một lô mới, hạn đủ `pointExpirationDays` tính từ lúc huỷ (BR-264).
+  - **Không hoàn tồn kho.**
 - **Lỗ hổng:** route PATCH **không có kiểm tra admin**, nên người dùng đăng nhập bất kỳ đều đổi được trạng thái (99, ISSUE-S09).
 - Không có thông báo gửi cho người đổi.
 - Người dùng xem đơn của mình ở `/profile/orders` qua `GET /me/redemptions`.
-- **File:** `gift.service.ts > updateRedemptionStatus()`.
+- **File:** `gift.service.ts > updateRedemptionStatus(), refundRedemptionPoints()`, `RW/modules/green-point/green-point-lot.util.ts > planRefund()`.
 
 ### F39 — Quản lý quà và mức độ khó (admin; mức độ khó deprecated)
 - Quà: `POST /api/v1/gifts`, `PUT /api/v1/gifts/:id` (admin). Ảnh được tạo thành Media GIFT. Sau khi ghi thì enqueue dịch (F45). Không có API xoá quà.
@@ -1162,51 +1164,38 @@ sequenceDiagram
 - **Bug:** PUT difficulty mà không gửi tên thì tên vi/en bị ghi thành chuỗi rỗng (99).
 - **File:** `RW/modules/gift/*`, `RW/modules/difficulty/*`.
 
-### F40 — Xem điểm, lịch sử, bảng xếp hạng
-- `GET /me/points`, `GET /me/points/transactions` (kèm thông tin campaign, report, quà liên quan, lấy từ incident và identity), `GET /leaderboard`, `GET /leaderboard/me` (legacy: tổng điểm dương).
-- Gamification:
-  - `GET /me/gamification/summary`, `point-transactions?kind=CRP|VRP|SP`, `points-by-season`, `GET /me/badges`.
-  - `GET /gamification/leaderboards/:metric` (crp / vrp / org_aggregate): season đang ACTIVE lấy dữ liệu live; season INACTIVE lấy snapshot.
-  - `GET /gamification/campaign-reward-estimate?difficultyLevel` để ước tính điểm thưởng (**deprecated**, bỏ ở đợt C; `estimatedBonusMax` luôn 0). Điểm của chiến dịch hiển thị bằng trường `greenPoints` của campaign (= `campaignCompletionPoints` hiện hành).
-- **Client:** chỉ có `/profile/points` (dùng API legacy). **Chưa có UI** cho leaderboard, season, badge (06-frontend.md).
-- **File:** `RW/modules/user-points/*`, `RW/modules/gamification/gamification.controller.ts`, `gamification-leaderboard.service.ts`.
+### F40 — Xem điểm, sắp hết hạn, lịch sử
+- `GET /me/points` → `{balance, earnedTotal, expiringSoon:{amount, earliestAt}}` (BR-261, BR-265, BR-266) kèm field cũ `spendablePoints` = `greenPoints` = `balance`, `greenPointsEarnedTotal` = `earnedTotal` (giữ một bản phát hành).
+- `GET /me/points/transactions` (kèm thông tin campaign, report, quà liên quan, lấy từ incident và identity); thêm loại `EXPIRE`, `MIGRATION_ADJUST`, các dòng này có `resource = null`.
+- Điểm của chiến dịch hiển thị bằng trường `greenPoints` của campaign (= `campaignCompletionPoints` hiện hành).
+- Leaderboard, season, badge, gamification summary, `campaign-reward-estimate` đã gỡ ở spec 014 (route trả 404); client chưa từng gọi.
+- **Client:** `/profile/points` hiện 3 số: điểm hiện có, sắp hết hạn (kèm ngày sớm nhất), tổng đã kiếm; lịch sử ghi nhãn theo loại dòng (06-frontend.md).
+- **File:** `RW/modules/user-points/user-points.service.ts > getPoints(), getTransactions()`, `RW/modules/green-point/green-point-lot.util.ts > getBalance(), getExpiringSoon(), getEarnedTotal()`.
 
-### F41 — Quản lý season và finalize season
-- Admin:
-  - `POST /api/v1/admin/seasons {kind, startsAt, endsAt, status}` — không kiểm tra ngày, không kiểm tra trùng season ACTIVE.
-  - `PATCH /admin/seasons/:id` — đổi status mà **không** chốt sổ.
-- **Finalize:** `POST /admin/seasons/:id/finalize {openNext?, startsAt?, endsAt?}`. Trong 1 transaction, nếu season đang ACTIVE:
-  1. Xoá và tạo lại `leaderboard_snapshots` (CRP, VRP cho user; ORG_AGGREGATE cho tổ chức).
-  2. **Chi SP** theo `season_leaderboard_payout_tiers` cho CRP và VRP (không có cho ORG_AGGREGATE). Idempotent theo key.
-  3. Chuyển season sang INACTIVE.
-  4. Nếu `openNext`: tạo season mới ACTIVE cùng kind (lỗi 422 nếu đã có season ACTIVE khác).
-- **[CHƯA HOÀN THIỆN]:** không có cron tự động xoay season (`season_schedule_rules.autoRotate` chỉ lưu cấu hình).
-- **File:** `RW/modules/gamification/season.service.ts > finalizeSeason(), freezeSeasonTx(), applyPayoutTiersTx()`.
+### F41 — Hết hạn điểm xanh (job nền) và đối soát khi triển khai
+- **Actor:** hệ thống (job trong worker reward-service); người vận hành (script đối soát).
+- **Job hết hạn** (`green-point-expiry.job.ts`): khởi động trong `RW/worker.ts`, chạy mỗi `GREEN_POINT_EXPIRY_INTERVAL_MS` (mặc định 1 giờ), tắt bằng `GREEN_POINT_EXPIRY_ENABLED=false`. Mỗi lô `remaining > 0` và `expires_at <= now`: một transaction ghi `EXPIRE` −remaining (resourceType `GREEN_POINT_LOT`, khoá `expire:<lotId>`) và đặt `remaining = 0`. Lỗi một lô thì log, lượt sau thử lại. Số dư đã loại lô quá hạn ngay khi đọc nên job chậm cũng không làm sai số dư (BR-261).
+- **Triển khai spec 014** (thứ tự: backup → migrate → reconcile → code mới):
+  1. Migration `20261022100000_green_point_lots`: thêm và backfill `idempotency_key`, chuyển dòng mốc vote sang `resourceType = REPORT`, đổi `user_sp_wallet` thành `green_point_lots` (+ `transaction_id`, CHECK, partial index), tạo `green_point_lot_spends`, thêm `point_expiration_days` (chép từ `spendable_point_rules`).
+  2. `npm run reconcile:green-points` (`RW/scripts/reconcile-green-points.ts`): chạy hết hạn trước, rồi mỗi user có tổng sổ ≠ tổng lô nhận một dòng `MIGRATION_ADJUST` = lô − sổ (lô là chuẩn), danh sách ghi ra CSV. Chạy lại an toàn.
+- **File:** `RW/modules/green-point/green-point-expiry.job.ts > expireDueLots(), startGreenPointExpiryJob()`, `RW/scripts/reconcile-green-points.ts`, `ecolink-server/services/reward-service/prisma/migrations/20261022100000_green_point_lots/migration.sql`.
 
 ```mermaid
 sequenceDiagram
-  actor A as Admin
-  participant RW as reward
+  participant J as GreenPointExpiry job
   participant DB as rewarddb
-  A->>RW: POST /admin/seasons/:id/finalize {openNext}
-  RW->>DB: TX: snapshot leaderboard, chi SP theo payout tier, season=INACTIVE
-  opt openNext
-    RW->>DB: tạo season mới ACTIVE
+  loop mỗi GREEN_POINT_EXPIRY_INTERVAL_MS
+    J->>DB: tìm lô remaining > 0, expires_at <= now (theo lô 200)
+    loop mỗi lô
+      J->>DB: TX: INSERT EXPIRE (expire:lotId) ON CONFLICT DO NOTHING; remaining = 0 nếu chưa đổi
+    end
   end
-  RW-->>A: {snapshotsWritten, closed, next}
 ```
 
-### F42 — Cấu hình rule điểm và badge
-- Admin (`/api/v1/admin/gamification/*`):
-  - point-rules (trang `/admin/point-rules`, menu "Point rules"): `GET` trả quy tắc đang hiệu lực `{campaignCompletionPoints, baseReportPoint, reportMilestoneThresholds, reportCompletionPoints, effectiveFrom, updatedAt}` (chưa có → 404). `PATCH` gửi đủ 4 giá trị (BR-253); trong một transaction cập nhật dòng đang hiệu lực (hoặc tạo mới) và ghi `gamification_point_rule_history` với `changedBy` = admin (BR-258). Sửa chỉ áp cho điểm cộng sau đó; điểm đã cộng giữ nguyên (BR-257). `GET .../point-rules/history?page&limit` trả lịch sử mới nhất trước kèm `changedByName`. Bảng `report_vote_green_point_rules` và việc đồng bộ sang đó đã bỏ.
-  - sp-rules: `expirationDays`.
-  - multipliers, season-schedules.
-  - payout-tiers (CRUD).
-  - badges (tạo và sửa với `rulesConfig` AST, validate theo metric metadata; `reward.discountBps`…).
-- **[CHƯA HOÀN THIỆN]:**
-  - Không có code nào cấp badge (`evaluateBadge()` không được gọi).
-  - Multiplier, season schedule, `bonus_sp`, `perks` chỉ được lưu, không có tác dụng.
-- **File:** `RW/modules/gamification/gamification.controller.ts > adminGetPointRules(), adminPatchPointRules(), adminGetPointRuleHistory()`, `gamification-config.service.ts > upsertPointRules(), listPointRuleHistory()`, `badge.service.ts`, `badge-rule-evaluator.service.ts`, `RW/modules/metrics/*`, `FE/app/(pages)/(admin)/admin/point-rules/*`, `FE/apis/gamification/*`.
+### F42 — Cấu hình quy tắc điểm
+- Admin (`/api/v1/admin/gamification/point-rules`, trang `/admin/point-rules`, menu "Point rules"): `GET` trả quy tắc đang hiệu lực `{campaignCompletionPoints, baseReportPoint, reportMilestoneThresholds, reportCompletionPoints, pointExpirationDays, effectiveFrom, updatedAt}` (chưa có → 404). `PATCH` gửi đủ 5 giá trị (BR-253); trong một transaction cập nhật dòng đang hiệu lực (hoặc tạo mới) và ghi `gamification_point_rule_history` với `changedBy` = admin, `before` / `after` có cả `pointExpirationDays` (BR-258). Sửa chỉ áp cho điểm cộng / lô tạo sau đó; điểm và lô đã có giữ nguyên (BR-257, BR-260). `GET .../point-rules/history?page&limit` trả lịch sử mới nhất trước kèm `changedByName`. Bảng `report_vote_green_point_rules` và việc đồng bộ sang đó đã bỏ.
+- Các cấu hình sp-rules, multipliers, season-schedules, payout-tiers, badges đã gỡ ở spec 014 (route trả 404).
+- **File:** `RW/modules/gamification/gamification.controller.ts > adminGetPointRules(), adminPatchPointRules(), adminGetPointRuleHistory()`, `gamification-config.service.ts > validatePointRulesInput(), upsertPointRules(), listPointRuleHistory()`, `FE/app/(pages)/(admin)/admin/point-rules/*`, `FE/apis/gamification/*`.
 
 ---
 

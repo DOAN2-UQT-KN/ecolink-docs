@@ -411,28 +411,44 @@ stateDiagram-v2
 stateDiagram-v2
   [*] --> PROCESSING: user đổi quà
   PROCESSING --> SHIPPED
-  PROCESSING --> CANCELLED: hoàn SP
+  PROCESSING --> CANCELLED: hoàn điểm
   SHIPPED --> DELIVERED
-  SHIPPED --> CANCELLED: hoàn SP
+  SHIPPED --> CANCELLED: hoàn điểm
   DELIVERED --> [*]
   CANCELLED --> [*]
 ```
 
 | Từ → sang | Ai (thực tế trong code) | Điều kiện | Side effect | File |
 |---|---|---|---|---|
-| (mới) → PROCESSING | User đăng nhập | BR-222..BR-225 | Trừ tồn kho; trừ SP theo FIFO; ghi sổ âm | `RW/modules/gift/gift.service.ts > redeem()` |
+| (mới) → PROCESSING | User đăng nhập | BR-222..BR-226 | Trừ tồn kho; trừ lô điểm còn hạn theo hạn sớm nhất trước, ghi `green_point_lot_spends` (BR-262); ghi sổ `GIFT_REDEEM` âm | `RW/modules/gift/gift.service.ts > redeem()` |
 | PROCESSING → SHIPPED; SHIPPED → DELIVERED | **User đăng nhập bất kỳ** (thiếu kiểm tra admin) | BR-230 | statusUpdatedAt | `updateRedemptionStatus()` |
-| PROCESSING / SHIPPED → CANCELLED | như trên | BR-230 | cancelledAt; hoàn SP (lô mới); ghi GIFT_REDEEM_REFUND; không hoàn tồn kho | `updateRedemptionStatus()` |
+| PROCESSING / SHIPPED → CANCELLED | như trên | BR-230 | cancelledAt; ghi `GIFT_REDEEM_REFUND` (1 lần); trả điểm về đúng lô còn hạn, phần của lô đã hết hạn ghi `EXPIRE` ngay; đơn cũ không có lot spend thì tạo lô mới (BR-231, BR-263, BR-264); không hoàn tồn kho | `updateRedemptionStatus()` |
 
 Không có thông báo nào được gửi khi đơn đổi quà đổi trạng thái.
 
-## 12. Season (`seasons.status`)
+## 12. Lô điểm xanh (`green_point_lots`, tính từ `remaining` và `expires_at`)
+
+Không có cột trạng thái; trạng thái suy ra từ dữ liệu. Bảng `seasons` (và mọi trạng thái season) không còn code dùng từ spec 014.
+
+```mermaid
+stateDiagram-v2
+  [*] --> ConHan: cộng điểm (1 dòng sổ + 1 lô)
+  ConHan --> HetDiem: đổi quà trừ hết remaining
+  HetDiem --> ConHan: huỷ đơn, lô chưa hết hạn
+  ConHan --> QuaHanChuaGhi: tới expires_at
+  QuaHanChuaGhi --> HetHan: job ghi EXPIRE, remaining = 0
+  HetDiem --> HetHan: tới expires_at (không ghi sổ)
+  HetHan --> [*]
+```
 
 | Từ → sang | Ai | Điều kiện | Side effect | File |
 |---|---|---|---|---|
-| (mới) → ACTIVE 1 hoặc INACTIVE 2 | Admin | BR-247 | — | `season.service.ts > createSeason()` |
-| ACTIVE → INACTIVE (finalize) | Admin | BR-248 | Snapshot bảng xếp hạng; chi SP theo payout tier; nếu `openNext` thì mở season mới | `finalizeSeason()` |
-| ACTIVE ↔ INACTIVE (PATCH) | Admin | Không có điều kiện | **Không** snapshot, không chi SP | `patchSeason()` |
+| (mới) → còn hạn (`remaining = amount > 0`, `expires_at > now`) | Worker reward-intake; huỷ đơn cũ (BR-264) | Dòng sổ chưa có (khoá idempotent), điểm > 0 | `expires_at = now + pointExpirationDays` (BR-260) | `RW/modules/green-point/green-point-ledger.util.ts > creditPoints()`, `gift.service.ts > refundRedemptionPoints()` |
+| còn hạn → còn hạn / hết điểm (`remaining` giảm, có thể về 0) | User đổi quà | Lô còn hạn, trừ có điều kiện `remaining >= phần trừ` (BR-262) | Ghi `green_point_lot_spends` | `green-point-lot.util.ts > spendLotsFifo()` |
+| hết điểm / còn hạn → còn hạn (`remaining` tăng) | Người huỷ đơn | Lô còn hạn lúc huỷ (BR-263) | Không đổi `expires_at` | `refundRedemptionPoints()` |
+| còn hạn → quá hạn chưa ghi (`remaining > 0`, `expires_at <= now`) | Thời gian | — | Không còn tính vào số dư ngay (BR-261) | `green-point-lot.util.ts > getBalance()` |
+| quá hạn chưa ghi → hết hạn (`remaining = 0`) | Job hết hạn (mỗi `GREEN_POINT_EXPIRY_INTERVAL_MS`) | Lô chưa đổi `remaining` từ lúc đọc | Ghi `EXPIRE` −remaining (khoá `expire:<lotId>`); lỗi thì lượt sau thử lại | `green-point-expiry.job.ts > expireDueLots()` |
+| (phần đã tiêu của lô đã hết hạn, khi huỷ đơn) | Người huỷ đơn | Lô đã hết hạn lúc huỷ | Không cộng lại; ghi `EXPIRE` −phần đó (khoá `expire:<lotId>:<redemptionId>`) | `refundRedemptionPoints()`, `planRefund()` |
 
 ## 13. Background job, outbox, notification job (hạ tầng)
 
@@ -468,4 +484,4 @@ stateDiagram-v2
 | Notification.readAt | null → thời điểm | Chỉ một chiều | `NS/modules/notification/notification.service.ts > markRead()` |
 | AuthToken | active → revoked / used / hết hạn | Xem BR-008..BR-012 | `ID/modules/auth/*` |
 | OTP đơn tổ chức | active → used / expired | Xem BR-053, BR-054 | `organization-application-otp.service.ts` |
-| Gift.isActive, BadgeDefinition.isActive / publishedAt | bật / tắt | Admin | `RW/modules/*` |
+| Gift.isActive | bật / tắt | Admin | `RW/modules/gift/*` |

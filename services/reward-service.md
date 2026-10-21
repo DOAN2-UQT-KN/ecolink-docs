@@ -9,12 +9,10 @@ reward-service là nơi lưu trữ và tính toán mọi thứ liên quan đến
 
 | Mảng | Nội dung | Bằng chứng |
 |---|---|---|
-| Difficulty (**deprecated**) | Bậc độ khó chiến dịch cũ (`maxVolunteers`, `suggestedMinVolunteers`, `greenPoints`). incident-service và client không còn đọc từ khi bỏ độ khó (spec 013); bảng, `/api/v1/difficulties`, `/internal/v1/difficulties*` và `campaign-reward-estimate` còn lại tới đợt dọn dẹp (đợt C) | `.../src/modules/difficulty/difficulty.service.ts` |
-| Quy tắc điểm | Mức điểm admin đặt (`gamification_point_rules`: hoàn thành chiến dịch, điểm cơ sở và mốc upvote report, report hoàn thành) kèm lịch sử thay đổi (`gamification_point_rule_history`); mọi strategy cộng điểm đọc quy tắc đang hiệu lực lúc cộng | `.../src/modules/gamification/gamification-config.service.ts` |
-| Green point (legacy) | Sổ cái `green_point_transactions` + số dư `user_green_point_balances`. Mỗi lần cộng điểm xanh sẽ đồng thời cộng SP và RP | `.../src/modules/green-point/green-point-ledger.util.ts > applyGreenPointLedgerCredit()` |
-| Gamification v2 | Mùa giải (Season), điểm xếp hạng theo mùa CRP (công dân) / VRP (tình nguyện viên), ví điểm tiêu dùng SP chia theo lô FIFO có hạn dùng, bảng xếp hạng, snapshot cuối mùa, trả SP cho top theo payout tier, định nghĩa huy hiệu (badge) với rules AST | `.../src/modules/gamification/*` |
-| Gift / đổi quà | Danh mục quà, đổi quà bằng SP (có giảm giá theo badge), đơn đổi quà với trạng thái vận chuyển, hoàn SP khi huỷ | `.../src/modules/gift/gift.service.ts` |
-| Metric metadata | Danh mục bảng/cột metric cho UI dựng luật huy hiệu, dùng để validate `rulesConfig` | `.../src/modules/metrics/*` |
+| Difficulty (**deprecated**) | Bậc độ khó chiến dịch cũ (`maxVolunteers`, `suggestedMinVolunteers`, `greenPoints`). incident-service và client không còn đọc từ khi bỏ độ khó (spec 013); bảng, `/api/v1/difficulties`, `/internal/v1/difficulties*` còn lại tới đợt dọn dẹp (đợt C); `campaign-reward-estimate` đã gỡ (spec 014) | `.../src/modules/difficulty/difficulty.service.ts` |
+| Quy tắc điểm | Mức điểm admin đặt (`gamification_point_rules`: hoàn thành chiến dịch, điểm cơ sở và mốc upvote report, report hoàn thành, **số ngày hết hạn của điểm** `point_expiration_days`) kèm lịch sử thay đổi (`gamification_point_rule_history`); mọi strategy cộng điểm đọc quy tắc đang hiệu lực lúc cộng | `.../src/modules/gamification/gamification-config.service.ts` |
+| Điểm xanh (spec 014) | Một loại điểm duy nhất. Sổ cái `green_point_transactions` (khoá idempotent theo user) là sổ duy nhất; mỗi lần cộng tạo 1 dòng sổ + 1 **lô** (`green_point_lots`) có hạn dùng. Số dư = tổng `remaining` của các lô còn hạn. Job nền ghi `EXPIRE` cho lô hết hạn | `.../src/modules/green-point/green-point-ledger.util.ts > insertLedgerOnce(), creditPoints()`, `green-point-lot.util.ts`, `green-point-expiry.job.ts` |
+| Gift / đổi quà | Danh mục quà, đổi quà theo giá niêm yết (trừ lô sắp hết hạn trước, ghi lại lô đã trừ), đơn đổi quà với trạng thái vận chuyển, hoàn điểm về đúng lô khi huỷ | `.../src/modules/gift/gift.service.ts` |
 | Facebook recognition | Nhận sự kiện hoàn thành chiến dịch, sinh caption bằng ai-service, đăng lên Facebook Graph và/hoặc webhook | `.../src/modules/facebook-recognition/facebook-recognition.service.ts` |
 | Dịch tự động | Dịch tên/mô tả Gift và tên Difficulty (deprecated) sang vi/en bất đồng bộ qua SQS | `.../src/queue/workers/translation.worker.ts` |
 
@@ -24,11 +22,11 @@ reward-service KHÔNG tự phát sự kiện sang service khác. Nó tiêu thụ
 
 ```
 reward-service/
-├── prisma/schema.prisma, migrations/, seed.ts, seeds/metric-metadata.seed.ts
-├── scripts/backfill-rp-totals.ts            # backfill RP từ sổ green point (chạy tay)
+├── prisma/schema.prisma, migrations/, seed.ts
 └── src/
     ├── index.ts        # Express app, mount routes, import "./worker" => API process cũng chạy worker
-    ├── worker.ts       # startAllQueues(), xử lý SIGINT/SIGTERM
+    ├── worker.ts       # startAllQueues(), startGreenPointExpiryJob(), xử lý SIGINT/SIGTERM
+    ├── scripts/reconcile-green-points.ts    # đối soát sổ ↔ lô khi triển khai spec 014 (chạy tay)
     ├── tracer.ts       # dd-trace (Datadog)
     ├── config/prisma.client.ts
     ├── constants/http-status.ts             # re-export @da2/constants
@@ -38,9 +36,9 @@ reward-service/
     ├── openapi/route-models.ts              # model cho swagger
     ├── queue/          # bootstrap (dispatcher + 4 SQS queue), register (khởi động worker), job stores, workers/
     └── modules/
-        ├── difficulty/  gift/  user-points/  metrics/
-        ├── green-point/ (service, factory, 3 strategy, ledger util, constants)
-        ├── gamification/ (controller, routes, season, badge, badge-rule-evaluator, leaderboard, summary, config, campaign-reward-display, rp-credit, sp-credit, sp-wallet, point-source)
+        ├── difficulty/  gift/  user-points/
+        ├── green-point/ (service, factory, 3 strategy, ledger util, lot util, expiry job, constants)
+        ├── gamification/ (controller, routes, config — chỉ còn quy tắc điểm)
         ├── facebook-recognition/
         └── translation/ (translation.client.ts, translation.types.ts)
 ```
@@ -64,7 +62,9 @@ Chỉ có 2 vai trò được phân biệt trong service: `admin` và "người 
 
 ## 4. Danh sách API endpoint
 
-Tổng: **50 endpoint** = 46 endpoint dưới `/api/v1` (đều được api-gateway proxy) + 3 endpoint nội bộ `/internal/v1` (gateway KHÔNG proxy, chỉ incident-service gọi trực tiếp) + `GET /health` (không qua gateway).
+Tổng: **20 endpoint** = 16 endpoint dưới `/api/v1` (đều được api-gateway proxy) + 3 endpoint nội bộ `/internal/v1` (gateway KHÔNG proxy, chỉ incident-service gọi trực tiếp) + `GET /health` (không qua gateway).
+
+Spec 014 (2026-10-21) đã gỡ hẳn leaderboard, season, badge, gamification summary, metric metadata và các cấu hình admin `sp-rules`, `multipliers`, `season-schedules`, `payout-tiers`, `badges`: các path `/leaderboard`, `/leaderboard/me`, `/seasons/*`, `/me/gamification/*`, `/me/badges`, `/gamification/campaign-reward-estimate`, `/gamification/leaderboards/:metric[/me]`, `/admin/gamification/{sp-rules,multipliers,season-schedules,payout-tiers,badges}`, `/admin/seasons*`, `/metric-tables`, `/metric-columns` giờ trả 404 (gateway cũng không proxy nữa). Bảng dữ liệu cũ vẫn giữ (mục 9, ý 24).
 
 Tất cả route `/api/v1/*` được mount trong `.../src/index.ts`. Path dưới đây là path đầy đủ qua gateway (gateway giữ nguyên path).
 
@@ -87,77 +87,34 @@ Không còn service nào trong hệ thống gọi (incident-service và client �
 | GET | `/api/v1/gifts/:id` | Không | Public | `id` UUID | `{ gift }` (không lọc `isActive`, chỉ lọc `deletedAt null`) | 400, 404 "Gift not found", 500 | `gift.api.routes.ts > GET /gifts/:id` → `getGiftById()` |
 | POST | `/api/v1/gifts` | Bearer | admin | body: `name` bắt buộc (1..255), `nameVi`/`nameEn` tuỳ chọn (1..255), `imageUrl` tuỳ chọn isURL, `description` bắt buộc string, `descriptionVi`/`descriptionEn` tuỳ chọn, `greenPoints` bắt buộc int ≥0, `stockRemaining` null hoặc int ≥0 (bỏ trống = không giới hạn), `isActive` boolean (mặc định true) | 201 `{ gift }` | 400, 401, 403, 500 | `POST /gifts` → `gift.service.ts > create()` |
 | PUT | `/api/v1/gifts/:id` | Bearer | admin | như POST nhưng mọi field tuỳ chọn; `imageUrl` rỗng → gỡ media | `{ gift }` | 400, 401, 403, 404, 500 | `PUT /gifts/:id` → `updateById()` |
-| POST | `/api/v1/gifts/:id/redeem` | Bearer | Mọi user | `id` UUID; body `phoneNumber` (trim, 7..32 ký tự, regex `^[0-9+\-()\s.]+$`), `pickupLocation` (trim, 1..1000) | `{ redemption: GiftRedemptionResponse }` (HTTP 200) | 400 (validation / "Missing id or user"), 401, 404 "Gift not found" (không tồn tại, đã xoá hoặc `isActive=false`), 422 "Gift is out of stock", 422 "Insufficient spendable points (SP)", 500 | `gift.api.routes.ts > handleGiftRedeemOrExchange()` → `gift.service.ts > redeem()` |
+| POST | `/api/v1/gifts/:id/redeem` | Bearer | Mọi user | `id` UUID; body `phoneNumber` (trim, 7..32 ký tự, regex `^[0-9+\-()\s.]+$`), `pickupLocation` (trim, 1..1000) | `{ redemption: GiftRedemptionResponse }` (HTTP 200) | 400 (validation / "Missing id or user"), 401, 404 "Gift not found" (không tồn tại, đã xoá hoặc `isActive=false`), 422 "Gift is out of stock", 422 "Insufficient green points", 409 "Please retry" (xung đột Serializable P2034 với một lần đổi khác cùng lúc), 500 | `gift.api.routes.ts > handleGiftRedeemOrExchange()` → `gift.service.ts > redeem()` |
 | POST | `/api/v1/gifts/:id/exchange` | Bearer | Mọi user | Giống hệt `/redeem` | Giống `/redeem` | Giống `/redeem` | `handleGiftRedeemOrExchange()` |
 | GET | `/api/v1/admin/gift-redemptions` | Bearer | admin | query `page`, `limit` 1..100, `status` ∈ PROCESSING/SHIPPED/DELIVERED/CANCELLED, `sortBy` ∈ createdAt/greenPointsSpent/statusUpdatedAt (mặc định createdAt), `sortOrder` (mặc định desc) | `{ redemptions: AdminGiftRedemptionListItemResponse[] (kèm snapshot gift và user {id,name,avatar} lấy từ identity), page, limit, total, totalPages }` | 400, 401, 403, 500 | `GET /admin/gift-redemptions` → `listRedemptionsForAdmin()` |
 | PATCH | `/api/v1/admin/gift-redemptions/:id/status` | Bearer | **Mọi user đã đăng nhập** (route KHÔNG có `requireAdmin`) | `id` UUID; body `status` ∈ 4 giá trị enum | `{ redemption }` | 400, 401, 404 "Redemption not found", 422 "Cannot change redemption status from X to Y", 500 | `PATCH /admin/gift-redemptions/:id/status` → `updateRedemptionStatus()` |
 
-### 4.3 Điểm của tôi, leaderboard legacy, lịch sử đổi quà (5)
+Đổi quà (`gift.service.ts > redeem()`, transaction `Serializable`): tìm quà active → trừ tồn kho có điều kiện → giá = `gift.greenPoints` (không giảm giá, BR-226) → số dư lô còn hạn < giá thì 422 → tạo đơn PROCESSING → `green-point-lot.util.ts > spendLotsFifo()` trừ lô theo `expires_at` rồi `created_at` tăng dần, mỗi lần trừ là `updateMany` có điều kiện `remaining >= take` và ghi một dòng `green_point_lot_spends` (BR-262) → ghi sổ `GIFT_REDEEM` −giá (khoá `gift_redeem:<redemptionId>`). Lỗi P2034 (xung đột tuần tự hoá) → 409 "Please retry".
+
+Huỷ đơn có `greenPointsSpent > 0` (`updateRedemptionStatus()` → `refundRedemptionPoints()`): ghi sổ `GIFT_REDEEM_REFUND` +đã tiêu (khoá `gift_redeem_refund:<redemptionId>`; đã có thì dừng). Có `green_point_lot_spends`: phần của lô còn hạn cộng lại vào đúng lô (giữ hạn cũ); phần của lô đã hết hạn ghi ngay `EXPIRE` −phần đó (resourceType `GREEN_POINT_LOT`, khoá `expire:<lotId>:<redemptionId>`), không cộng lại (BR-263). Không có lot spend (đơn tạo trước spec 014) → tạo một lô mới gắn với dòng hoàn, hạn đủ `pointExpirationDays` tính từ lúc huỷ (BR-264). Tồn kho không được hoàn.
+
+### 4.3 Điểm của tôi, lịch sử đổi quà (3)
 
 | Method | Path | Auth | Role | Request | Response | Mã lỗi | Handler |
 |---|---|---|---|---|---|---|---|
-| GET | `/api/v1/me/points` | Bearer | Mọi user | — | `{ spendablePoints (SP còn hạn), greenPoints (số dư legacy), greenPointsEarnedTotal (tổng các dòng green point > 0), balance (= spendablePoints, deprecated) }` | 401, 500 | `.../modules/user-points/user-points.api.routes.ts > GET /me/points` → `user-points.service.ts > getPoints()` |
-| GET | `/api/v1/me/points/transactions` | Bearer | Mọi user | query `page`, `limit` 1..100, `type` (string: "earned" → points>0, "spent" → points<0, giá trị khác → so khớp đúng `type`), `sortBy` ∈ createdAt/points/type, `sortOrder` | `{ transactions: (GreenPointTransaction + resource)[], page, limit, total, totalPages }`. `resource` được làm giàu: CAMPAIGN/REPORT (kể cả dòng mốc vote `REPORT_VOTE_MILESTONE_<threshold>`, gom vào report qua `point-source.util.ts > isReportResourceType()`) gọi incident-service `/api/v1/campaigns/by-ids`, `/api/v1/reports/by-ids` (chuyển tiếp header Authorization), USER gọi identity-service, GIFT_REDEMPTION đọc DB cục bộ | 400, 401, 500 | `GET /me/points/transactions` → `getTransactions()` |
-| GET | `/api/v1/leaderboard` | Không | Public | query `page`, `limit` 1..100 | `{ leaderboard: [{userId, greenPoints, user}], page, limit, total, totalPages }`. Xếp hạng theo SUM(points>0) trên `green_point_transactions` (raw SQL) | 400, 500 | `GET /leaderboard` → `getLeaderboard()` |
-| GET | `/api/v1/leaderboard/me` | Bearer | Mọi user | — | `{ leaderboardMe: { rank (RANK() OVER), greenPoints } \| null }` | 401, 500 | `GET /leaderboard/me` → `getLeaderboardMe()` |
+| GET | `/api/v1/me/points` | Bearer | Mọi user | — | `{ balance, earnedTotal, expiringSoon: { amount, earliestAt }, spendablePoints, greenPoints, greenPointsEarnedTotal }`. `balance` = tổng `remaining` của lô còn hạn (BR-261); `earnedTotal` = tổng điểm các loại kiếm được (BR-266); `expiringSoon.amount` = điểm trong lô hết hạn trong 7 ngày tới, `earliestAt` = ngày hết hạn sớm nhất của các lô đó (ISO) hoặc null (BR-265). Field cũ giữ một bản phát hành: `spendablePoints` = `greenPoints` = `balance`, `greenPointsEarnedTotal` = `earnedTotal` | 401, 500 | `.../modules/user-points/user-points.api.routes.ts > GET /me/points` → `user-points.service.ts > getPoints()` |
+| GET | `/api/v1/me/points/transactions` | Bearer | Mọi user | query `page`, `limit` 1..100, `type` (string: "earned" → points>0, "spent" → points<0, giá trị khác → so khớp đúng `type`), `sortBy` ∈ createdAt/points/type, `sortOrder` | `{ transactions: (GreenPointTransaction + resource)[], page, limit, total, totalPages }`. `resource` được làm giàu: CAMPAIGN/REPORT (dòng mốc vote có `resourceType = REPORT` từ spec 014) gọi incident-service `/api/v1/campaigns/by-ids`, `/api/v1/reports/by-ids` (chuyển tiếp header Authorization), USER gọi identity-service (trừ dòng `MIGRATION_ADJUST`), GIFT_REDEMPTION đọc DB cục bộ; `GREEN_POINT_LOT` (dòng `EXPIRE`) và `MIGRATION_ADJUST` có `resource = null`. `type` có thêm `EXPIRE`, `MIGRATION_ADJUST` | 400, 401, 500 | `GET /me/points/transactions` → `getTransactions()` |
 | GET | `/api/v1/me/redemptions` | Bearer | Mọi user | query `page`, `limit`, `sortBy` ∈ createdAt/greenPointsSpent/statusUpdatedAt, `sortOrder` | `{ redemptions: GiftRedemptionListItemResponse[], page, limit, total, totalPages }` | 400, 401, 500 | `GET /me/redemptions` → `gift.service.ts > listRedemptionsForUser()` |
 
-### 4.4 Metric metadata (2)
-
-| Method | Path | Auth | Role | Request | Response | Mã lỗi | Handler |
-|---|---|---|---|---|---|---|---|
-| GET | `/api/v1/metric-tables` | Bearer | Mọi user | query `label` (contains, không phân biệt hoa thường) | `{ tables: MetricTableDto[] }` chỉ `isActive=true`, sắp theo `key` | 400, 401, 500 | `.../modules/metrics/metrics.api.routes.ts` → `metrics.controller.ts > getMetricTables()` |
-| GET | `/api/v1/metric-columns` | Bearer | Mọi user | query `label`, `metricTableId` UUID | `{ columns: MetricColumnDto[] }` (kèm `metricTableKey`, `metricTableLabel`) | 400, 401, 500 | `metrics.controller.ts > getMetricColumns()` |
-
-Không có endpoint ghi metric metadata; dữ liệu đến từ `prisma/seeds/metric-metadata.seed.ts`.
-
-### 4.5 Gamification cho người dùng / public (9)
-
-| Method | Path | Auth | Role | Request | Response | Mã lỗi | Handler |
-|---|---|---|---|---|---|---|---|
-| GET | `/api/v1/seasons/current` | Không | Public | — | `{ season \| null }`. Ưu tiên season ACTIVE đang trong khung thời gian; nếu không có thì season ACTIVE mới nhất theo `startsAt`; nếu không có thì season mới nhất bất kỳ | 500 | `.../gamification/gamification.controller.ts > getSeasonCurrent()` → `season.service.ts > getCurrentSeason()` |
-| GET | `/api/v1/seasons/:id` | Không | Public | `id` UUID | `{ season }` | 400, 404 "Season not found", 500 | `getSeasonById()` |
-| GET | `/api/v1/me/gamification/summary` | Bearer | Mọi user | — | `{ season, rankingPoints {citizenRp, volunteerRp, totalRp}, spendablePoints {balance, nextExpiresAt}, legacyGreenPointsBalance }` | 401, 500 | `getGamificationSummary()` → `gamification-summary.service.ts > getSummaryForUser()` |
-| GET | `/api/v1/me/gamification/point-transactions` | Bearer | Mọi user | query `page`, `limit` 1..100, `kind` ∈ CRP/VRP/SP | `{ transactions, total, page, limit, totalPages }` (sắp createdAt desc) | 400, 401, 500 | `getMyPointTransactions()` → `listPointTransactions()` |
-| GET | `/api/v1/me/gamification/points-by-season` | Bearer | Mọi user | query `page`, `limit` | `{ seasons: [{seasonId,label,kind,status,startsAt,endsAt,crp,vrp,sp}], total, page, limit, totalPages }`; `sp` = tổng ròng các dòng SP có `createdAt` trong [startsAt, endsAt] | 400, 401, 500 | `getPointsBySeason()` → `gamification-summary.service.ts > getPointsBySeason()` |
-| GET | `/api/v1/me/badges` | Bearer | Mọi user | query `seasonId` UUID (mặc định: season hiện tại) | `{ badges: [{id, grantedAt, metadata, season, badge{...}}] }` loại bỏ badge đã soft delete | 400, 401, 500 | `getMyBadges()` → `badge.service.ts > listMyBadges()` |
-| GET | `/api/v1/gamification/campaign-reward-estimate` (**deprecated**, bỏ ở đợt C; client không gọi) | Không | Public | query `difficultyLevel` int ≥1 (bắt buộc) | `{ difficultyLevel, basePoints (= difficulty.greenPoints), estimatedBonusMax (luôn 0: cột bonus cap đã drop), estimatedRange{min,max}, difficultyName }` | 400, 404 "Difficulty not found", 500 | `getCampaignRewardEstimate()` → `campaign-reward-display.service.ts > getEstimateForDifficultyLevel()` |
-| GET | `/api/v1/gamification/leaderboards/:metric` | Không | Public | `metric` ∈ crp/vrp/org_aggregate (không phân biệt hoa thường), query `page`, `limit` 1..100, `seasonId` UUID, `organizationId` UUID (chỉ lọc CRP/VRP theo thành viên tổ chức, dựa trên `organizationIds` do identity trả về) | `{ metric, seasonId, leaderboard, page, limit, total, totalPages }`. Season INACTIVE → đọc `leaderboard_snapshots`; season ACTIVE → đọc live `user_season_rp_totals` (chỉ điểm > 0) hoặc `organization_season_scores` | 400 ("metric must be crp, vrp, or org_aggregate"), 500 | `getGamificationLeaderboard()` → `gamification-leaderboard.service.ts > getLeaderboard()` |
-| GET | `/api/v1/gamification/leaderboards/:metric/me` | Bearer | Mọi user | như trên (không có page/limit) | `{ leaderboardMe: {rank, score, seasonId} \| null }`; ORG_AGGREGATE luôn `null` | 400, 401, 500 | `getGamificationLeaderboardMe()` → `getLeaderboardMe()` |
-
-### 4.6 Admin gamification config (16)
+### 4.4 Admin quy tắc điểm (3)
 
 Mọi route: `authenticate` + `requireAdmin` (401/403). Body KHÔNG dùng express-validator; kiểm tra thủ công trong controller.
 
 | Method | Path | Request | Response | Mã lỗi | Handler |
 |---|---|---|---|---|---|
-| GET | `/api/v1/admin/gamification/point-rules` | — | `{ rules: { id, campaignCompletionPoints, baseReportPoint, reportMilestoneThresholds, reportCompletionPoints, effectiveFrom, updatedAt } }` (bản ghi active mới nhất theo `effectiveFrom`) | 404 "No active point rules", 500 | `adminGetPointRules()` |
-| PATCH | `/api/v1/admin/gamification/point-rules` | Đủ 4 field (ngữ nghĩa PUT): `campaignCompletionPoints`, `baseReportPoint`, `reportCompletionPoints` int ≥0; `reportMilestoneThresholds` mảng int >0, không trùng (BR-253) | `{ rules }` (cùng dạng GET). Trong 1 transaction: cập nhật bản active hoặc tạo mới (thresholds sort tăng dần) và ghi 1 dòng `gamification_point_rule_history` (`changedBy` = admin từ JWT, `before` = giá trị cũ hoặc null, `after`) (BR-258) | 400 `VALIDATION_ERROR` kèm `errors: [{field, message}]`; 401 thiếu user; 500 | `adminPatchPointRules()` → `gamification-config.service.ts > validatePointRulesInput(), upsertPointRules()` |
+| GET | `/api/v1/admin/gamification/point-rules` | — | `{ rules: { id, campaignCompletionPoints, baseReportPoint, reportMilestoneThresholds, reportCompletionPoints, pointExpirationDays, effectiveFrom, updatedAt } }` (bản ghi active mới nhất theo `effectiveFrom`) | 404 "No active point rules", 500 | `adminGetPointRules()` |
+| PATCH | `/api/v1/admin/gamification/point-rules` | Đủ 5 field (ngữ nghĩa PUT): `campaignCompletionPoints`, `baseReportPoint`, `reportCompletionPoints` int ≥0; `reportMilestoneThresholds` mảng int >0, không trùng; `pointExpirationDays` int ≥1 (BR-253, BR-260) | `{ rules }` (cùng dạng GET). Trong 1 transaction: cập nhật bản active hoặc tạo mới (thresholds sort tăng dần) và ghi 1 dòng `gamification_point_rule_history` (`changedBy` = admin từ JWT, `before` = giá trị cũ hoặc null, `after`; cả hai có `pointExpirationDays`) (BR-258) | 400 `VALIDATION_ERROR` kèm `errors: [{field, message}]`; 401 thiếu user; 500 | `adminPatchPointRules()` → `gamification-config.service.ts > validatePointRulesInput(), upsertPointRules()` |
 | GET | `/api/v1/admin/gamification/point-rules/history` | query `page` (mặc định 1), `limit` (mặc định 20, tối đa 100) | `{ items: [{ id, changedBy, changedByName, changedAt, before, after }], meta: { page, limit, total } }`, mới nhất trước; `changedByName` tra identity-service (`fetchUsersByIds()`), lỗi thì null | 500 | `adminGetPointRuleHistory()` → `listPointRuleHistory()` |
-| GET | `/api/v1/admin/gamification/sp-rules` | — | `{ rules \| null }` | 500 | `adminGetSpRules()` |
-| PATCH | `/api/v1/admin/gamification/sp-rules` | `expirationDays` int ≥1 | `{ rules }` | 400 "Invalid expirationDays", 500 | `adminPatchSpRules()` → `upsertSpRules()` |
-| GET | `/api/v1/admin/gamification/multipliers` | — | `{ multipliers }` sắp isActive desc, priority desc | 500 | `adminListMultipliers()` |
-| PUT | `/api/v1/admin/gamification/multipliers` | `code` (bắt buộc), `multiplier` number/string, `priority`, `isActive` | `{ multiplier }` upsert theo `code` | 400 "code required", 500 | `adminPutMultiplier()` → `upsertMultiplierRule()` |
-| GET | `/api/v1/admin/gamification/season-schedules` | — | `{ schedules }` | 500 | `adminListSeasonSchedules()` |
-| PUT | `/api/v1/admin/gamification/season-schedules` | `kind` MONTHLY/QUARTERLY (bắt buộc), `autoRotate`, `metadata` (null để xoá) | `{ schedule }` upsert theo `kind` | 400 "Invalid kind", 500 | `adminPutSeasonSchedule()` → `upsertSeasonScheduleRule()` |
-| GET | `/api/v1/admin/gamification/payout-tiers` | query `seasonId` UUID (lọc `seasonId = x OR seasonId null`) | `{ tiers }` | 400, 500 | `adminListPayoutTiers()` |
-| POST | `/api/v1/admin/gamification/payout-tiers` | `metric` ∈ CRP/VRP/ORG_AGGREGATE, `rankMin` int ≥1, `rankMax` int ≥ rankMin, `spAmount` int ≥0, `seasonId` string tuỳ chọn (null = tier mặc định) | 201 `{ tier }` | 400 "Invalid metric" / "Invalid tier bounds", 500 | `adminCreatePayoutTier()` |
-| PATCH | `/api/v1/admin/gamification/payout-tiers/:id` | `id` UUID; `seasonId`, `metric`, `rankMin`, `rankMax`, `spAmount` (không validate) | `{ tier }` | 400 (id), 404, 500 | `adminPatchPayoutTier()` |
-| DELETE | `/api/v1/admin/gamification/payout-tiers/:id` | `id` UUID | `{ deleted: true }` (xoá cứng) | 400, 404, 500 | `adminDeletePayoutTier()` |
-| GET | `/api/v1/admin/gamification/badges` | query `includeInactive` "true"/"false". "true" → trả cả bản ghi đã soft delete; mặc định chỉ `deletedAt null` | `{ badges }` | 400, 500 | `adminListBadges()` → `listDefinitionsAdmin()` |
-| POST | `/api/v1/admin/gamification/badges` | `name` (bắt buộc), `category` ∈ REPORT/CAMPAIGN/CONTRIBUTION/RANK (bắt buộc), `slug` (tuỳ chọn, tự sinh snake_case từ name, tự thêm hậu tố `_2`…`_64` nếu trùng), `symbol`, `scope` LIFETIME/SEASON, `rulesConfig` object (hoặc legacy `ruleType` THRESHOLD/RANK + `metric` CRP/VRP/ORG_AGGREGATE + `threshold` ≥0 / `rankTopN` ≥1), `isRepeatable`, `cooldownSeconds` int ≥0, `maxGrantsPerUser` int >0 hoặc null, `reward` object (key cho phép: discountBps/discount_bps 0..10000, bonus_sp ≥0, partner_tier_codes string[], perks object), `isActive`, `publishedAt` | 201 `{ badge }` | 400 VALIDATION_ERROR (không kèm chi tiết), 500 | `adminCreateBadge()` → `badge.service.ts > createDefinition()` |
-| PATCH | `/api/v1/admin/gamification/badges/:id` | `id` UUID; các field như POST (trừ slug), thêm `deletedAt` (soft delete/khôi phục); `rulesConfig: null` xoá luật; `publishedAt` chỉ set được, không gỡ được | `{ badge }` | 400 (kể cả khi đổi `category`/`scope` sau khi đã có grant), 404, 500 | `adminPatchBadge()` → `patchDefinition()` |
 
-### 4.7 Admin seasons (4)
-
-| Method | Path | Auth | Role | Request | Response | Mã lỗi | Handler |
-|---|---|---|---|---|---|---|---|
-| GET | `/api/v1/admin/seasons` | Bearer | admin | query `page`, `limit` 1..100, `kind` MONTHLY/QUARTERLY, `search` (contains trên `label`) | `{ seasons, total, page, limit, totalPages }` | 400, 401, 403, 500 | `adminListSeasons()` → `season.service.ts > listAdmin()` |
-| POST | `/api/v1/admin/seasons` | Bearer | admin | `kind` MONTHLY/QUARTERLY, `startsAt`, `endsAt` (parse được Date), `label`, `status` (1/2 hoặc "ACTIVE"/"INACTIVE"; mặc định ACTIVE) | 201 `{ season }` | 400 "Invalid kind" / "Invalid dates" / "Invalid status", 500 | `adminCreateSeason()` → `createSeason()` |
-| PATCH | `/api/v1/admin/seasons/:id` | Bearer | admin | `id` UUID; `label`, `startsAt`, `endsAt`, `status`, `kind` | `{ season }` | 400 "Invalid status", 404, 500 | `adminPatchSeason()` → `patchSeason()` |
-| POST | `/api/v1/admin/seasons/:id/finalize` | Bearer | admin | `id` UUID; query `openNext` boolean; body `startsAt`, `endsAt` (bắt buộc và startsAt < endsAt khi openNext=true), `nextLabel` | `{ snapshotsWritten, closed?, next? }` | 400 ("startsAt is required when openNext=true", "endsAt is required…", "startsAt must be earlier than endsAt"), 404 "Season not found", 422 "Season must be 1 (ACTIVE) or 2 (INACTIVE)", 422 "Another ACTIVE season already exists", 500 | `adminFinalizeSeason()` → `season.service.ts > finalizeSeason()` |
-
-### 4.8 Nội bộ (3) — gateway không proxy
+### 4.5 Nội bộ (3) — gateway không proxy
 
 | Method | Path | Auth | Request | Response | Mã lỗi | Handler |
 |---|---|---|---|---|---|---|
@@ -167,7 +124,7 @@ Mọi route: `authenticate` + `requireAdmin` (401/403). Body KHÔNG dùng expres
 
 Người gọi: incident-service `ecolink-server/services/incident-service/src/modules/reward/reward-service.client.ts > getCampaignCompletionPoints()` (điền `greenPoints` của campaign). Hai route `/difficulties*` không còn người gọi. Comment trong code ghi rõ các endpoint HTTP enqueue green-point/facebook cũ đã bị gỡ.
 
-### 4.9 Khác
+### 4.6 Khác
 
 | Method | Path | Handler |
 |---|---|---|
@@ -193,9 +150,9 @@ Envelope SQS: `{ jobId, version: 1, jobType, createdAt, payload }` (`ecolink-ser
 
 | jobType | Nguồn | Payload | Xử lý | Bằng chứng |
 |---|---|---|---|---|
-| `REPORT_COMPLETION_GREEN_POINTS` | incident-service outbox → queue reward-intake | `{ reportId, userId }` (`points` của payload cũ bị bỏ qua) | `reportCompletionPoints` của quy tắc (0 = không cộng) → `REPORT_COMPLETION` (resourceType REPORT) → SP + CRP; metadata `{ruleId, reportCompletionPoints}` | `.../green-point/strategies/report-completion-green-point.strategy.ts` |
-| `CAMPAIGN_COMPLETION_GREEN_POINTS` | incident-service outbox | `{ campaignId, participants: [{userId, eligibleShifts (int ≥1), registeredShifts (int ≥0)}] }`; payload cũ `{ campaignId, credits: [{userId, points}] }` vẫn nhận trong một bản phát hành (dùng `points`, metadata `legacyPayload: true`) | Mỗi người `round(campaignCompletionPoints × min(1, eligibleShifts / max(1, registeredShifts)))`, 0 thì bỏ → `CAMPAIGN_COMPLETION` (resourceType CAMPAIGN) → SP + VRP; metadata `{ruleId, campaignCompletionPoints, eligibleShifts, registeredShifts}` | `.../strategies/campaign-completion-green-point.strategy.ts` |
-| `REPORT_VOTE_MILESTONE_GREEN_POINTS` | incident-service outbox (vote.service) | `{ reportId, reportCreatorUserId, voteCount }` | Với mỗi threshold ≤ voteCount (sắp tăng dần) trong point rules active: points = `baseReportPoint × (index+1)`; resourceType `REPORT_VOTE_MILESTONE_<threshold>` (khoá idempotent) → SP + CRP với `sourceType = REPORT`; metadata `{ruleId, baseReportPoint, threshold, milestoneIndex, voteCountAtAward}` | `.../strategies/report-vote-milestone-green-point.strategy.ts > resolveReportVoteMilestoneCredits()` |
+| `REPORT_COMPLETION_GREEN_POINTS` | incident-service outbox → queue reward-intake | `{ reportId, userId }` (`points` của payload cũ bị bỏ qua) | `reportCompletionPoints` của quy tắc (0 = không cộng) → `REPORT_COMPLETION` (resourceType REPORT, khoá `report_completion:<reportId>`) → 1 dòng sổ + 1 lô; metadata `{ruleId, reportCompletionPoints}` | `.../green-point/strategies/report-completion-green-point.strategy.ts` |
+| `CAMPAIGN_COMPLETION_GREEN_POINTS` | incident-service outbox | `{ campaignId, participants: [{userId, eligibleShifts (int ≥1), registeredShifts (int ≥0)}] }`; payload cũ `{ campaignId, credits: [{userId, points}] }` vẫn nhận trong một bản phát hành (dùng `points`, metadata `legacyPayload: true`) | Mỗi người `round(campaignCompletionPoints × min(1, eligibleShifts / max(1, registeredShifts)))`, 0 thì bỏ → `CAMPAIGN_COMPLETION` (resourceType CAMPAIGN, khoá `campaign_completion:<campaignId>`) → 1 dòng sổ + 1 lô; metadata `{ruleId, campaignCompletionPoints, eligibleShifts, registeredShifts}` | `.../strategies/campaign-completion-green-point.strategy.ts` |
+| `REPORT_VOTE_MILESTONE_GREEN_POINTS` | incident-service outbox (vote.service) | `{ reportId, reportCreatorUserId, voteCount }` | Với mỗi threshold ≤ voteCount (sắp tăng dần) trong point rules active: points = `baseReportPoint × (index+1)`; resourceType `REPORT`, khoá `vote_milestone:<reportId>:<threshold>` → 1 dòng sổ + 1 lô; metadata `{ruleId, baseReportPoint, threshold, milestoneIndex, voteCountAtAward}` | `.../strategies/report-vote-milestone-green-point.strategy.ts > resolveReportVoteMilestoneCredits()` |
 | `CAMPAIGN_FACEBOOK_RECOGNITION` | incident-service outbox | `{ campaignId, campaignTitle, recognizedUserIds[], completedAt, bannerUrl?, description?, recognizedVolunteers?[{name,email}] }` | Sinh caption (ai-service) → đăng Facebook Graph và/hoặc POST webhook | `.../facebook-recognition/facebook-recognition.service.ts > applyQueuedJob()` |
 | `TRANSLATE_TEXT` | Chính reward-service (gift, difficulty) | `{ resourceType: GIFT\|DIFFICULTY, resourceId, translations[] }` | Gọi ai-service dịch, ghi đè cột vi/en | `.../queue/workers/translation.worker.ts` |
 
@@ -212,7 +169,7 @@ incident-service đẩy qua `SqsOutboxPublisher` (`ecolink-server/services/incid
 
 | Đích | Endpoint | Auth | Dùng ở |
 |---|---|---|---|
-| identity-service | `POST {IDENTITY_SERVICE_URL}/internal/v1/users/by-ids` body `{ ids }` (chia lô 100) | `x-internal-api-key: INTERNAL_IDENTITY_API_KEY` | `.../utils/identity-user.client.ts > fetchUsersByIds()`: leaderboard, admin redemptions, transactions (resource USER), lọc theo `organizationId` |
+| identity-service | `POST {IDENTITY_SERVICE_URL}/internal/v1/users/by-ids` body `{ ids }` (chia lô 100) | `x-internal-api-key: INTERNAL_IDENTITY_API_KEY` | `.../utils/identity-user.client.ts > fetchUsersByIds()`: admin redemptions, transactions (resource USER), lịch sử quy tắc điểm (`changedByName`) |
 | incident-service | `GET {INCIDENT_SERVICE_URL}/api/v1/campaigns/by-ids?campaignIds=...`, `GET .../api/v1/reports/by-ids?reportIds=...` | Chuyển tiếp header `Authorization` của người gọi | `.../utils/incident-resource.client.ts` (trong `getTransactions()`) |
 | ai-service | `POST {AI_SERVICE_URL}/internal/v1/translate` | `x-internal-api-key: INTERNAL_AI_API_KEY` | `.../modules/translation/translation.client.ts > translateText()` |
 | ai-service | `POST {AI_SERVICE_URL}/api/v1/social/campaign-facebook-caption` (timeout 60 s) | Không gửi header auth | `facebook-recognition.service.ts > fetchCaptionFromAi()` |
@@ -223,7 +180,7 @@ Mọi lỗi khi gọi identity/incident đều bị nuốt (log rồi trả Map 
 
 ## 6. Job nền, cron, worker
 
-Không có cron/scheduler nào trong code (bảng `season_schedule_rules` chỉ lưu cấu hình, không có code dùng `autoRotate`).
+Job hết hạn điểm (`.../modules/green-point/green-point-expiry.job.ts > startGreenPointExpiryJob()`, khởi động trong `src/worker.ts`, nên chạy cả trong API process): chạy ngay khi start rồi mỗi `GREEN_POINT_EXPIRY_INTERVAL_MS` (mặc định 1 giờ); `GREEN_POINT_EXPIRY_ENABLED=false` thì tắt. Mỗi lượt (`expireDueLots()`) duyệt theo lô 200 các lô `remaining > 0` và `expires_at <= now`; mỗi lô một transaction ngắn: ghi dòng `EXPIRE` −remaining (resourceType `GREEN_POINT_LOT`, khoá `expire:<lotId>`) rồi đặt `remaining = 0` có điều kiện (`remaining` chưa đổi). Lô lỗi được log và để lượt sau. Số dư không phụ thuộc job (lô quá hạn đã bị loại khi đọc), job chỉ giữ lịch sử đầy đủ (BR-261). Không có cron nào khác; bảng `season_schedule_rules` còn trong DB nhưng không còn code dùng.
 
 Worker (`.../src/queue/register.ts > startAllQueues()`):
 
@@ -244,9 +201,10 @@ Vòng xử lý (`ecolink-server/shared/da2-queue/src/core/queue-worker.ts > proc
 5. Lỗi: nếu `receiveCount >= maxRetries` → xoá message + `markFailed` (bỏ hẳn, không có DLQ trong code); ngược lại đặt visibility = `min(maxDelay, base × 2^(receiveCount−1))` giây và `markRetryScheduled`.
 6. Lỗi poll → ngủ 2 s rồi poll lại.
 
-Green point: `greenPointService.applyQueuedJob()` validate payload rồi chạy strategy trong một transaction `Serializable` (`.../modules/green-point/green-point.service.ts`). Strategy đọc quy tắc điểm trong chính transaction đó (`loadActivePointRules(tx)`); không có quy tắc nào → log cảnh báo, không cộng, job vẫn thành công (không retry) (`green-point-ledger.util.ts > warnNoPointRules()`).
+Green point: `greenPointService.applyQueuedJob()` validate payload rồi chạy strategy trong một transaction `Serializable`; mỗi credit đi qua `green-point-ledger.util.ts > creditPoints()`: `insertLedgerOnce()` (`createMany skipDuplicates` = `INSERT … ON CONFLICT DO NOTHING` trên `(user_id, idempotency_key)`, không bắt P2002 nên transaction không bị abort) rồi tạo 1 lô cùng số điểm, `expires_at = now + pointExpirationDays` (BR-240, BR-260) (`.../modules/green-point/green-point.service.ts`). Strategy đọc quy tắc điểm trong chính transaction đó (`loadActivePointRules(tx)`); không có quy tắc nào → log cảnh báo, không cộng, job vẫn thành công (không retry) (`green-point-ledger.util.ts > warnNoPointRules()`).
 
-Script chạy tay: `scripts/backfill-rp-totals.ts` → `rp-credit.util.ts > backfillRankingPointsFromGreenLedger()` (tạo RP cho mọi dòng green point dương, idempotent theo `idempotencyKey`).
+Script chạy tay:
+- `src/scripts/reconcile-green-points.ts` — `npm run reconcile:green-points` (bản build trong `dist`) hoặc `npm run dev:reconcile:green-points` (ts-node). Chạy `expireDueLots()` trước (còn lô lỗi thì dừng, exit 1), rồi với mỗi user có tổng sổ (dòng chưa xoá mềm) ≠ tổng `remaining` của lô, ghi một dòng `MIGRATION_ADJUST` = lô − sổ (resourceType USER, khoá `migration_adjust:<userId>`; **lô là chuẩn**) và ghi danh sách ra file CSV `reconcile-green-points-<thời điểm>.csv` ở thư mục chạy. Chạy lại an toàn (khoá idempotent). Thứ tự triển khai spec 014: backup DB → `prisma migrate deploy` (migration `20261022100000_green_point_lots`) → reconcile → bật code mới.
 
 ## 7. Phụ thuộc
 
@@ -282,39 +240,41 @@ Script chạy tay: `scripts/backfill-rp-totals.ts` → `rp-credit.util.ts > back
 | `AI_SERVICE_URL`, `INTERNAL_AI_API_KEY` | ai-service (dịch, caption) | `translation.client.ts`, `facebook-recognition.service.ts` |
 | `FACEBOOK_ACCESS_TOKEN`, `FACEBOOK_APP_ID`, `FACEBOOK_APP_SECRET`, `FACEBOOK_FEED_OBJECT_ID` (mặc định `me`), `FACEBOOK_GRAPH_API_VERSION` (mặc định v21.0), `FACEBOOK_RECOGNITION_WEBHOOK_URL` | Đăng Facebook / webhook | `facebook-recognition.service.ts` |
 | `DD_ENV`, `DD_VERSION` (+ `DD_AGENT_HOST` theo comment) | Datadog | `src/tracer.ts` |
+| `GREEN_POINT_EXPIRY_INTERVAL_MS` (mặc định 3600000), `GREEN_POINT_EXPIRY_ENABLED` (`false` = tắt) | Job hết hạn điểm | `modules/green-point/green-point-expiry.job.ts` |
 
 ## 9. Vấn đề cần xác nhận / [CHƯA HOÀN THIỆN]
 
 **Bảo mật**
-1. `PATCH /api/v1/admin/gift-redemptions/:id/status` không có `requireAdmin` (comment ghi "@access Private") → mọi user đã đăng nhập có thể đổi trạng thái đơn của bất kỳ ai (SHIPPED/DELIVERED/CANCELLED, kích hoạt hoàn SP) — `gift.api.routes.ts`.
+1. `PATCH /api/v1/admin/gift-redemptions/:id/status` không có `requireAdmin` (comment ghi "@access Private") → mọi user đã đăng nhập có thể đổi trạng thái đơn của bất kỳ ai (SHIPPED/DELIVERED/CANCELLED, kích hoạt hoàn điểm) — `gift.api.routes.ts`.
 2. `JWT_SECRET` có fallback cứng `"fallback-secret-key"` — `utils/jwt.utils.ts`.
 3. `.env.example` chứa giá trị trông như thật cho `FACEBOOK_APP_SECRET` và `FACEBOOK_ACCESS_TOKEN` (không chép lại ở đây) — cần thu hồi/thay placeholder.
 4. `fetchCaptionFromAi()` gọi `/api/v1/social/campaign-facebook-caption` không gửi auth.
-5. `GET /metric-tables`, `/metric-columns` chỉ cần đăng nhập (dù phục vụ UI admin).
+5. ~~`GET /metric-tables`, `/metric-columns` chỉ cần đăng nhập~~ — đã gỡ 2026-10-21 (spec 014) cùng module metrics.
 
 **Bug / nghi bug**
 6. `GET /internal/v1/difficulties` (deprecated, không còn người gọi) trả `data.difficulties = { difficulties, total }` (object) vì `listActive()` trả object; chỉ lấy 20 bản ghi đầu.
 7. `difficulty.service.ts > updateById()`: khi body không có `name/nameVi/nameEn`, `nameVi`/`nameEn` = `""` (không phải `undefined`) nên luôn ghi đè thành chuỗi rỗng. Ví dụ PUT chỉ đổi `greenPoints` sẽ xoá tên vi/en.
 8. Huỷ đơn đổi quà không hoàn lại `stockRemaining` — `updateRedemptionStatus()`.
-9. Đổi quà ghi dòng `GIFT_REDEEM` âm vào `green_point_transactions` nhưng không trừ `user_green_point_balances`; hoàn tiền ghi dòng dương `GIFT_REDEEM_REFUND` → dòng hoàn tiền bị tính vào `greenPointsEarnedTotal` và leaderboard legacy (`SUM(points>0)`).
-10. `applyGreenPointLedgerCredit()` bắt lỗi P2002 rồi tiếp tục trong cùng transaction Postgres. Sau lỗi unique, Postgres đánh dấu transaction aborted, các câu lệnh tiếp theo (ví dụ credit tiếp theo trong batch campaign) có thể fail → cả job retry và bị bỏ sau 5 lần. Tương tự trong `applySpendablePointCredit()`/`applyRankingPointCredit()`. Cần xác nhận hành vi thực tế với Prisma.
-11. Huỷ đơn tạo lô SP mới với hạn dùng mới (không khôi phục lô cũ).
-12. `REPORT_VOTE_MILESTONE`: idempotency theo `REPORT_VOTE_MILESTONE_<threshold>`; nếu admin đổi danh sách threshold, report cũ có thể được trả thêm cho threshold mới. ~~`mapResourceTypeToSourceType()` map resourceType này thành `SYSTEM` thay vì `REPORT`~~ — đã sửa 2026-10-21: dòng SP / RP của mốc vote có `sourceType = REPORT` (`isReportResourceType()`).
+9. ~~Đổi quà ghi `GIFT_REDEEM` âm nhưng không trừ `user_green_point_balances`; `GIFT_REDEEM_REFUND` bị tính vào `greenPointsEarnedTotal` và leaderboard legacy~~ — đã sửa 2026-10-21 (spec 014): số dư tính từ lô, `user_green_point_balances` không còn đọc/ghi; tổng đã kiếm chỉ cộng loại kiếm được (BR-266); leaderboard đã gỡ.
+10. ~~`applyGreenPointLedgerCredit()` bắt P2002 rồi chạy tiếp trong transaction đã abort~~ — đã sửa 2026-10-21 (spec 014): ghi sổ qua `insertLedgerOnce()` (`ON CONFLICT DO NOTHING`), các util SP / RP đã xoá.
+11. ~~Huỷ đơn tạo lô SP mới với hạn dùng mới~~ — đã sửa 2026-10-21 (spec 014): hoàn về đúng lô đã trừ, giữ hạn cũ (BR-263). Riêng đơn tạo trước khi có `green_point_lot_spends` vẫn nhận lô mới với hạn mới (BR-264).
+12. `REPORT_VOTE_MILESTONE`: idempotency theo khoá `vote_milestone:<reportId>:<threshold>`; nếu admin đổi danh sách threshold, report cũ có thể được trả thêm cho threshold mới. Từ spec 014 dòng mốc vote có `resourceType = REPORT` (migration chuyển cả dòng cũ).
 13. FacebookRecognition không idempotent: nếu đăng Facebook thành công nhưng webhook lỗi → job retry → đăng lại bài.
-14. `PATCH /admin/seasons/:id` cho đổi `status` ACTIVE→INACTIVE mà không freeze snapshot/payout; cũng cho INACTIVE→ACTIVE. Không validate `startsAt < endsAt`, không kiểm tra trùng season ACTIVE ở create/patch (chỉ finalize kiểm tra). Date/kind không hợp lệ → lỗi Prisma → 500.
-15. `adminPatchPayoutTier()`, `adminPutMultiplier()` không validate giá trị (NaN, metric sai) → 500.
-16. `PATCH point-rules` bắt buộc gửi đủ cả 4 field (ngữ nghĩa PUT). ~~Không chặn threshold âm/trùng; không xoá được `volunteerBonusCapByDifficulty`~~ — đã sửa 2026-10-21: mốc phải nguyên > 0, không trùng; cột bonus cap đã drop.
-17. `seasonService.finalizeSeason()` dùng transaction mặc định (không Serializable), payout tier chỉ áp cho CRP/VRP; tier ORG_AGGREGATE tạo được nhưng không bao giờ chi.
-18. Rules AST: evaluator chỉ tính target `user_point_transactions` (cộng mọi kind CRP+VRP+SP, bỏ qua `metric`/`ruleType` legacy); `orders/reviews/reports/votes` luôn false; target khác trong metric seed (`campaigns`, `green_point_transactions`…) qua được validate nhưng evaluator coi giá trị = 0. SUM trên field `id` (có trong seed) sẽ lỗi ở Prisma.
+14. ~~`PATCH /admin/seasons/:id` đổi status không snapshot/payout~~ — đã gỡ 2026-10-21 (spec 014).
+15. ~~`adminPatchPayoutTier()`, `adminPutMultiplier()` không validate~~ — đã gỡ 2026-10-21 (spec 014).
+16. `PATCH point-rules` bắt buộc gửi đủ cả 5 field (ngữ nghĩa PUT). ~~Không chặn threshold âm/trùng; không xoá được `volunteerBonusCapByDifficulty`~~ — đã sửa 2026-10-21: mốc phải nguyên > 0, không trùng; cột bonus cap đã drop.
+17. ~~`finalizeSeason()` không Serializable; tier ORG_AGGREGATE không bao giờ chi~~ — đã gỡ 2026-10-21 (spec 014).
+18. ~~Rules AST của badge chỉ tính `user_point_transactions`~~ — đã gỡ 2026-10-21 (spec 014) cùng badge và metric metadata.
 19. `GET /gifts` và `GET /difficulties` (deprecated) luôn trả `name: null` (và `description: null` cho gift), khác với field DTO.
 20. API process (`index.ts` import `./worker`) cũng chạy worker; nếu chạy thêm `npm run worker` sẽ có 2 bộ consumer. Handler SIGTERM của worker gọi `process.exit(0)` cho cả API.
-21. Seed `ecolink-server/scripts/seeds/reward-service-seed.sql` insert gift với `media_id` không tồn tại (không insert bảng `media`) → vi phạm FK `gifts_media_id_fkey`, cả transaction seed có thể fail. Seed cũng tạo số dư 150 không khớp giao dịch 100, và đơn đổi quà không có dòng trừ điểm.
-22. Leaderboard có `organizationId` tải toàn bộ bảng điểm của season rồi gọi identity cho tất cả user (hiệu năng).
+21. Seed `ecolink-server/scripts/seeds/reward-service-seed.sql` insert gift với `media_id` không tồn tại (không insert bảng `media`) → vi phạm FK `gifts_media_id_fkey`, cả transaction seed fail (đã chạy thử 2026-10-21, vẫn lỗi). ~~Số dư 150 không khớp giao dịch 100; đơn đổi quà không có dòng trừ điểm~~ — đã sửa 2026-10-21: seed không còn ghi `user_green_point_balances`, có dòng `GIFT_REDEEM` −100 nên sổ cộng về 0.
+22. ~~Leaderboard theo `organizationId` tải toàn bộ bảng điểm~~ — đã gỡ 2026-10-21 (spec 014).
 
 **[CHƯA HOÀN THIỆN]**
-23. Không có code nào tạo `UserBadgeGrant`; `badgeService.evaluateBadge()` không được gọi ở đâu → huy hiệu không bao giờ được cấp; `getBestStoreDiscountBps()` thực tế luôn 0; `slugLockedAt` chỉ được set khi publish.
-24. Không có code ghi `organization_season_scores`, `report_milestone_awards`, `campaign_reward_awards`; `volunteer_org_multiplier_rules` và `season_schedule_rules` chỉ là CRUD cấu hình, không được worker đọc. `reward.bonus_sp`, `partner_tier_codes`, `perks` chỉ được validate, không dùng.
+23. ~~Không có code cấp `UserBadgeGrant`; giảm giá theo badge luôn 0~~ — đã gỡ 2026-10-21 (spec 014): badge và giảm giá bị bỏ; đổi quà theo giá niêm yết (BR-226).
+24. Các bảng ranking / season / badge (`seasons`, `user_point_transactions`, `user_season_rp_totals`, `leaderboard_snapshots`, `organization_season_scores`, `season_leaderboard_payout_tiers`, `volunteer_org_multiplier_rules`, `season_schedule_rules`, `spendable_point_rules`, `badge_definitions`, `user_badge_grants`, `report_milestone_awards`, `campaign_reward_awards`, `metric_tables`, `metric_columns`) cùng `user_green_point_balances` vẫn còn trong schema / DB nhưng không còn code đọc / ghi; drop ở đợt dọn dẹp.
 25. Queue `green-point` và `facebook-recognition` có worker nhưng không có producer (HTTP enqueue cũ đã gỡ, xem comment trong `internal.routes.ts`). ~~Job `UPVOTE_ADDING_GREEN_POINTS`, `REFERRAL_ADDING_GREEN_POINTS` không có producer~~ — đã xoá hai strategy này 2026-10-21.
-26. `LeaderboardMetric` có `REPORT_UPVOTES`, `REPORT_COUNT`, `CAMPAIGN_COMPLETED` nhưng API chỉ chấp nhận crp/vrp/org_aggregate. `src/modules/gamification/badge-system-reference.md` mô tả mô hình badge cũ (ruleType/metric/threshold, upsert theo (userId,badgeId,seasonId)) không còn khớp schema.
+26. ~~`LeaderboardMetric` thừa giá trị; `badge-system-reference.md` lỗi thời~~ — đã gỡ 2026-10-21 (spec 014) (file đã xoá).
 27. ~~Bảng `report_vote_green_point_rules` chỉ được đồng bộ để "ops/scripts"~~ — đã drop 2026-10-21 (migration `20261021100000_point_rules_earning`) cùng hàm đồng bộ.
-28. Không có endpoint tạo/xoá Difficulty (deprecated), xoá Gift (chỉ `isActive`), ghi metric metadata.
+28. Không có endpoint tạo/xoá Difficulty (deprecated), xoá Gift (chỉ `isActive`).
+29. ~~`scripts/backfill-rp-totals.ts` import `rp-credit.util.ts` đã xoá~~ — đã xoá script cùng spec 014.

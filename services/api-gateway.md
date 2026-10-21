@@ -59,8 +59,8 @@ Mọi method (`app.use`) được chuyển tiếp nguyên path. Trừ 2 trườn
 | `/api/v1/incident/saved-resources` | incident-service | ⚠ `/incident/saved-resources…` (bỏ `/api/v1`) |
 | `/api/v1/sos` | incident-service | giữ nguyên |
 | `/api/v1/notifications` | notification-service (`NOTIFICATION_SERVICE_URL`, `:3003`) | giữ nguyên |
-| `/api/v1/gifts`, `/api/v1/difficulties` (deprecated, bỏ ở đợt dọn dẹp; client không còn gọi), `/api/v1/me/points`, `/api/v1/me/redemptions`, `/api/v1/admin/gift-redemptions`, `/api/v1/leaderboard` | reward-service (`REWARD_SERVICE_URL`, `:3002`) | giữ nguyên |
-| `/api/v1/seasons`, `/api/v1/me/gamification`, `/api/v1/me/badges`, `/api/v1/metric-tables`, `/api/v1/metric-columns`, `/api/v1/gamification`, `/api/v1/admin/gamification`, `/api/v1/admin/seasons` | reward-service | giữ nguyên |
+| `/api/v1/gifts`, `/api/v1/difficulties` (deprecated, bỏ ở đợt dọn dẹp; client không còn gọi), `/api/v1/me/points`, `/api/v1/me/redemptions`, `/api/v1/admin/gift-redemptions` | reward-service (`REWARD_SERVICE_URL`, `:3002`) | giữ nguyên |
+| `/api/v1/admin/gamification` (chỉ còn `point-rules`, `point-rules/history`). Các proxy `/api/v1/leaderboard`, `/api/v1/seasons`, `/api/v1/me/gamification`, `/api/v1/me/badges`, `/api/v1/metric-tables`, `/api/v1/metric-columns`, `/api/v1/gamification`, `/api/v1/admin/seasons` đã gỡ (spec 014) → gateway trả 404 | reward-service | giữ nguyên |
 | `/api/v1/chat` | ai-service (`AI_SERVICE_URL`, `:3004`) | giữ nguyên, `parseReqBody: false` (để stream SSE) |
 | `/api/v1/translate` | ai-service | ⚠ `/api/v1/chat/translate…` |
 

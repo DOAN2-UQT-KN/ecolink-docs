@@ -517,20 +517,16 @@ Migration `incident-service/prisma/migrations/20260922104500_truncate_legacy_org
 
 ## 3. reward-service (`rewarddb`)
 
+Sơ đồ chỉ vẽ các bảng còn được code dùng. Các bảng ranking / season / badge / metric metadata và `user_green_point_balances` vẫn còn trong schema nhưng không còn code đọc / ghi từ spec 014 (xem 3.3).
+
 ```mermaid
 erDiagram
   Media ||--o{ Gift : "mediaId (restrict)"
   Gift ||--o{ GiftRedemption : "giftId (restrict)"
-  Season ||--o{ UserSeasonRpTotal : "cascade"
-  Season ||--o{ OrganizationSeasonScore : "cascade"
-  Season ||--o{ LeaderboardSnapshot : "cascade"
-  Season ||--o{ UserBadgeGrant : "cascade"
-  Season ||--o{ SeasonLeaderboardPayoutTier : "cascade"
-  Season ||--o{ UserPointTransaction : "seasonId (restrict)"
-  Season ||--o{ ReportMilestoneAward : ""
-  Season ||--o{ CampaignRewardAward : ""
-  BadgeDefinition ||--o{ UserBadgeGrant : "cascade"
-  MetricTable ||--o{ MetricColumn : "cascade"
+  GreenPointTransaction ||--o| GreenPointLot : "transactionId (set null)"
+  GreenPointLot ||--o{ GreenPointLotSpend : "lotId (restrict)"
+  GiftRedemption ||--o{ GreenPointLotSpend : "redemptionId (restrict)"
+  GamificationPointRules ||--o{ GamificationPointRuleHistory : "ruleId (restrict)"
   Difficulty {
     uuid id PK
     int level UK
@@ -545,70 +541,57 @@ erDiagram
     uuid resourceId
     string resourceType
     int points
+    string idempotencyKey
   }
-  UserGreenPointBalance {
-    uuid userId PK
-    int balance
-  }
-  UserSpWalletEntry {
+  GreenPointLot {
     uuid id PK
     uuid userId
+    uuid transactionId UK
     int amount
     int remaining
     datetime expiresAt
   }
-  UserPointTransaction {
+  GreenPointLotSpend {
     uuid id PK
-    uuid userId
-    string kind "CRP|VRP|SP"
+    uuid redemptionId FK
+    uuid lotId FK
     int amount
-    uuid seasonId FK
-    string idempotencyKey
   }
 ```
 
 ### 3.1 Điểm
 
-Hệ thống có 3 sổ song song:
+Từ spec 014 chỉ còn **một loại điểm** (điểm xanh) với hai bảng:
 
-- **Green point (điểm xanh)**: sổ cũ ở `green_point_transactions` và số dư ở `user_green_point_balances`.
-- **SP (spendable point, điểm tiêu được, có hạn)**: ví theo lô ở `user_sp_wallet` và sổ ở `user_point_transactions` với `kind = SP`.
-- **RP (ranking point)**: `CRP` (citizen, từ report) và `VRP` (volunteer, từ campaign). Sổ ở `user_point_transactions` và tổng theo season ở `user_season_rp_totals`.
+- **Sổ cái** `green_point_transactions`: sổ duy nhất, mọi lần cộng / trừ / hoàn / hết hạn / điều chỉnh đều là một dòng, idempotent theo `(user_id, idempotency_key)` (BR-240).
+- **Lô** `green_point_lots` (trước là `user_sp_wallet`, migration `ecolink-server/services/reward-service/prisma/migrations/20261022100000_green_point_lots` đổi tên, giữ nguyên id, `remaining`, `expires_at`): mỗi lần cộng điểm tạo một lô có hạn. **Số dư = tổng `remaining` của lô có `expires_at > now`** (BR-261).
+
+SP (`kind = SP`), RP (`CRP` / `VRP`) trong `user_point_transactions` và số dư `user_green_point_balances` không còn được ghi hay đọc; bảng giữ lại tới đợt dọn dẹp.
 
 | Bảng | Field | Ràng buộc / ghi chú |
 |---|---|---|
 | Difficulty (`difficulties`) | level (**unique**), name/nameVi/nameEn varchar(64), maxVolunteers?, suggestedMinVolunteers? (`suggested_min_volunteers`), greenPoints, deletedAt | **Deprecated**: incident-service và client không còn đọc (điểm hoàn thành chiến dịch lấy từ `gamification_point_rules`). Bảng và API `/difficulties` còn tới đợt dọn dẹp (đợt C) |
-| UserGreenPointBalance (`user_green_point_balances`) | userId (PK), balance (default 0) | Không bị trừ khi đổi quà |
-| GreenPointTransaction (`green_point_transactions`) | userId, type (`CAMPAIGN_COMPLETION`, `REPORT_COMPLETION`, `UPVOTE`, `REPORT_VOTE_MILESTONE`, `REFERRAL`, `GIFT_REDEEM`, `GIFT_REDEEM_REFUND`; `UPVOTE`, `REFERRAL` còn là hằng số nhưng không còn code ghi), resourceId, resourceType (mốc upvote: `REPORT_VOTE_MILESTONE_<threshold>`), points (âm là chi), metadata (dòng cộng điểm từ quy tắc ghi `ruleId` và các đầu vào để tính lại được; payload chiến dịch kiểu cũ ghi `legacyPayload: true`) | **partial unique (user_id, type, resource_id, resource_type) WHERE deleted_at IS NULL**, dùng để chống cộng trùng |
-| UserSpWalletEntry (`user_sp_wallet`) | userId, amount, remaining, sourceType, sourceId?, expiresAt | Trừ theo FIFO dựa trên `expiresAt` |
-| UserPointTransaction (`user_point_transactions`) | userId, kind (`PointKind`), amount (âm là debit), sourceType (`PointSourceType`), sourceId?, seasonId? (bắt buộc với RP), metadata, idempotencyKey varchar(256)? | **partial unique (user_id, idempotency_key) WHERE idempotency_key IS NOT NULL** |
-| UserSeasonRpTotal (`user_season_rp_totals`) | PK (userId, seasonId), citizenRp, volunteerRp | |
-| OrganizationSeasonScore | PK (organizationId, seasonId), aggregateScore | Không có code ghi |
-| ReportMilestoneAward, CampaignRewardAward | | Không được dùng; có các unique tương ứng |
+| GreenPointTransaction (`green_point_transactions`) | userId, type (`CAMPAIGN_COMPLETION`, `REPORT_COMPLETION`, `REPORT_VOTE_MILESTONE`, `GIFT_REDEEM`, `GIFT_REDEEM_REFUND`, `EXPIRE`, `MIGRATION_ADJUST`; `UPVOTE`, `REFERRAL` chỉ còn ở dòng cũ), resourceId, resourceType (`CAMPAIGN`, `REPORT` — kể cả mốc upvote, `USER`, `GIFT_REDEMPTION`, `GREEN_POINT_LOT`), points (âm là chi), **idempotencyKey varchar(256) NOT NULL**, metadata (dòng cộng điểm từ quy tắc ghi `ruleId` và các đầu vào; payload chiến dịch kiểu cũ ghi `legacyPayload: true`), deletedAt | **unique (user_id, idempotency_key)**; partial unique cũ (user_id, type, resource_id, resource_type) đã drop. Khoá xem BR-240; migration gán khoá cho dòng cũ (`legacy:<type>:<resource_type>:<resource_id>`, dòng xoá mềm `deleted:<id>`) và chuyển dòng mốc vote từ `REPORT_VOTE_MILESTONE_<n>` sang `resourceType = REPORT` (ngưỡng nằm trong khoá) |
+| GreenPointLot (`green_point_lots`) | userId, transactionId? (**unique**, FK → `green_point_transactions`, set null; null với lô chuyển từ ví SP), amount, remaining, sourceType? (`PointSourceType`, chỉ lô cũ), sourceId?, expiresAt, createdAt | **CHECK (remaining >= 0 AND remaining <= amount)**; partial index (user_id, expires_at) WHERE remaining > 0; index expires_at. `expires_at = created + pointExpirationDays` (BR-260) |
+| GreenPointLotSpend (`green_point_lot_spends`) | redemptionId (FK → `gift_redemptions`, restrict), lotId (FK → `green_point_lots`, restrict), amount, createdAt | **CHECK amount > 0**; **unique (redemption_id, lot_id)**; index redemption_id. Đơn đổi quà đã lấy bao nhiêu điểm từ lô nào, để huỷ đơn trả về đúng lô (BR-262, BR-263) |
+| UserGreenPointBalance (`user_green_point_balances`) | userId (PK), balance (default 0) | Không còn code đọc / ghi (spec 014); drop ở đợt dọn dẹp |
+| UserPointTransaction, UserSeasonRpTotal, OrganizationSeasonScore, ReportMilestoneAward, CampaignRewardAward | | Sổ SP / RP và tổng theo season cũ; không còn code đọc / ghi; drop ở đợt dọn dẹp |
 
 ### 3.2 Quà tặng
 
 | Bảng | Field | Ghi chú |
 |---|---|---|
 | Media (`media`) | url, type (`GIFT`) | |
-| Gift (`gifts`) | name (255), nameVi/nameEn?, mediaId? (FK restrict), description text (+Vi/En), greenPoints (giá, trừ bằng SP), stockRemaining? (null nghĩa là vô hạn), isActive (default true), deletedAt | |
+| Gift (`gifts`) | name (255), nameVi/nameEn?, mediaId? (FK restrict), description text (+Vi/En), greenPoints (giá niêm yết, trừ vào lô điểm xanh, không giảm giá), stockRemaining? (null nghĩa là vô hạn), isActive (default true), deletedAt | |
 | GiftRedemption (`gift_redemptions`) | userId, giftId (FK restrict), greenPointsSpent, phoneNumber varchar(32) (default ''), pickupLocation text (default ''), status (`GiftRedemptionStatus`, default PROCESSING), statusUpdatedAt, cancelledAt? | Không có cột updatedAt |
 
-### 3.3 Gamification và season
+### 3.3 Quy tắc điểm và bảng cũ
 
 | Bảng | Field | Ghi chú |
 |---|---|---|
-| Season (`seasons`) | label?, kind (`SeasonKind`), status Int (1 ACTIVE / 2 INACTIVE), startsAt, endsAt | |
-| GamificationPointRules (`gamification_point_rules`) | campaignCompletionPoints (`campaign_completion_points`, default 20), baseReportPoint, reportMilestoneThresholds Int[] (lưu tăng dần), reportCompletionPoints (`report_completion_points`, default 0 = tắt), isActive, effectiveFrom | Quy tắc điểm đang hiệu lực = dòng `isActive` có `effectiveFrom` mới nhất; worker đọc lúc cộng điểm. Cột `volunteer_bonus_cap_by_difficulty` đã drop (migration `RW/prisma/migrations/20261021100000_point_rules_earning`) |
+| GamificationPointRules (`gamification_point_rules`) | campaignCompletionPoints (`campaign_completion_points`, default 20), baseReportPoint, reportMilestoneThresholds Int[] (lưu tăng dần), reportCompletionPoints (`report_completion_points`, default 0 = tắt), pointExpirationDays (`point_expiration_days`, default 90, ≥ 1), isActive, effectiveFrom | Quy tắc điểm đang hiệu lực = dòng `isActive` có `effectiveFrom` mới nhất; worker đọc lúc cộng điểm. Cột `volunteer_bonus_cap_by_difficulty` đã drop (migration `ecolink-server/services/reward-service/prisma/migrations/20261021100000_point_rules_earning`). `point_expiration_days` thêm ở migration `20261022100000_green_point_lots`, chép từ `spendable_point_rules` đang active |
 | GamificationPointRuleHistory (`gamification_point_rule_history`) | ruleId (FK → gamification_point_rules, restrict), changedBy (uuid admin), before jsonb? (null khi chưa có quy tắc), after jsonb, changedAt | Chỉ insert; một dòng mỗi lần admin lưu, ghi trong cùng transaction. Index (ruleId, changedAt desc) |
-| SpendablePointRules | expirationDays (default 90), isActive, effectiveFrom | Hạn dùng của SP |
-| VolunteerOrgMultiplierRule | code (**unique**), multiplier Decimal(4,2), priority, isActive | Chỉ có CRUD, không có code dùng |
-| SeasonScheduleRules | kind (**unique**), autoRotate, metadata | Chỉ có CRUD, không có cron |
-| SeasonLeaderboardPayoutTier | seasonId? (null nghĩa là tier mặc định), metric, rankMin, rankMax, spAmount | Chi SP khi finalize season |
-| BadgeDefinition (`badge_definitions`) | slug (**unique**, max 128), name, symbol?, category, scope (default SEASON), isRepeatable, maxGrantsPerUser?, cooldownSeconds, rulesConfig json (AST điều kiện), reward json (`discountBps`…), isActive, publishedAt?, slugLockedAt?, deletedAt | |
-| UserBadgeGrant | userId, badgeId (cascade), seasonId?, grantedAt, metadata | [CHƯA HOÀN THIỆN] không có code tạo |
-| LeaderboardSnapshot | seasonId, subjectKind, subjectId, metric, score, rank | **unique (seasonId, subjectKind, subjectId, metric)** |
-| MetricTable / MetricColumn | key (**unique**) / (tableId, key) **unique**, label, valueType, isActive | Metadata cho rule builder của badge |
+| Season (`seasons`), SpendablePointRules, VolunteerOrgMultiplierRule, SeasonScheduleRules, SeasonLeaderboardPayoutTier (`season_leaderboard_payout_tiers`), BadgeDefinition (`badge_definitions`), UserBadgeGrant, LeaderboardSnapshot, MetricTable / MetricColumn | | Không còn code đọc / ghi từ spec 014 (season, badge, leaderboard, ví SP, metric metadata đã gỡ; seed không còn insert multiplier, season schedule, spendable rules); bảng giữ tới đợt dọn dẹp |
 | RewardBackgroundJob (`reward_background_jobs`) | jobType, payload, status (12/22/17/23), attempts, maxAttempts, processedAt | |
 
 ---
@@ -669,8 +652,8 @@ Mọi cột `status` kiểu Int ở incident, notification và reward (job) đ�
 
 | Giá trị | Tên | Dùng ở |
 |---|---|---|
-| 1 | `_STATUS_ACTIVE` | Campaign đang diễn ra (ACTIVE, từ ngày đầu); Organization hoạt động; SOS đang mở; Season ACTIVE; User ACTIVE (identity có enum riêng, cùng số) |
-| 2 | `_STATUS_INACTIVE` | Report, Organization bị ban; Campaign bị chặn / ban (BLOCKED); Season INACTIVE; User bị ban |
+| 1 | `_STATUS_ACTIVE` | Campaign đang diễn ra (ACTIVE, từ ngày đầu); Organization hoạt động; SOS đang mở; Season ACTIVE (bảng cũ); User ACTIVE (identity có enum riêng, cùng số) |
+| 2 | `_STATUS_INACTIVE` | Report, Organization bị ban; Campaign bị chặn / ban (BLOCKED); Season INACTIVE (bảng cũ); User bị ban |
 | 3 | `_STATUS_DELETED` | Không dùng. identity dùng số 3 cho `PENDING_ACTIVATION` với nghĩa khác |
 | 4 | `_STATUS_DRAFT` | Campaign nháp (DRAFT); điều kiện chuyển trạng thái của organization |
 | 5 | `_STATUS_NEW` | Không còn dùng cho campaign |
@@ -756,13 +739,10 @@ Các key preference (tất cả mặc định `true`): `campaignNew`, `campaignN
 | Enum | Giá trị |
 |---|---|
 | GiftRedemptionStatus | PROCESSING, SHIPPED, DELIVERED, CANCELLED |
-| SeasonKind | MONTHLY, QUARTERLY |
-| PointKind | CRP (điểm xếp hạng công dân, từ report), VRP (điểm xếp hạng tình nguyện viên, từ campaign), SP (điểm tiêu được) |
-| PointSourceType | REPORT, CAMPAIGN, SYSTEM, STORE, SEASON_END |
-| LeaderboardSubjectKind | USER, ORGANIZATION |
-| LeaderboardMetric | CRP, VRP, ORG_AGGREGATE; REPORT_UPVOTES, REPORT_COUNT, CAMPAIGN_COMPLETED (không dùng) |
-| BadgeScope | LIFETIME, SEASON |
-| BadgeCategory | REPORT, CAMPAIGN, CONTRIBUTION, RANK |
+| PointSourceType | REPORT, CAMPAIGN, SYSTEM, STORE, SEASON_END — chỉ còn ở `green_point_lots.source_type` của lô cũ |
+| SeasonKind, PointKind, LeaderboardSubjectKind, LeaderboardMetric, BadgeScope, BadgeCategory | Còn trong schema cho các bảng cũ; không còn code dùng (spec 014) |
+
+Loại dòng sổ (`type`) và `resourceType` của điểm xanh là varchar, hằng số ở `RW/modules/green-point/green-point-transaction.constants.ts` (xem 3.1).
 
 ### 6.5 Khác
 

@@ -1,6 +1,6 @@
 # Ecolink — Tổng quan nghiệp vụ
 
-> Tài liệu dành cho PM, BA, khách hàng, nhà tài trợ và tình nguyện viên nòng cốt. Nội dung tổng hợp từ bộ tài liệu kỹ thuật trong thư mục `docs/`, và được viết dựa trên **đúng những gì sản phẩm đang làm** tại thời điểm 17/10/2026. Nó không mô tả những gì sản phẩm "dự định" làm.
+> Tài liệu dành cho PM, BA, khách hàng, nhà tài trợ và tình nguyện viên nòng cốt. Nội dung tổng hợp từ bộ tài liệu kỹ thuật trong thư mục `docs/`, và được viết dựa trên **đúng những gì sản phẩm đang làm** tại thời điểm 21/10/2026. Nó không mô tả những gì sản phẩm "dự định" làm.
 > Những chỗ sản phẩm chưa làm xong, hoặc đang làm khác với mong đợi, được nêu rõ ở mục 3 (cột Trạng thái) và mục 10.
 
 ---
@@ -8,13 +8,13 @@
 ## 1. Giới thiệu sản phẩm
 
 ### Ecolink là gì?
-Ecolink là nền tảng kết nối cộng đồng để **phát hiện và dọn dẹp các điểm rác, ô nhiễm**. Người dân chụp ảnh và báo cáo điểm rác. Các tổ chức (trường học, câu lạc bộ, NGO, cơ quan nhà nước…) mở **chiến dịch** dọn dẹp. Tình nguyện viên đăng ký tham gia. Khi chiến dịch hoàn thành, người tham gia nhận **điểm xanh** để đổi quà và leo bảng xếp hạng.
+Ecolink là nền tảng kết nối cộng đồng để **phát hiện và dọn dẹp các điểm rác, ô nhiễm**. Người dân chụp ảnh và báo cáo điểm rác. Các tổ chức (trường học, câu lạc bộ, NGO, cơ quan nhà nước…) mở **chiến dịch** dọn dẹp. Tình nguyện viên đăng ký tham gia. Khi chiến dịch hoàn thành, người tham gia nhận **điểm xanh** để đổi quà.
 
 ### Sản phẩm giải quyết vấn đề gì?
 - Người dân thấy rác nhưng không biết báo cho ai. Ecolink cho phép gửi báo cáo kèm ảnh và vị trí chỉ trong vài bước, và có trợ lý AI hỗ trợ.
 - Tổ chức muốn làm chiến dịch nhưng khó tìm địa điểm và khó huy động người. Ecolink cung cấp danh sách điểm rác đã được xác nhận, tự mời người dân sống gần khu vực, và hỗ trợ quản lý người tham gia, điểm danh, theo dõi tiến độ và kết quả từng ca.
 - Cộng đồng khó phân biệt tổ chức uy tín. Ecolink thẩm định hồ sơ pháp lý của tổ chức và gắn **dấu tích xanh** cho tổ chức đã được xác minh.
-- Tình nguyện viên thiếu động lực duy trì. Ecolink có điểm thưởng, quà tặng, bảng xếp hạng theo mùa và huy hiệu.
+- Tình nguyện viên thiếu động lực duy trì. Ecolink có điểm xanh (có hạn dùng) và quà tặng.
 
 ### Giá trị cho từng nhóm người dùng
 
@@ -32,7 +32,7 @@ Ecolink là nền tảng kết nối cộng đồng để **phát hiện và d�
 
 | Vai trò | Là ai | Muốn làm gì | Được làm | Không được làm |
 |---|---|---|---|---|
-| **Khách** | Người chưa đăng nhập | Tìm hiểu, đăng ký tài khoản, nộp hồ sơ tổ chức | Đăng ký, đăng nhập, xem danh sách quà và bảng xếp hạng, **nộp hồ sơ đăng ký tổ chức** (không cần tài khoản) | Xem báo cáo, chiến dịch, bản đồ (sẽ được yêu cầu đăng nhập) |
+| **Khách** | Người chưa đăng nhập | Tìm hiểu, đăng ký tài khoản, nộp hồ sơ tổ chức | Đăng ký, đăng nhập, xem danh sách quà, **nộp hồ sơ đăng ký tổ chức** (không cần tài khoản) | Xem báo cáo, chiến dịch, bản đồ (sẽ được yêu cầu đăng nhập) |
 | **Người dùng** (người dân) | Người có tài khoản cá nhân | Báo cáo rác, theo dõi, bình chọn, tham gia | Gửi và sửa báo cáo của mình; bình chọn và lưu báo cáo hoặc chiến dịch; đăng ký ca của chiến dịch, xin gia nhập tổ chức; gửi yêu cầu khẩn cấp (SOS) khi đang ở chiến dịch, tới giúp SOS gần mình, bật "Sẵn sàng hỗ trợ SOS"; chat với trợ lý AI; đổi quà; cài đặt thông báo | Duyệt nội dung; tạo chiến dịch (chỉ owner hoặc quản lý chiến dịch của tổ chức được tạo) |
 | **Tình nguyện viên** | Người dùng đã được chấp nhận vào một chiến dịch | Làm việc trong chiến dịch và nhận điểm | Nhận việc được giao, cập nhật kết quả, điểm danh vào / ra từng ca bằng mã QR tại điểm tập trung, nhận điểm khi chiến dịch hoàn thành | Quản lý chiến dịch |
 | **Owner tổ chức** (gồm người đại diện pháp lý) | Người dùng cá nhân được gắn vai owner sau khi hồ sơ được duyệt, hoặc qua **đề xuất thêm owner** được các owner khác đồng ý. Một tổ chức có thể có nhiều owner (tối đa 5 lúc đăng ký); một người làm owner tối đa 3 tổ chức. Tổ chức **không** có tài khoản đăng nhập riêng | Quản lý tổ chức và chiến dịch | Mọi quyền của Admin tổ chức, cộng: nâng / hạ vai Admin, **đề xuất thêm owner**, **đề xuất thu hồi owner khác**, đồng ý / từ chối đề xuất của owner khác, **tự hạ vai hoặc rời tổ chức** (khi còn owner khác; người đại diện pháp lý phải chọn người thay, người thay xác nhận và các owner khác đồng ý); **tạo chiến dịch**; quản lý, sửa và xoá **mọi** chiến dịch của tổ chức (kể cả chiến dịch người khác tạo) | Tự tạo tổ chức mà không qua thẩm định; rời tổ chức khi là owner duy nhất |
@@ -43,7 +43,7 @@ Ecolink là nền tảng kết nối cộng đồng để **phát hiện và d�
 | **Người được mời vào tổ chức** | Người dùng đã có tài khoản được một thành viên mời | Nhận hoặc từ chối | Mở link trong email (không cần đăng nhập), bấm Chấp nhận hoặc Từ chối trong 7 ngày | Vào tổ chức khi chưa tự chấp nhận |
 | **Người nộp hồ sơ tổ chức** | Người lập hồ sơ, không cần tài khoản; bắt buộc là một trong các owner | Đăng ký tổ chức lên Ecolink | Xác thực email bằng mã, lưu nháp, khai danh sách owner, nộp hồ sơ và giấy tờ, gửi lại email xác nhận cho owner, theo dõi, sửa, rút hồ sơ qua đường link trong email | — |
 | **Owner được mời** | Người được ghi tên làm owner trong một hồ sơ | Đồng ý hoặc từ chối | Mở link trong email (không cần đăng nhập), bấm **Xác nhận** hoặc **Tôi không liên quan**, có thể chặn email mình khỏi mọi lời mời sau này | Được gán vai khi chưa tự xác nhận |
-| **Quản trị viên** | Nhân sự vận hành Ecolink | Kiểm duyệt và vận hành | Duyệt hoặc chặn báo cáo, chiến dịch (kèm yêu cầu chỉnh sửa; trừ chiến dịch của tổ chức mình là thành viên), tổ chức, người dùng; thẩm định hồ sơ tổ chức và cấp dấu tích xanh; duyệt hoàn thành chiến dịch; quản lý quà và đơn đổi quà; cấu hình điểm, mùa, huy hiệu | Sửa báo cáo của người dân (bị cấm) |
+| **Quản trị viên** | Nhân sự vận hành Ecolink | Kiểm duyệt và vận hành | Duyệt hoặc chặn báo cáo, chiến dịch (kèm yêu cầu chỉnh sửa; trừ chiến dịch của tổ chức mình là thành viên), tổ chức, người dùng; thẩm định hồ sơ tổ chức và cấp dấu tích xanh; duyệt hoàn thành chiến dịch; quản lý quà và đơn đổi quà; cấu hình quy tắc điểm (mức điểm, hạn dùng) | Sửa báo cáo của người dân (bị cấm) |
 
 > Chi tiết kỹ thuật: xem `docs/05-permissions.md`.
 
@@ -126,17 +126,14 @@ Trạng thái: ✅ đã có · 🟡 đang làm dở / có hạn chế · ❌ ch�
 | Bình chọn và lưu | Bình chọn lên hoặc xuống, lưu để xem lại | Người dùng | ✅ |
 | Báo cáo qua trợ lý AI | Chat, gửi ảnh, trợ lý tự tạo báo cáo | Người dùng | 🟡 Báo cáo tạo qua chat **không có vị trí thật** |
 
-### 3.6 Điểm thưởng, quà tặng, xếp hạng
+### 3.6 Điểm xanh và quà tặng
 | Tính năng | Mô tả | Ai dùng | Trạng thái |
 |---|---|---|---|
-| Điểm xanh | Nhận khi chiến dịch hoàn thành, khi báo cáo đạt mốc bình chọn, và khi báo cáo được xử lý (nếu quản trị viên bật). Mọi chiến dịch có cùng mức điểm | Người dùng | ✅ |
-| Quy tắc điểm | Quản trị viên đặt số điểm cho: hoàn thành chiến dịch (mặc định 20, nhân tỉ lệ ca tham gia), điểm cơ bản và các mốc bình chọn của báo cáo, báo cáo được xử lý (mặc định 0 = tắt). Thay đổi chỉ áp cho điểm cộng sau đó; mỗi lần lưu được ghi vào lịch sử (ai đổi, lúc nào, trước / sau) | Quản trị viên | ✅ |
-| Điểm tiêu dùng có hạn | Mỗi điểm xanh nhận được sinh ra một lượng điểm tiêu dùng tương đương, **hết hạn sau 90 ngày**, dùng để đổi quà | Người dùng | ✅ |
-| Cửa hàng quà | Xem quà, đổi quà (nhập số điện thoại và nơi nhận) | Người dùng | ✅ |
-| Quản lý đơn đổi quà | Chuyển trạng thái đang xử lý → đã gửi → đã giao, hoặc huỷ (có hoàn điểm) | Quản trị viên | 🟡 Đang thiếu kiểm tra quyền (mục 10); không báo cho người đổi |
-| Lịch sử điểm | Xem điểm và lịch sử cộng trừ | Người dùng | ✅ |
-| Mùa giải và bảng xếp hạng | Điểm xếp hạng công dân (từ báo cáo) và tình nguyện viên (từ chiến dịch) theo mùa; cuối mùa thưởng thêm điểm tiêu dùng theo thứ hạng | Người dùng, quản trị viên | 🟡 Hệ thống đã có, giao diện người dùng chưa có |
-| Huy hiệu | Quản trị viên định nghĩa huy hiệu kèm điều kiện đạt và ưu đãi giảm giá | Quản trị viên | 🟡 Định nghĩa được, nhưng **chưa có ai được trao** |
+| Điểm xanh | Loại điểm duy nhất. Nhận khi chiến dịch hoàn thành, khi báo cáo đạt mốc bình chọn, và khi báo cáo được xử lý (nếu quản trị viên bật). Mọi chiến dịch có cùng mức điểm. Mỗi lần nhận là một "lô" điểm **hết hạn sau 90 ngày** (quản trị viên đổi được); điểm hết hạn bị trừ tự động và hiện trong lịch sử | Người dùng | ✅ |
+| Quy tắc điểm | Quản trị viên đặt số điểm cho: hoàn thành chiến dịch (mặc định 20, nhân tỉ lệ ca tham gia), điểm cơ bản và các mốc bình chọn của báo cáo, báo cáo được xử lý (mặc định 0 = tắt), và số ngày điểm hết hạn (mặc định 90). Thay đổi chỉ áp cho điểm cộng sau đó; mỗi lần lưu được ghi vào lịch sử (ai đổi, lúc nào, trước / sau) | Quản trị viên | ✅ |
+| Cửa hàng quà | Xem quà, đổi quà theo đúng giá niêm yết (nhập số điện thoại và nơi nhận); điểm sắp hết hạn được trừ trước | Người dùng | ✅ |
+| Quản lý đơn đổi quà | Chuyển trạng thái đang xử lý → đã gửi → đã giao, hoặc huỷ (hoàn điểm về đúng lô cũ, giữ hạn cũ) | Quản trị viên | 🟡 Đang thiếu kiểm tra quyền (mục 10); không báo cho người đổi |
+| Điểm của tôi | Ba con số: điểm hiện có, điểm sắp hết hạn trong 7 ngày (kèm ngày sớm nhất), tổng điểm đã kiếm; lịch sử cộng trừ ghi rõ từng loại (chiến dịch, mốc bình chọn, báo cáo được xử lý, đổi quà, hoàn điểm, hết hạn, điều chỉnh số dư) | Người dùng | ✅ |
 
 ### 3.7 Thông báo
 | Tính năng | Mô tả | Trạng thái |
@@ -297,12 +294,13 @@ flowchart LR
 
 ### 4.6 Đổi quà
 1. Người dùng vào "Quà tặng", chọn quà, nhập số điện thoại và nơi nhận.
-2. Hệ thống kiểm tra còn hàng và **điểm tiêu dùng còn hạn** đủ để đổi, rồi trừ điểm (điểm sắp hết hạn được trừ trước) và tạo đơn **đang xử lý**.
-3. Quản trị viên cập nhật đơn thành **đã gửi**, rồi **đã giao**. Nếu huỷ, điểm được hoàn lại.
+2. Hệ thống kiểm tra còn hàng và **điểm xanh còn hạn** đủ để trả giá niêm yết, rồi trừ điểm (điểm sắp hết hạn được trừ trước) và tạo đơn **đang xử lý**.
+3. Quản trị viên cập nhật đơn thành **đã gửi**, rồi **đã giao**. Nếu huỷ, điểm được trả về đúng lô đã trừ và giữ hạn cũ; phần thuộc lô đã hết hạn thì không trả lại (ghi là hết hạn). Đơn đặt trước đợt cập nhật này được hoàn thành một lô mới, hạn 90 ngày từ lúc huỷ.
 
 Các trường hợp thường gặp:
 - Hết hàng: thông báo "hết quà".
 - Không đủ điểm: thông báo "không đủ điểm". Điểm đã hết hạn không dùng được.
+- Hai lần đổi cùng lúc của một người: một lần có thể bị báo "thử lại".
 - Người đổi **không nhận thông báo** khi đơn thay đổi trạng thái; phải tự vào xem ở mục Đơn hàng.
 
 ### 4.7 Yêu cầu khẩn cấp (SOS)
@@ -499,30 +497,27 @@ Mã BR-xxx dùng để đối chiếu với `docs/03-business-rules.md`.
 - **BR-221:** Quà cần tên, ảnh, mô tả, số điểm; tồn kho có thể không giới hạn.
 - **BR-222:** Đổi quà cần số điện thoại (7–32 ký tự) và nơi nhận.
 - **BR-223:** Quà phải còn mở bán và còn hàng.
-- **BR-224:** Giá quà có thể được giảm theo huy hiệu người dùng đang có (hiện chưa có ai có huy hiệu).
-- **BR-225:** Phải đủ điểm tiêu dùng **còn hạn**; điểm sắp hết hạn được trừ trước.
+- **BR-225:** Phải đủ điểm xanh **còn hạn**; điểm sắp hết hạn được trừ trước.
+- **BR-226:** Mọi người đổi quà theo đúng giá niêm yết, không có giảm giá.
 - **BR-230:** Đơn đi theo thứ tự: đang xử lý → đã gửi → đã giao, và có thể huỷ trước khi giao.
-- **BR-231:** Huỷ đơn thì hoàn điểm (với hạn dùng mới), nhưng không hoàn tồn kho.
+- **BR-231:** Huỷ đơn thì hoàn điểm đúng một lần (cách hoàn xem BR-263, BR-264), nhưng không hoàn tồn kho.
 - **BR-232:** (Sắp bỏ) Mức độ khó gồm tên, số tình nguyện viên tối đa và số điểm thưởng; chiến dịch không còn dùng mức độ khó.
 
-### 5.11 Điểm và xếp hạng
-- **BR-240:** Mỗi hoạt động chỉ được cộng điểm một lần.
-- **BR-241:** Mỗi điểm xanh nhận được sinh ra một lượng điểm tiêu dùng tương đương, hết hạn sau 90 ngày (cấu hình được).
-- **BR-242:** Điểm từ chiến dịch tính vào xếp hạng **tình nguyện viên**; điểm từ báo cáo và bình chọn tính vào xếp hạng **công dân**. Điểm xếp hạng tính theo mùa.
-- **BR-243:** "Mùa hiện tại" là mùa đang mở trong khoảng thời gian hiện tại.
+### 5.11 Điểm xanh
+- **BR-240:** Mỗi hoạt động chỉ được cộng điểm một lần; mọi lần cộng, trừ, hoàn, hết hạn đều được ghi lại đúng một lần.
 - **BR-244:** Thưởng mốc bình chọn tăng dần: mốc thứ n được n lần điểm cơ bản; mỗi mốc chỉ thưởng một lần cho mỗi báo cáo.
 - **BR-245:** Dữ liệu cộng điểm không hợp lệ sẽ bị từ chối.
-- **BR-246:** Bảng xếp hạng chỉ tính người có điểm dương; mùa đã đóng thì hiển thị bảng chốt cuối mùa.
-- **BR-247:** Mùa có loại theo tháng hoặc theo quý.
-- **BR-248, BR-249:** Kết thúc mùa: chốt bảng xếp hạng, thưởng điểm tiêu dùng cho các thứ hạng đã cấu hình, và có thể mở mùa mới ngay. Không mở được mùa mới khi đang có mùa khác mở.
-- **BR-250:** Thưởng cuối mùa cấu hình theo khoảng thứ hạng.
-- **BR-251, BR-252:** Huy hiệu có nhóm (báo cáo, chiến dịch, đóng góp, thứ hạng), điều kiện đạt, và ưu đãi giảm giá tối đa 100%. Huy hiệu đã trao thì không đổi được nhóm.
-- **BR-253:** Quản trị viên cấu hình điểm hoàn thành chiến dịch, điểm cơ bản và các mốc bình chọn, điểm báo cáo được xử lý (số nguyên không âm; mốc lớn hơn 0, không trùng) và hạn dùng điểm.
+- **BR-253:** Quản trị viên cấu hình điểm hoàn thành chiến dịch, điểm cơ bản và các mốc bình chọn, điểm báo cáo được xử lý (số nguyên không âm; mốc lớn hơn 0, không trùng) và số ngày điểm hết hạn (ít nhất 1).
 - **BR-255, BR-256:** Điểm hoàn thành chiến dịch nhân tỉ lệ ca tham gia; điểm báo cáo được xử lý bằng 0 nghĩa là tắt.
 - **BR-257:** Điểm luôn tính theo quy tắc đang áp dụng tại lúc cộng; đổi quy tắc không ảnh hưởng điểm đã cộng.
 - **BR-258:** Mỗi lần lưu quy tắc điểm được ghi lịch sử (ai đổi, lúc nào, trước / sau).
-- **BR-259:** Điểm mốc bình chọn hiển thị trong lịch sử điểm gắn với báo cáo tương ứng.
-- **BR-254:** (Sắp bỏ) Ước tính điểm thưởng theo mức độ khó; giao diện không còn dùng.
+- **BR-260:** Điểm của mỗi lần nhận hết hạn sau số ngày quản trị viên đặt (mặc định 90); đổi số ngày chỉ áp cho điểm nhận sau đó.
+- **BR-261:** Điểm hiện có chỉ tính điểm còn hạn; điểm hết hạn bị trừ tự động và hiện trong lịch sử.
+- **BR-262:** Đổi quà trừ điểm sắp hết hạn trước.
+- **BR-263:** Huỷ đơn trả điểm về đúng lô đã trừ, giữ hạn cũ; phần thuộc lô đã hết hạn thì ghi hết hạn luôn, không trả lại.
+- **BR-264:** Đơn đặt trước đợt cập nhật điểm (21/10/2026) khi huỷ được hoàn thành một lô điểm mới với hạn đầy đủ.
+- **BR-265:** "Sắp hết hạn" là điểm sẽ hết hạn trong 7 ngày tới, kèm ngày hết hạn sớm nhất.
+- **BR-266:** "Tổng đã kiếm" chỉ cộng điểm nhận được; đổi quà, hoàn điểm, hết hạn, điều chỉnh không làm đổi con số này.
 
 ### 5.12 Trợ lý AI và dịch
 - **BR-270, BR-271:** Có hai trợ lý: trợ lý Ecolink và trợ lý dịch. Mỗi người chỉ xem được cuộc trò chuyện của mình.
@@ -653,13 +648,13 @@ Dấu tích xanh hiện chỉ được gắn một lần khi duyệt hồ sơ, v
 | Bị khoá | Quản trị viên (chưa có chức năng mở khoá) |
 
 ### 6.7 Đơn đổi quà
-Đang xử lý → Đã gửi → Đã giao, hoặc Huỷ (từ Đang xử lý hoặc Đã gửi; hoàn điểm). Người đổi **không nhận thông báo** ở bước nào.
+Đang xử lý → Đã gửi → Đã giao, hoặc Huỷ (từ Đang xử lý hoặc Đã gửi; hoàn điểm về lô cũ). Người đổi **không nhận thông báo** ở bước nào.
 
 ### 6.8 Yêu cầu khẩn cấp
 Đang mở → Đã giải quyết (người hỗ trợ bấm, hoặc tự động khi chiến dịch hoàn thành).
 
-### 6.9 Mùa giải
-Đang mở → Đã đóng (quản trị viên kết thúc mùa: chốt bảng xếp hạng và thưởng), có thể mở mùa mới ngay.
+### 6.9 Lô điểm xanh
+Còn hạn → Hết điểm (đã dùng hết để đổi quà) hoặc Quá hạn → Hết hạn (hệ thống tự ghi trừ, khoảng mỗi giờ). Huỷ đơn có thể trả điểm về lô còn hạn. Mùa giải đã bỏ.
 
 > Chi tiết kỹ thuật: xem `docs/04-state-machines.md`.
 
@@ -705,7 +700,7 @@ Có = được · Không = không được · ĐK = có điều kiện
 | Thẩm định hồ sơ, cấp dấu tích xanh | Không | Không | Không | Không | Không | Có |
 | Duyệt hoặc chặn tổ chức, khoá người dùng | Không | Không | Không | Không | Không | Có |
 | Đổi quà | Không | Có | Có | Có | Có | Có |
-| Quản lý quà, đơn đổi quà, cấu hình điểm, mùa, huy hiệu | Không | Không | Không | Không | Không | Có |
+| Quản lý quà, đơn đổi quà, cấu hình quy tắc điểm (mức điểm, hạn dùng) | Không | Không | Không | Không | Không | Có |
 | Chat với trợ lý AI | Không | Có | Có | Có | Có | Có |
 
 > Cột "Quản lý chiến dịch" ở đây là người quản lý **một chiến dịch** (người tạo và người được thêm, đều phải còn là thành viên tổ chức), trừ dòng "Tạo chiến dịch" là vai "Quản lý chiến dịch" **trong tổ chức**. Cột "Owner tổ chức" quản lý được mọi chiến dịch của tổ chức mình. Vai "Admin" trong tổ chức không có quyền với chiến dịch.
@@ -777,18 +772,14 @@ Hiện **không có** thông báo cho các sự kiện: đặt lại mật khẩ
 | **Owner** | Người dùng được gắn vai quản lý một tổ chức sau khi tự xác nhận và được duyệt; mỗi người làm owner tối đa 3 tổ chức |
 | **Người đại diện pháp lý** | Owner đứng tên chịu trách nhiệm pháp lý cho tổ chức; mỗi hồ sơ có đúng một người |
 | **Chiến dịch** | Hoạt động dọn dẹp do tổ chức mở, gắn với một hoặc nhiều điểm rác |
-| **Quy tắc điểm** | Bộ mức điểm do quản trị viên đặt: hoàn thành chiến dịch, mốc bình chọn báo cáo, báo cáo được xử lý |
+| **Quy tắc điểm** | Bộ mức điểm do quản trị viên đặt: hoàn thành chiến dịch, mốc bình chọn báo cáo, báo cáo được xử lý, và số ngày điểm hết hạn |
 | **Người quản lý chiến dịch** | Người tạo chiến dịch và những người được thêm vào để vận hành |
 | **Tình nguyện viên** | Người dùng đã được chấp nhận tham gia một chiến dịch |
 | **Điểm danh theo ca** | Người tham gia quét mã QR (đổi mỗi 10 phút) do người phụ trách ca hiển thị, khi đến và khi về; quét xa điểm tập trung quá 50 m thì bị gắn cờ để ban tổ chức kiểm tra và có thể loại; ca có mặt ≥ 60% thời gian và không bị loại mới được tính điểm |
 | **SOS** | Yêu cầu hỗ trợ khẩn cấp phát tại một ca đang chạy của chiến dịch, theo 3 loại: Nhân lực / Dụng cụ, Rác nguy hại, Y tế |
 | **Sẵn sàng hỗ trợ SOS** | Cài đặt trong hồ sơ: tình nguyện viên bật để nhận lời mời tới giúp SOS ở gần trong khung giờ đã chọn |
 | **Xác nhận đã sạch** | Người dân quanh khu vực đánh giá khu vực đã sạch hay chưa sau khi chiến dịch báo hoàn thành; chỉ để quản trị viên tham khảo |
-| **Điểm xanh** | Điểm thưởng ghi nhận đóng góp (hoàn thành chiến dịch, báo cáo được xử lý, báo cáo đạt mốc bình chọn) |
-| **Điểm tiêu dùng** | Điểm dùng để đổi quà, sinh ra cùng lúc với điểm xanh, **hết hạn sau 90 ngày** |
-| **Điểm xếp hạng công dân / tình nguyện viên** | Điểm tính thứ hạng theo mùa: từ báo cáo (công dân) và từ chiến dịch (tình nguyện viên) |
-| **Mùa giải** | Chu kỳ xếp hạng theo tháng hoặc quý; cuối mùa chốt bảng và thưởng |
-| **Huy hiệu** | Danh hiệu trao khi đạt điều kiện; có thể kèm ưu đãi giảm giá quà |
+| **Điểm xanh** | Loại điểm duy nhất: ghi nhận đóng góp (hoàn thành chiến dịch, báo cáo được xử lý, báo cáo đạt mốc bình chọn) và dùng để đổi quà; mỗi lần nhận hết hạn sau 90 ngày (cấu hình được) |
 | **Mốc bình chọn** | Các ngưỡng số lượt bình chọn mà báo cáo đạt được thì người gửi được thưởng |
 | **Trợ lý AI** | Chatbot của Ecolink, có thể tạo báo cáo giúp người dùng |
 | **Tự dịch** | Nội dung người dùng nhập được AI dịch tự động giữa tiếng Việt và tiếng Anh |
@@ -831,9 +822,9 @@ Phần này viết lại các vấn đề trong `docs/99-open-issues.md` theo g�
 | 21 | **Xác nhận "đã sạch" của cộng đồng** | Chỉ để tham khảo, không ảnh hưởng quyết định | Có dùng làm điều kiện duyệt không? |
 | 22 | **Nộp kết quả (submission)** | Có chức năng nhưng không gắn với luồng hoàn thành | Giữ lại (và gắn vào luồng hoàn thành) hay bỏ? |
 | 23 | ~~SOS báo cho ai~~ | **Đã giải quyết (06/10/2026, theo spec "Cải tiến tính năng SOS"):** đội của ca nhận ngay; rồi tình nguyện viên "Sẵn sàng" ở gần, owner tổ chức (sau 10 phút, Y tế ngay), tổ chức lân cận và quản trị viên theo loại và mức ưu tiên (mục 4.7). Chưa kết nối lực lượng cứu hộ bên ngoài; SOS Y tế nhắc gọi 115 | — |
-| 24 | **Đơn đổi quà** | Không báo cho người đổi; huỷ đơn không trả lại tồn kho; điểm hoàn có hạn dùng mới | Có thông báo không? Huỷ đơn có trả lại quà vào kho không? Hạn dùng của điểm hoàn tính thế nào? |
-| 25 | **Hai hệ điểm song song** | "Điểm xanh" (dùng cho lịch sử và bảng xếp hạng cũ) và "điểm tiêu dùng / điểm xếp hạng" (dùng để đổi quà và xếp hạng mùa). Đổi quà không trừ điểm xanh | Người dùng nhìn thấy loại điểm nào? Có gộp lại không? |
-| 26 | **Mùa giải và huy hiệu** | Đã cấu hình được nhưng giao diện chưa có. Huy hiệu chưa được trao cho ai. Mùa không tự chuyển | Thời điểm ra mắt? Ai phụ trách mở và đóng mùa? |
+| 24 | **Đơn đổi quà** | Không báo cho người đổi; huỷ đơn không trả lại tồn kho. Điểm hoàn được trả về đúng lô cũ và giữ hạn cũ (từ 21/10/2026) | Có thông báo không? Huỷ đơn có trả lại quà vào kho không? |
+| 25 | ~~Hai hệ điểm song song~~ | **Đã giải quyết (21/10/2026):** chỉ còn một loại điểm xanh có hạn dùng; đổi quà trừ thẳng vào điểm xanh. Khi triển khai, số dư mỗi người được đối soát theo điểm còn hạn và ghi một dòng "điều chỉnh số dư" nếu lệch | — |
+| 26 | ~~Mùa giải và huy hiệu~~ | **Không còn (21/10/2026):** mùa giải, bảng xếp hạng, huy hiệu và giảm giá theo huy hiệu đã bỏ | — |
 | 27 | **Mật khẩu** | Giao diện cho 6 ký tự, hệ thống yêu cầu 8 | Thống nhất một quy định |
 | 28 | **Xác minh email khi đăng ký** | Không có | Có cần không? |
 | 29 | **Mở khoá tài khoản** | Không có | Có cần không, và quy trình thế nào? |
