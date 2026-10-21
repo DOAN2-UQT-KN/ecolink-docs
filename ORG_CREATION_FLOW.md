@@ -90,7 +90,7 @@ sequenceDiagram
 | Trang theo dõi | `.../organizations/apply/status/page.tsx` + `_components/OwnerConfirmations.tsx` |
 | Trang owner xác nhận | `.../organizations/owner-confirm/page.tsx` |
 | Kích hoạt tài khoản | `ecolink-client/app/(pages)/(auth)/activate-account/page.tsx` |
-| Màn thẩm định | `ecolink-client/app/(pages)/(admin)/admin/organization-applications/` |
+| Màn thẩm định | `ecolink-client/app/(pages)/(admin)/admin/organizations/applications/` (tab "Organization applications" của `/admin/organizations`) |
 | Backend hồ sơ | `ecolink-server/services/incident-service/src/modules/organization_application/` |
 | Membership | `.../modules/organization/organization-membership.service.ts`, `organization_member.repository.ts` |
 | Onboarding sau duyệt | `.../organization_application/organization-owner-onboard.publisher.ts` |
@@ -158,7 +158,7 @@ kênh → giữ xác nhận. Owner bị gỡ chỉ bị đánh `removed_at`, kh�
 
 ### Bước 6 — Admin thẩm định
 
-Tại `/admin/organization-applications` (chỉ thấy `PENDING_REVIEW`, `NEEDS_REVISION` và đã quyết định):
+Tại tab "Organization applications" của `/admin/organizations` (`?tab=applications`; link cũ `/admin/organization-applications` tự chuyển về đây) (chỉ thấy `PENDING_REVIEW`, `NEEDS_REVISION` và đã quyết định):
 
 - **Claim** ghi reviewer, không đổi trạng thái.
 - **Request more information** → `NEEDS_REVISION`.
