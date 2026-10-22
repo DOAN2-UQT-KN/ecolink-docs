@@ -529,9 +529,6 @@ erDiagram
   GiftStockBatch ||--o{ GiftStockMovement : "batchId (restrict)"
   GiftStockBatch ||--o{ GiftRedemption : "batchId (restrict)"
   GiftRedemption ||--o{ GiftStockMovement : "redemptionId (restrict)"
-  Gift ||--o{ GiftVoucherCode : "giftId (restrict)"
-  GiftStockBatch ||--o{ GiftVoucherCode : "batchId (restrict)"
-  GiftVoucherCode |o--o| GiftRedemption : "voucherCodeId (restrict, unique)"
   GreenPointTransaction ||--o| GreenPointLot : "transactionId (set null)"
   GreenPointLot ||--o{ GreenPointLotSpend : "lotId (restrict)"
   GiftRedemption ||--o{ GreenPointLotSpend : "redemptionId (restrict)"
@@ -591,11 +588,10 @@ SP (`kind = SP`), RP (`CRP` / `VRP`) trong `user_point_transactions` và số d�
 | Bảng | Field | Ghi chú |
 |---|---|---|
 | Media (`media`) | url, type (`GIFT`, `GIFT_SOURCE_LOGO`), deletedAt | Logo nguồn có `deletedAt` thì coi như không có logo |
-| Gift (`gifts`) | name (255), nameVi/nameEn?, mediaId? (FK restrict), description text (+Vi/En), greenPoints (giá niêm yết, trừ vào lô điểm xanh, không giảm giá), stockRemaining int NOT NULL default 0, isActive (default true), deliveryType (`delivery_type`, `GiftDeliveryType`: PHYSICAL, VOUCHER_CODE, default PHYSICAL), deletedAt | `stockRemaining` chỉ là cache của `SUM(remaining)` các lô còn hạn, cập nhật cùng transaction với movement, đối soát hằng ngày (BR-235). Không còn "không giới hạn" (spec 015). `deliveryType` chỉ đổi được khi quà chưa có lô nào (BR-228); quà cũ thành PHYSICAL qua default của migration `20261025100000_gift_voucher_orders` |
-| GiftRedemption (`gift_redemptions`) | userId, giftId (FK restrict), greenPointsSpent, phoneNumber? varchar(32) (default ''), pickupLocation? text (default ''), status (`GiftRedemptionStatus`, default PROCESSING), statusUpdatedAt, cancelledAt?, batchId? (FK → `gift_stock_batches`, restrict), voucherCodeId? (`voucher_code_id`, **unique**, FK → `gift_voucher_codes`, restrict), cancelReason? (`cancel_reason` varchar(500)), restocked? (bool) | Không có cột updatedAt. `batchId` null với đơn trước spec 015; nguồn của đơn suy ra qua `batch.sourceId`. Từ spec 016 `phoneNumber`/`pickupLocation` nullable: service bắt buộc với quà PHYSICAL, đơn voucher để null (BR-222). `cancelReason` bắt buộc khi huỷ từ spec 016 (đơn huỷ trước đó null); `restocked` null nếu chưa huỷ (BR-229) |
+| Gift (`gifts`) | name (255), nameVi/nameEn?, mediaId? (FK restrict), description text (+Vi/En), greenPoints (giá niêm yết, trừ vào lô điểm xanh, không giảm giá), stockRemaining int NOT NULL default 0, isActive (default true), deletedAt | `stockRemaining` chỉ là cache của `SUM(remaining)` các lô còn hạn, cập nhật cùng transaction với movement, đối soát hằng ngày (BR-235). Không còn "không giới hạn" (spec 015) |
+| GiftRedemption (`gift_redemptions`) | userId, giftId (FK restrict), greenPointsSpent, phoneNumber varchar(32) (default ''), pickupLocation text (default ''), status (`GiftRedemptionStatus`, default PROCESSING), statusUpdatedAt, cancelledAt?, batchId? (FK → `gift_stock_batches`, restrict), cancelReason? (`cancel_reason` varchar(500)), restocked? (bool) | Không có cột updatedAt. `batchId` null với đơn trước spec 015; nguồn của đơn suy ra qua `batch.sourceId`. `cancelReason` bắt buộc khi huỷ từ spec 016 (đơn huỷ trước đó null); `restocked` null nếu chưa huỷ (BR-229). Hai cột thêm bởi migration `20261025100000_redemption_cancel_reason` |
 | GiftSource (`gift_sources`) | name (255), type (`GiftSourceType`: SPONSOR, ECOLINK, DONATION), contactName?, contactPhone? (32), contactEmail?, logoMediaId? (FK set null), showOnGift (default false), status (`GiftSourceStatus`: ACTIVE, INACTIVE), note?, createdBy?, createdAt, updatedAt | Không xoá cứng, không có `deletedAt`. Index `(status, type)`, `(name)`. Nguồn "Tồn kho trước refactor" (id `00000000-0000-4000-8000-000000000015`, ECOLINK) do migration tạo |
 | GiftStockBatch (`gift_stock_batches`) | giftId (FK restrict), sourceId (FK restrict), quantity, remaining, unitValueVnd, receivedAt, expiresAt?, reference (255, rỗng được nếu có file), attachmentUrls text[] (default `{}`, tối đa 5 URL file chứng từ), note?, createdBy?, createdAt | **CHECK** `quantity > 0`, `0 ≤ remaining ≤ quantity`, `unit_value_vnd ≥ 0`, `expires_at IS NULL OR expires_at > received_at`. Index partial `(gift_id, expires_at) WHERE remaining > 0`, `(expires_at) WHERE remaining > 0`, `(source_id, received_at)`. Lô còn hạn: `expires_at IS NULL OR expires_at > now` |
-| GiftVoucherCode (`gift_voucher_codes`) (spec 016) | giftId (FK restrict), batchId (FK restrict), codeCipher text (AES-256-GCM `iv.tag.ciphertext`, base64), codeHash char(64) (HMAC-SHA256 hex), codeLast4 varchar(4), status (`GiftVoucherCodeStatus`: AVAILABLE, ISSUED, VOID, default AVAILABLE), redemptionId? (**unique**, cột thường, không FK — FK nằm ở `gift_redemptions.voucher_code_id`), issuedAt?, voidedAt?, createdAt | **UNIQUE** `(gift_id, code_hash)`; index `(batch_id, status, created_at)`. **CHECK** `status = ISSUED` ⇔ có `redemption_id` và `issued_at`; `status = VOID` ⇔ có `voided_at`. Khoá mã hoá/HMAC dẫn xuất bằng HKDF từ env `GIFT_VOUCHER_CODE_KEY`. Bất biến: lô của quà voucher có `remaining` = số mã AVAILABLE (BR-228). Mã đầy đủ chỉ giải mã cho chủ đơn; admin chỉ thấy `codeLast4` |
 | GiftStockMovement (`gift_stock_movements`) | giftId, batchId, type (`GiftStockMovementType`: STOCK_IN, REDEEM_OUT, CANCEL_RETURN, ADJUST_OUT, EXPIRED), quantity có dấu, reason? (`GiftStockAdjustReason`: DAMAGED, LOST, COUNT_SHORTAGE, RETURN_TO_SOURCE), note?, redemptionId?, actorId?, createdAt | Chỉ thêm, không sửa. **UNIQUE** `(redemption_id, type)`; **CHECK** reason có khi và chỉ khi type = ADJUST_OUT. Bất biến: mỗi lô `SUM(quantity) = remaining`. `actorId`: admin (nhập, ghi giảm, huỷ trả), người đổi (REDEEM_OUT), null = hệ thống |
 
 ### 3.3 Quy tắc điểm và bảng cũ
@@ -752,8 +748,6 @@ Các key preference (tất cả mặc định `true`): `campaignNew`, `campaignN
 | Enum | Giá trị |
 |---|---|
 | GiftRedemptionStatus | PROCESSING, SHIPPED, DELIVERED, CANCELLED |
-| GiftDeliveryType | PHYSICAL, VOUCHER_CODE (spec 016) |
-| GiftVoucherCodeStatus | AVAILABLE, ISSUED, VOID (spec 016) |
 | PointSourceType | REPORT, CAMPAIGN, SYSTEM, STORE, SEASON_END — chỉ còn ở `green_point_lots.source_type` của lô cũ |
 | SeasonKind, PointKind, LeaderboardSubjectKind, LeaderboardMetric, BadgeScope, BadgeCategory | Còn trong schema cho các bảng cũ; không còn code dùng (spec 014) |
 

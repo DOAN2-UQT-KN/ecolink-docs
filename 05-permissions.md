@@ -231,13 +231,12 @@ Phía client, SOS: tab **SOS** của trang campaign (`FE/app/(pages)/(main)/camp
 |---|---|---|---|---|
 | Xem quà, chi tiết quà, difficulty (deprecated) | ✅ | ✅ | ✅ | Không có guard |
 | Lọc quà theo `isActive` | ❌ | ❌ | ✅ | `gift.api.routes.ts` (tryAuthenticate) |
-| Đổi quà; xem điểm (số dư, sắp hết hạn, tổng đã kiếm), lịch sử điểm, đơn của mình (đơn voucher kèm mã đầy đủ — chỉ chủ đơn) | ❌ | ✅ | ✅ | `authenticate`; `/me/redemptions` lọc theo `userId` của token |
+| Đổi quà; xem điểm (số dư, sắp hết hạn, tổng đã kiếm), lịch sử điểm, đơn của mình | ❌ | ✅ | ✅ | `authenticate` |
 | Tạo và sửa quà; sửa difficulty (deprecated); xem mọi đơn đổi quà | ❌ | ❌ | ✅ | `requireAdmin` |
-| Đổi trạng thái đơn đổi quà (huỷ cần lý do; đơn đang xử lý trả món về lô, đơn đã gửi theo lựa chọn `restock`); danh sách đơn chỉ thấy 4 ký tự cuối của mã voucher | ❌ | ❌ | ✅ | `requireAdmin` (spec 015) |
+| Đổi trạng thái đơn đổi quà (huỷ cần lý do; đơn đang xử lý trả món về lô, đơn đã gửi theo lựa chọn `restock`) | ❌ | ❌ | ✅ | `requireAdmin` (spec 015) |
 | Nguồn quà: xem, tạo, sửa, ngừng / bật lại, xem lô theo nguồn, báo cáo và CSV (`/admin/gift-sources*`) | ❌ | ❌ | ✅ | `requireAdmin` (`gift-source.api.routes.ts`) |
-| Kho: xem lô, nhập kho (gồm danh sách mã voucher), ghi giảm, lịch sử kho, xem mã voucher của lô đã che (`/admin/gifts/:id/stock-*`, `/admin/stock-batches/:id/adjustments`, `/admin/stock-batches/:id/voucher-codes`) | ❌ | ❌ | ✅ | `requireAdmin` (`gift-stock.api.routes.ts`) |
+| Kho: xem lô, nhập kho, ghi giảm, lịch sử kho (`/admin/gifts/:id/stock-*`, `/admin/stock-batches/:id/adjustments`) | ❌ | ❌ | ✅ | `requireAdmin` (`gift-stock.api.routes.ts`) |
 | Thấy `expiringSoon` trong `GET /gifts`, `/gifts/:id` | ❌ | ❌ | ✅ | role từ `tryAuthenticate` (người khác nhận `null`) |
-| Thấy `hasBatches` trong `GET /gifts`, `/gifts/:id` | ❌ | ❌ | ✅ | role từ `tryAuthenticate` (người khác không có field) |
 | `/admin/gamification/point-rules` (xem / sửa, gồm số ngày hết hạn điểm) và `point-rules/history` — các route admin gamification duy nhất còn lại từ spec 014 | ❌ | ❌ | ✅ | `requireAdmin` |
 | `/internal/v1/*` của reward (`/point-rules/campaign-completion`, `/difficulties*` deprecated) | Chỉ service có `INTERNAL_REWARD_API_KEY` | | | `requireInternalRewardApiKey` |
 
