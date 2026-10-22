@@ -235,7 +235,7 @@ Phía client, SOS: tab **SOS** của trang campaign (`FE/app/(pages)/(main)/camp
 | Tạo và sửa quà; sửa difficulty (deprecated); xem mọi đơn đổi quà | ❌ | ❌ | ✅ | `requireAdmin` |
 | Đổi trạng thái đơn đổi quà (huỷ cần lý do; đơn đang xử lý trả món về lô, đơn đã gửi theo lựa chọn `restock`); danh sách đơn chỉ thấy 4 ký tự cuối của mã voucher | ❌ | ❌ | ✅ | `requireAdmin` (spec 015) |
 | Nguồn quà: xem, tạo, sửa, ngừng / bật lại, xem lô theo nguồn, báo cáo và CSV (`/admin/gift-sources*`) | ❌ | ❌ | ✅ | `requireAdmin` (`gift-source.api.routes.ts`) |
-| Kho: xem lô, nhập kho (gồm danh sách mã voucher), ghi giảm, lịch sử kho, xem mã voucher của lô đã che (`/admin/gifts/:id/stock-*`, `/admin/stock-batches/:id/adjustments`, `/admin/stock-batches/:id/voucher-codes`) | ❌ | ❌ | ✅ | `requireAdmin` (`gift-stock.api.routes.ts`) |
+| Kho: xem lô, nhập kho (gồm danh sách mã voucher), ghi giảm, lịch sử kho, xem mã voucher của lô đã che (`/admin/gifts/:id/stock-*`, `/admin/stock-batches/:id/adjustments`, `/admin/stock-batches/:id/voucher-codes`, `/admin/gifts/:id/voucher-codes`) | ❌ | ❌ | ✅ | `requireAdmin` (`gift-stock.api.routes.ts`) |
 | Thấy `expiringSoon` trong `GET /gifts`, `/gifts/:id` | ❌ | ❌ | ✅ | role từ `tryAuthenticate` (người khác nhận `null`) |
 | Thấy `hasBatches` trong `GET /gifts`, `/gifts/:id` | ❌ | ❌ | ✅ | role từ `tryAuthenticate` (người khác không có field) |
 | `/admin/gamification/point-rules` (xem / sửa, gồm số ngày hết hạn điểm) và `point-rules/history` — các route admin gamification duy nhất còn lại từ spec 014 | ❌ | ❌ | ✅ | `requireAdmin` |
