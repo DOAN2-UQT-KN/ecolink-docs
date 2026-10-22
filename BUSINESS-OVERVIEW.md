@@ -131,11 +131,11 @@ Trạng thái: ✅ đã có · 🟡 đang làm dở / có hạn chế · ❌ ch�
 |---|---|---|---|
 | Điểm xanh | Loại điểm duy nhất. Nhận khi chiến dịch hoàn thành, khi báo cáo đạt mốc bình chọn, và khi báo cáo được xử lý (nếu quản trị viên bật). Mọi chiến dịch có cùng mức điểm. Mỗi lần nhận là một "lô" điểm **hết hạn sau 90 ngày** (quản trị viên đổi được); điểm hết hạn bị trừ tự động và hiện trong lịch sử | Người dùng | ✅ |
 | Quy tắc điểm | Quản trị viên đặt số điểm cho: hoàn thành chiến dịch (mặc định 20, nhân tỉ lệ ca tham gia), điểm cơ bản và các mốc bình chọn của báo cáo, báo cáo được xử lý (mặc định 0 = tắt), và số ngày điểm hết hạn (mặc định 90). Thay đổi chỉ áp cho điểm cộng sau đó; mỗi lần lưu được ghi vào lịch sử (ai đổi, lúc nào, trước / sau) | Quản trị viên | ✅ |
-| Cửa hàng quà | Xem quà, đổi quà theo đúng giá niêm yết (nhập số điện thoại và nơi nhận); điểm sắp hết hạn được trừ trước. Thẻ quà ghi số còn lại (hết thì không đổi được) và "Tài trợ bởi …" kèm logo của nhà tài trợ được phép hiển thị | Người dùng | ✅ |
+| Cửa hàng quà | Xem quà, đổi quà theo đúng giá niêm yết (chọn số lượng 1–10 món trong một đơn, nhập số điện thoại và nơi nhận; tổng điểm hiện ngay khi đổi số lượng); điểm sắp hết hạn được trừ trước. Thẻ quà ghi số còn lại (hết thì không đổi được) và "Tài trợ bởi …" kèm logo của nhà tài trợ được phép hiển thị | Người dùng | ✅ |
 | Nguồn quà | Quản lý nơi quà đến: nhà tài trợ, Ecolink tự mua, quyên góp (tên, người liên hệ, logo, có hiển thị trên trang quà không). Không xoá, chỉ "Ngừng": hàng đã nhập vẫn đổi được | Quản trị viên | ✅ |
 | Kho quà theo lô | Mỗi lần nhận quà là một lô gắn với một nguồn (số lượng, giá trị quy đổi mỗi món, ngày nhận, hạn dùng, số chứng từ). Tồn kho bằng tổng các lô còn hạn, không còn quà "không giới hạn", không sửa tay. Ghi giảm khi hỏng, mất, kiểm kê thiếu, trả lại nguồn. Lô hết hạn tự ghi giảm hằng ngày, lô sắp hết hạn trong 7 ngày được đánh dấu. Lịch sử kho ghi mọi thay đổi, ai làm, lý do | Quản trị viên | ✅ |
 | Báo cáo nguồn | Theo từng nguồn và khoảng ngày: đã nhập, đã trao, đang giữ cho đơn, hao hụt, hết hạn, còn trong kho, tổng giá trị đã trao, số người nhận. Xuất CSV để gửi nhà tài trợ | Quản trị viên | ✅ |
-| Quản lý đơn đổi quà | Mỗi đơn có mã đơn riêng (dạng EL-XXXXXXXX), tìm được theo mã. Khi gửi hàng phải nhập hãng vận chuyển và mã vận đơn (sửa được khi đơn đang gửi). Mở mã đơn để xem chi tiết và lịch sử từng bước (ai làm, lúc nào). Chuyển trạng thái đang xử lý → đã gửi → đã giao, hoặc huỷ (bắt buộc ghi lý do, người đổi thấy lý do trong "Đơn của tôi"; hoàn điểm về đúng lô cũ, giữ hạn cũ; huỷ khi đang xử lý thì món quà về lại kho; huỷ khi đã gửi thì quản trị viên chọn hàng có về kho không). Bảng đơn có cột nguồn quà, lọc theo trạng thái / nguồn (giữ trên đường dẫn), chỉ hiện nút cho bước hợp lệ | Quản trị viên | ✅ Người đổi được báo khi đơn được gửi |
+| Quản lý đơn đổi quà | Mỗi đơn có mã đơn riêng (dạng EL-XXXXXXXX), tìm được theo mã. Khi gửi hàng phải nhập hãng vận chuyển và mã vận đơn (sửa được khi đơn đang gửi). Mở mã đơn để xem chi tiết và lịch sử từng bước (ai làm, lúc nào). Chuyển trạng thái đang xử lý → đã gửi → đã giao, hoặc huỷ (bắt buộc ghi lý do, người đổi thấy lý do trong "Đơn của tôi"; hoàn điểm về đúng lô cũ, giữ hạn cũ; huỷ khi đang xử lý thì món quà về lại kho; huỷ khi đã gửi thì quản trị viên chọn hàng có về kho không). Mỗi đơn ghi số lượng ("× N", hiện ở cả danh sách lẫn chi tiết), chi tiết đơn ghi các nguồn quà kèm số món; bảng đơn lọc theo trạng thái / nguồn (giữ trên đường dẫn), chỉ hiện nút cho bước hợp lệ | Quản trị viên | ✅ Người đổi được báo khi đơn được gửi |
 | Điểm của tôi | Ba con số: điểm hiện có, điểm sắp hết hạn trong 7 ngày (kèm ngày sớm nhất), tổng điểm đã kiếm; lịch sử cộng trừ ghi rõ từng loại (chiến dịch, mốc bình chọn, báo cáo được xử lý, đổi quà, hoàn điểm, hết hạn, điều chỉnh số dư) | Người dùng | ✅ |
 
 ### 3.7 Thông báo
@@ -296,15 +296,15 @@ flowchart LR
 ```
 
 ### 4.6 Đổi quà
-1. Người dùng vào "Quà tặng", chọn quà, nhập số điện thoại và nơi nhận.
-2. Hệ thống kiểm tra còn hàng và **điểm xanh còn hạn** đủ để trả giá niêm yết, rồi lấy một món từ lô quà sắp hết hạn trước, trừ điểm (điểm sắp hết hạn được trừ trước) và tạo đơn **đang xử lý**. Đơn ghi món đó thuộc lô của nguồn nào.
-3. Quản trị viên cập nhật đơn thành **đã gửi**, rồi **đã giao**. Nếu huỷ, quản trị viên phải ghi lý do (tối đa 500 ký tự, người đổi thấy được); điểm được trả về đúng lô đã trừ và giữ hạn cũ; phần thuộc lô đã hết hạn thì không trả lại (ghi là hết hạn). Đơn đặt trước đợt cập nhật này được hoàn thành một lô mới, hạn 90 ngày từ lúc huỷ. Huỷ khi đang xử lý thì món quà về lại đúng lô cũ; huỷ khi đã gửi thì quản trị viên chọn hàng có về kho không (có thì món về lại đúng lô cũ).
+1. Người dùng vào "Quà tặng", chọn quà, chọn số lượng (1–10 món, không vượt số còn lại và số điểm đang có), nhập số điện thoại và nơi nhận.
+2. Hệ thống kiểm tra còn đủ hàng và **điểm xanh còn hạn** đủ để trả giá niêm yết × số lượng, rồi lấy các món từ lô quà sắp hết hạn trước (có thể từ nhiều lô, nhiều nguồn — vẫn chung một kho nên gửi một lần), trừ điểm một lần (điểm sắp hết hạn được trừ trước) và tạo **một** đơn **đang xử lý**. Đơn ghi mỗi món thuộc lô của nguồn nào. Không đủ hàng hay không đủ điểm thì không tạo đơn nào, không có đơn thiếu món.
+3. Quản trị viên cập nhật đơn thành **đã gửi**, rồi **đã giao**. Nếu huỷ, quản trị viên phải ghi lý do (tối đa 500 ký tự, người đổi thấy được); điểm được trả về đúng lô đã trừ và giữ hạn cũ; phần thuộc lô đã hết hạn thì không trả lại (ghi là hết hạn). Đơn đặt trước đợt cập nhật này được hoàn thành một lô mới, hạn 90 ngày từ lúc huỷ. Huỷ khi đang xử lý thì món quà về lại đúng lô cũ; huỷ khi đã gửi thì quản trị viên chọn hàng có về kho không (có thì món về lại đúng lô cũ). Đơn nhiều món được huỷ trọn đơn: hoàn đủ tổng điểm, trả đủ số món, mỗi lô nhận lại đúng số món đã cho ra.
 
 Các trường hợp thường gặp:
-- Hết hàng: thông báo "hết quà".
+- Hết hàng: thông báo "hết quà". Còn hàng nhưng ít hơn số lượng đã chọn: thông báo "không đủ hàng", hộp thoại cập nhật số còn lại.
 - Không đủ điểm: thông báo "không đủ điểm". Điểm đã hết hạn không dùng được.
 - Nhiều lần đổi cùng lúc (cùng người hoặc cùng món quà): hệ thống tự thử lại; chỉ khi vẫn tranh chấp sau nhiều lần mới báo "thử lại".
-- Người đổi **không nhận thông báo** khi đơn thay đổi trạng thái; phải tự vào xem ở mục Đơn hàng.
+- Người đổi chỉ nhận thông báo khi đơn **được gửi** (kèm hãng, mã vận đơn, tên quà × số lượng); các bước khác phải tự vào xem ở mục Đơn hàng.
 
 ### 4.7 Yêu cầu khẩn cấp (SOS)
 1. **Ai phát được:** chỉ khi chiến dịch có ca đang chạy. Quản lý chiến dịch (chọn ca), trưởng ca, tình nguyện viên đã điểm danh ca, hoặc người dân đang đứng trong 500 m quanh điểm tập trung có ca đang chạy (cần email đã xác thực và có số điện thoại trong hồ sơ). Giới hạn 3 SOS mỗi giờ mỗi người theo spec hiện đang tạm tắt (bật lại được bằng cấu hình).
