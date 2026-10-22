@@ -1117,13 +1117,13 @@ sequenceDiagram
 
 ### F37 — Đổi quà
 1. `/gifts`: `GET /api/v1/gifts?isActive=true`. Người không phải admin chỉ thấy quà đang active. Mỗi quà có `stockRemaining` = tổng `remaining` các lô còn hạn và `sponsors[]` (nguồn bật `showOnGift` còn lô còn hàng, còn hạn; BR-238).
-2. `POST /api/v1/gifts/:id/redeem {phoneNumber, pickupLocation}` (JWT; route validator bắt buộc cả hai, BR-222). Alias `/exchange` đã bị gỡ ở spec 016.
+2. `POST /api/v1/gifts/:id/redeem {phoneNumber, recipientName, pickupLocation, deliveryLatitude, deliveryLongitude, addressDetail?, deliveryNote?}` (JWT; BR-222). Client: hộp thoại đổi quà nhập tên người nhận (mặc định tên tài khoản), SĐT hiển thị `XXXX XXX XXX`, địa chỉ qua autocomplete Goong + ghim trên bản đồ (bấm bản đồ thì reverse geocode điền lại địa chỉ). Alias `/exchange` đã bị gỡ ở spec 016.
 3. `gift.service.ts > redeem()`:
    - Transaction Serializable:
      - Quà phải active.
      - Giá = `gift.greenPoints` (giá niêm yết, không giảm giá; BR-226).
      - Số dư (tổng `remaining` của lô còn hạn) ≥ giá (BR-225, BR-261).
-     - Tạo đơn PROCESSING.
+     - Tạo đơn PROCESSING, lưu kèm người nhận, ghim, chi tiết địa chỉ và ghi chú.
      - `takeOneFromBatches()`: lấy 1 món từ lô còn hạn của quà theo `expires_at` tăng dần (lô không hạn sau cùng) rồi `received_at`; trừ có điều kiện `remaining > 0`, lô vừa bị lấy hết thì sang lô kế, hết lô thì 422 và rollback cả đơn. Ghi `batch_id` vào đơn, movement `REDEEM_OUT` −1 (actor = người đổi), cache `gifts.stock_remaining` −1 (BR-223, BR-233).
      - `spendLotsFifo()`: trừ lô theo `expires_at` rồi `created_at` tăng dần, mỗi lần trừ có điều kiện `remaining >= phần trừ`, ghi `green_point_lot_spends` (BR-262); ghi sổ `GIFT_REDEEM` −giá (khoá `gift_redeem:<redemptionId>`).
    - Xung đột tuần tự hoá (P2034, hoặc P2010 với mã Postgres 40001/40P01): chạy lại cả transaction, tối đa 15 lần, chờ ngẫu nhiên full-jitter giới hạn `min(250, 10·2^lần)` ms giữa các lần; hết lượt thì 409 "Please retry".

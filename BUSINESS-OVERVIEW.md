@@ -498,7 +498,7 @@ Mã BR-xxx dùng để đối chiếu với `docs/03-business-rules.md`.
 ### 5.10 Quà tặng
 - **BR-220:** Người dùng chỉ thấy quà đang được mở bán.
 - **BR-221:** Quà cần tên, ảnh, mô tả, số điểm. Tồn kho không nhập tay: chỉ tăng qua nhập kho theo lô.
-- **BR-222:** Đổi quà cần số điện thoại (7–32 ký tự) và nơi nhận.
+- **BR-222:** Đổi quà cần tên người nhận, số di động Việt Nam (10 số, bắt đầu bằng 0) và địa chỉ được ghim trên bản đồ; chi tiết địa chỉ (số nhà, tầng, phòng) và ghi chú cho người giao là tuỳ chọn.
 - **BR-223:** Quà phải còn mở bán và còn hàng trong một lô chưa hết hạn.
 - **BR-224:** Lô quà hết hạn thì không đổi được nữa và được tự động ghi giảm mỗi ngày; lô sắp hết hạn trong 7 ngày được đánh dấu cho quản trị viên.
 - **BR-227:** Báo cáo nguồn tính theo ngày giờ Việt Nam; đơn đặt trước khi có kho theo lô không tính cho nguồn nào.
