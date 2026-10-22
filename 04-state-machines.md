@@ -409,20 +409,23 @@ stateDiagram-v2
 
 ```mermaid
 stateDiagram-v2
-  [*] --> PROCESSING: user đổi quà
+  [*] --> PROCESSING: user đổi quà hiện vật
+  [*] --> DELIVERED: user đổi quà voucher (cấp mã ngay)
   PROCESSING --> SHIPPED
-  PROCESSING --> CANCELLED: hoàn điểm
+  PROCESSING --> CANCELLED: lý do + hoàn điểm + trả kho
   SHIPPED --> DELIVERED
-  SHIPPED --> CANCELLED: hoàn điểm
+  SHIPPED --> CANCELLED: lý do + hoàn điểm + trả kho nếu restock
   DELIVERED --> [*]
   CANCELLED --> [*]
 ```
 
 | Từ → sang | Ai (thực tế trong code) | Điều kiện | Side effect | File |
 |---|---|---|---|---|
-| (mới) → PROCESSING | User đăng nhập | BR-222..BR-226, BR-233 | Lấy 1 món từ lô quà còn hạn (hạn sớm trước), ghi `batch_id`, movement `REDEEM_OUT`, cache tồn kho −1; trừ lô điểm còn hạn theo hạn sớm nhất trước, ghi `green_point_lot_spends` (BR-262); ghi sổ `GIFT_REDEEM` âm | `RW/modules/gift/gift.service.ts > redeem()` |
+| (mới) → PROCESSING (quà PHYSICAL) hoặc → DELIVERED (quà VOUCHER_CODE) | User đăng nhập | BR-222..BR-226, BR-228, BR-233 | Lấy 1 món từ lô quà còn hạn (hạn sớm trước), ghi `batch_id`, movement `REDEEM_OUT`, cache tồn kho −1; quà voucher cấp 1 mã AVAILABLE của lô đó (→ ISSUED, ghi `voucher_code_id`); trừ lô điểm còn hạn theo hạn sớm nhất trước, ghi `green_point_lot_spends` (BR-262); ghi sổ `GIFT_REDEEM` âm | `RW/modules/gift/gift.service.ts > redeem()`, `voucher-code.util.ts > issueCodeFromBatch()` |
 | PROCESSING → SHIPPED; SHIPPED → DELIVERED | Admin (`requireAdmin`, spec 015) | BR-230 | statusUpdatedAt | `updateRedemptionStatus()` |
-| PROCESSING / SHIPPED → CANCELLED | như trên | BR-230 | cancelledAt; ghi `GIFT_REDEEM_REFUND` (1 lần); trả điểm về đúng lô còn hạn, phần của lô đã hết hạn ghi `EXPIRE` ngay; đơn cũ không có lot spend thì tạo lô mới (BR-231, BR-263, BR-264). Từ PROCESSING và có lô: trả 1 món về đúng lô (`CANCEL_RETURN`, 1 lần, BR-234); từ SHIPPED hoặc đơn không có lô: kho không đổi | `updateRedemptionStatus()`, `gift-stock.util.ts > returnToBatch()` |
+| PROCESSING / SHIPPED → CANCELLED | như trên | BR-229, BR-230: `cancelReason` 1..500 ký tự; từ SHIPPED phải có `restock` boolean | Khoá dòng `FOR UPDATE`; lưu cancelledAt, `cancelReason`, `restocked = restock && batchId != null`; ghi `GIFT_REDEEM_REFUND` (1 lần); trả điểm về đúng lô còn hạn, phần của lô đã hết hạn ghi `EXPIRE` ngay; đơn cũ không có lot spend thì tạo lô mới (BR-231, BR-263, BR-264). Từ PROCESSING (luôn) hoặc SHIPPED với `restock: true`, đơn có lô: trả 1 món về đúng lô (`CANCEL_RETURN`, 1 lần, BR-234); SHIPPED với `restock: false` hoặc đơn không có lô: kho không đổi | `updateRedemptionStatus()`, `gift-stock.util.ts > returnToBatch()` |
+
+Bảng chuyển trạng thái nằm ở `gift.dto.ts > REDEMPTION_STATUS_TRANSITIONS`; mọi response đơn (và danh sách đơn của admin) trả `allowedTransitions` lấy từ bảng này, client chỉ vẽ nút theo đó (không còn bảng chuyển trạng thái riêng ở client). Gửi lại đúng trạng thái hiện tại thì trả đơn như cũ.
 
 Không có thông báo nào được gửi khi đơn đổi quà đổi trạng thái.
 
@@ -438,7 +441,7 @@ stateDiagram-v2
   IN_STOCK --> EXPIRING_SOON: còn ≤ 7 ngày tới hạn
   IN_STOCK --> OUT_OF_STOCK: đổi quà / ghi giảm hết
   EXPIRING_SOON --> OUT_OF_STOCK: đổi quà / ghi giảm hết
-  OUT_OF_STOCK --> IN_STOCK: huỷ đơn PROCESSING trả món (CANCEL_RETURN)
+  OUT_OF_STOCK --> IN_STOCK: huỷ đơn có trả kho (CANCEL_RETURN)
   IN_STOCK --> EXPIRED: tới expires_at
   EXPIRING_SOON --> EXPIRED: tới expires_at
   EXPIRED --> EXPIRED: job ghi EXPIRED, remaining = 0
@@ -452,6 +455,25 @@ stateDiagram-v2
 | IN_STOCK | còn lại | Có | Có |
 
 Thay đổi `remaining` chỉ qua movement: STOCK_IN, REDEEM_OUT, CANCEL_RETURN, ADJUST_OUT, EXPIRED (BR-233..BR-235, BR-239, BR-224).
+
+### 11.2 Mã voucher (`gift_voucher_codes.status`, spec 016)
+
+```mermaid
+stateDiagram-v2
+  [*] --> AVAILABLE: nhập kho lô voucher (codes[])
+  AVAILABLE --> ISSUED: đổi quà cấp mã (FOR UPDATE SKIP LOCKED)
+  AVAILABLE --> VOID: ghi giảm theo codeIds / job hết hạn lô
+  ISSUED --> [*]
+  VOID --> [*]
+```
+
+| Từ → sang | Ai | Điều kiện | Side effect | File |
+|---|---|---|---|---|
+| (mới) → AVAILABLE | Admin | BR-237 (danh sách sạch, không trùng trong quà) | Lưu `code_cipher`, `code_hash`, `code_last4`; lô `quantity = remaining = số mã` | `gift-stock.service.ts > stockIn()`, `voucher-code.util.ts > insertCodes()` |
+| AVAILABLE → ISSUED | User đổi quà | Mã AVAILABLE cũ nhất của đúng lô vừa trừ | `redemption_id`, `issued_at`; đơn ghi `voucher_code_id` và ở DELIVERED | `voucher-code.util.ts > issueCodeFromBatch()` |
+| AVAILABLE → VOID | Admin ghi giảm; worker hết hạn lô | BR-239 (mọi `codeIds` phải AVAILABLE của lô), BR-224 | `voided_at`; `ADJUST_OUT` / `EXPIRED` trừ `remaining` đúng số mã | `voucher-code.util.ts > voidCodes(), voidAllAvailable()` |
+
+ISSUED và VOID là trạng thái cuối: đơn voucher không huỷ được (bắt đầu ở DELIVERED), nên mã không quay lại AVAILABLE. CHECK DB: ISSUED ⇔ có `redemption_id` + `issued_at`; VOID ⇔ có `voided_at`. Bất biến: `remaining` của lô voucher = số mã AVAILABLE (BR-228).
 
 ## 12. Lô điểm xanh (`green_point_lots`, tính từ `remaining` và `expires_at`)
 
@@ -512,3 +534,4 @@ stateDiagram-v2
 | AuthToken | active → revoked / used / hết hạn | Xem BR-008..BR-012 | `ID/modules/auth/*` |
 | OTP đơn tổ chức | active → used / expired | Xem BR-053, BR-054 | `organization-application-otp.service.ts` |
 | Gift.isActive | bật / tắt | Admin | `RW/modules/gift/*` |
+| Gift.deliveryType | PHYSICAL ↔ VOUCHER_CODE | Admin, chỉ khi quà chưa có lô nào (422 "GIFT_HAS_BATCHES", BR-228) | `RW/modules/gift/gift.service.ts > updateById()` |

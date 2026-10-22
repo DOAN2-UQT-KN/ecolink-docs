@@ -1,6 +1,6 @@
 # Ecolink — Tổng quan nghiệp vụ
 
-> Tài liệu dành cho PM, BA, khách hàng, nhà tài trợ và tình nguyện viên nòng cốt. Nội dung tổng hợp từ bộ tài liệu kỹ thuật trong thư mục `docs/`, và được viết dựa trên **đúng những gì sản phẩm đang làm** tại thời điểm 21/10/2026. Nó không mô tả những gì sản phẩm "dự định" làm.
+> Tài liệu dành cho PM, BA, khách hàng, nhà tài trợ và tình nguyện viên nòng cốt. Nội dung tổng hợp từ bộ tài liệu kỹ thuật trong thư mục `docs/`, và được viết dựa trên **đúng những gì sản phẩm đang làm** tại thời điểm 22/10/2026. Nó không mô tả những gì sản phẩm "dự định" làm.
 > Những chỗ sản phẩm chưa làm xong, hoặc đang làm khác với mong đợi, được nêu rõ ở mục 3 (cột Trạng thái) và mục 10.
 
 ---
@@ -131,11 +131,11 @@ Trạng thái: ✅ đã có · 🟡 đang làm dở / có hạn chế · ❌ ch�
 |---|---|---|---|
 | Điểm xanh | Loại điểm duy nhất. Nhận khi chiến dịch hoàn thành, khi báo cáo đạt mốc bình chọn, và khi báo cáo được xử lý (nếu quản trị viên bật). Mọi chiến dịch có cùng mức điểm. Mỗi lần nhận là một "lô" điểm **hết hạn sau 90 ngày** (quản trị viên đổi được); điểm hết hạn bị trừ tự động và hiện trong lịch sử | Người dùng | ✅ |
 | Quy tắc điểm | Quản trị viên đặt số điểm cho: hoàn thành chiến dịch (mặc định 20, nhân tỉ lệ ca tham gia), điểm cơ bản và các mốc bình chọn của báo cáo, báo cáo được xử lý (mặc định 0 = tắt), và số ngày điểm hết hạn (mặc định 90). Thay đổi chỉ áp cho điểm cộng sau đó; mỗi lần lưu được ghi vào lịch sử (ai đổi, lúc nào, trước / sau) | Quản trị viên | ✅ |
-| Cửa hàng quà | Xem quà, đổi quà theo đúng giá niêm yết (nhập số điện thoại và nơi nhận); điểm sắp hết hạn được trừ trước. Thẻ quà ghi số còn lại (hết thì không đổi được) và "Tài trợ bởi …" kèm logo của nhà tài trợ được phép hiển thị | Người dùng | ✅ |
+| Cửa hàng quà | Xem quà, đổi quà theo đúng giá niêm yết; điểm sắp hết hạn được trừ trước. Có hai loại quà: **hiện vật** (nhập số điện thoại và nơi nhận) và **mã voucher** (thẻ quà ghi "Nhận mã ngay"; không cần địa chỉ, đổi xong thấy mã ngay kèm nút sao chép và hạn dùng, xem lại được trong "Đơn của tôi"). Thẻ quà ghi số còn lại (hết thì không đổi được) và "Tài trợ bởi …" kèm logo của nhà tài trợ được phép hiển thị | Người dùng | ✅ |
 | Nguồn quà | Quản lý nơi quà đến: nhà tài trợ, Ecolink tự mua, quyên góp (tên, người liên hệ, logo, có hiển thị trên trang quà không). Không xoá, chỉ "Ngừng": hàng đã nhập vẫn đổi được | Quản trị viên | ✅ |
-| Kho quà theo lô | Mỗi lần nhận quà là một lô gắn với một nguồn (số lượng, giá trị quy đổi mỗi món, ngày nhận, hạn dùng, số chứng từ). Tồn kho bằng tổng các lô còn hạn, không còn quà "không giới hạn", không sửa tay. Ghi giảm khi hỏng, mất, kiểm kê thiếu, trả lại nguồn. Lô hết hạn tự ghi giảm hằng ngày, lô sắp hết hạn trong 7 ngày được đánh dấu. Lịch sử kho ghi mọi thay đổi, ai làm, lý do | Quản trị viên | ✅ |
+| Kho quà theo lô | Mỗi lần nhận quà là một lô gắn với một nguồn (số lượng, giá trị quy đổi mỗi món, ngày nhận, hạn dùng, số chứng từ). Tồn kho bằng tổng các lô còn hạn, không còn quà "không giới hạn", không sửa tay. Ghi giảm khi hỏng, mất, kiểm kê thiếu, trả lại nguồn. Lô hết hạn tự ghi giảm hằng ngày, lô sắp hết hạn trong 7 ngày được đánh dấu. Lịch sử kho ghi mọi thay đổi, ai làm, lý do. Quà mã voucher: nhập kho bằng danh sách mã (dán hoặc tải file .txt/.csv, tối đa 5.000 mã mỗi lô, không trùng mã đã có); số lượng lô = số mã; ghi giảm bằng cách chọn đúng mã cần huỷ; quản trị viên chỉ thấy 4 ký tự cuối của mã. Loại quà chỉ đổi được khi quà chưa có lô nào | Quản trị viên | ✅ |
 | Báo cáo nguồn | Theo từng nguồn và khoảng ngày: đã nhập, đã trao, đang giữ cho đơn, hao hụt, hết hạn, còn trong kho, tổng giá trị đã trao, số người nhận. Xuất CSV để gửi nhà tài trợ | Quản trị viên | ✅ |
-| Quản lý đơn đổi quà | Chuyển trạng thái đang xử lý → đã gửi → đã giao, hoặc huỷ (hoàn điểm về đúng lô cũ, giữ hạn cũ; huỷ khi đang xử lý thì món quà về lại kho). Bảng đơn có cột nguồn quà, lọc theo nguồn | Quản trị viên | 🟡 Không báo cho người đổi; huỷ đơn đã gửi chưa cho chọn hàng có về kho |
+| Quản lý đơn đổi quà | Chuyển trạng thái đang xử lý → đã gửi → đã giao, hoặc huỷ (bắt buộc ghi lý do, người đổi thấy lý do trong "Đơn của tôi"; hoàn điểm về đúng lô cũ, giữ hạn cũ; huỷ khi đang xử lý thì món quà về lại kho; huỷ khi đã gửi thì quản trị viên chọn hàng có về kho không). Đơn mã voucher giao ngay nên không huỷ được. Bảng đơn có cột nguồn quà, lọc theo trạng thái / nguồn (giữ trên đường dẫn), chỉ hiện nút cho bước hợp lệ | Quản trị viên | 🟡 Không báo cho người đổi |
 | Điểm của tôi | Ba con số: điểm hiện có, điểm sắp hết hạn trong 7 ngày (kèm ngày sớm nhất), tổng điểm đã kiếm; lịch sử cộng trừ ghi rõ từng loại (chiến dịch, mốc bình chọn, báo cáo được xử lý, đổi quà, hoàn điểm, hết hạn, điều chỉnh số dư) | Người dùng | ✅ |
 
 ### 3.7 Thông báo
@@ -296,14 +296,14 @@ flowchart LR
 ```
 
 ### 4.6 Đổi quà
-1. Người dùng vào "Quà tặng", chọn quà, nhập số điện thoại và nơi nhận.
-2. Hệ thống kiểm tra còn hàng và **điểm xanh còn hạn** đủ để trả giá niêm yết, rồi lấy một món từ lô quà sắp hết hạn trước, trừ điểm (điểm sắp hết hạn được trừ trước) và tạo đơn **đang xử lý**. Đơn ghi món đó thuộc lô của nguồn nào.
-3. Quản trị viên cập nhật đơn thành **đã gửi**, rồi **đã giao**. Nếu huỷ, điểm được trả về đúng lô đã trừ và giữ hạn cũ; phần thuộc lô đã hết hạn thì không trả lại (ghi là hết hạn). Đơn đặt trước đợt cập nhật này được hoàn thành một lô mới, hạn 90 ngày từ lúc huỷ. Huỷ khi đang xử lý thì món quà về lại đúng lô cũ; huỷ khi đã gửi thì kho không đổi.
+1. Người dùng vào "Quà tặng", chọn quà. Quà hiện vật: nhập số điện thoại và nơi nhận. Quà mã voucher: không cần nhập gì.
+2. Hệ thống kiểm tra còn hàng và **điểm xanh còn hạn** đủ để trả giá niêm yết, rồi lấy một món từ lô quà sắp hết hạn trước, trừ điểm (điểm sắp hết hạn được trừ trước) và tạo đơn **đang xử lý**. Đơn ghi món đó thuộc lô của nguồn nào. Quà mã voucher: đơn **đã giao** ngay, người dùng nhận một mã của lô đó (kèm hạn dùng của lô), sao chép được và xem lại trong "Đơn của tôi"; chỉ chủ đơn thấy mã đầy đủ.
+3. Quản trị viên cập nhật đơn thành **đã gửi**, rồi **đã giao**. Nếu huỷ, quản trị viên phải ghi lý do (tối đa 500 ký tự, người đổi thấy được); điểm được trả về đúng lô đã trừ và giữ hạn cũ; phần thuộc lô đã hết hạn thì không trả lại (ghi là hết hạn). Đơn đặt trước đợt cập nhật này được hoàn thành một lô mới, hạn 90 ngày từ lúc huỷ. Huỷ khi đang xử lý thì món quà về lại đúng lô cũ; huỷ khi đã gửi thì quản trị viên chọn hàng có về kho không (có thì món về lại đúng lô cũ).
 
 Các trường hợp thường gặp:
 - Hết hàng: thông báo "hết quà".
 - Không đủ điểm: thông báo "không đủ điểm". Điểm đã hết hạn không dùng được.
-- Hai lần đổi cùng lúc của một người: một lần có thể bị báo "thử lại".
+- Nhiều lần đổi cùng lúc (cùng người hoặc cùng món quà): hệ thống tự thử lại; chỉ khi vẫn tranh chấp sau nhiều lần mới báo "thử lại".
 - Người đổi **không nhận thông báo** khi đơn thay đổi trạng thái; phải tự vào xem ở mục Đơn hàng.
 
 ### 4.7 Yêu cầu khẩn cấp (SOS)
@@ -498,22 +498,24 @@ Mã BR-xxx dùng để đối chiếu với `docs/03-business-rules.md`.
 ### 5.10 Quà tặng
 - **BR-220:** Người dùng chỉ thấy quà đang được mở bán.
 - **BR-221:** Quà cần tên, ảnh, mô tả, số điểm. Tồn kho không nhập tay: chỉ tăng qua nhập kho theo lô.
-- **BR-222:** Đổi quà cần số điện thoại (7–32 ký tự) và nơi nhận.
+- **BR-222:** Đổi quà hiện vật cần số điện thoại (7–32 ký tự) và nơi nhận; quà mã voucher không cần.
 - **BR-223:** Quà phải còn mở bán và còn hàng trong một lô chưa hết hạn.
 - **BR-224:** Lô quà hết hạn thì không đổi được nữa và được tự động ghi giảm mỗi ngày; lô sắp hết hạn trong 7 ngày được đánh dấu cho quản trị viên.
 - **BR-227:** Báo cáo nguồn tính theo ngày giờ Việt Nam; đơn đặt trước khi có kho theo lô không tính cho nguồn nào.
 - **BR-225:** Phải đủ điểm xanh **còn hạn**; điểm sắp hết hạn được trừ trước.
 - **BR-226:** Mọi người đổi quà theo đúng giá niêm yết, không có giảm giá.
-- **BR-230:** Đơn đi theo thứ tự: đang xử lý → đã gửi → đã giao, và có thể huỷ trước khi giao.
+- **BR-228:** Quà là hiện vật hoặc mã voucher; chỉ đổi loại khi chưa nhập lô nào. Mã voucher được lưu mã hoá, số còn lại của lô luôn bằng số mã chưa phát; đổi quà nhận ngay một mã, chỉ người đổi xem được mã đầy đủ.
+- **BR-229:** Huỷ đơn phải có lý do (tối đa 500 ký tự); huỷ đơn đã gửi phải chọn hàng có về kho không; huỷ đơn đang xử lý thì luôn trả kho.
+- **BR-230:** Đơn đi theo thứ tự: đang xử lý → đã gửi → đã giao, và có thể huỷ trước khi giao. Đơn mã voucher giao ngay nên không huỷ được. Màn hình chỉ hiện nút cho các bước hệ thống cho phép.
 - **BR-231:** Huỷ đơn thì hoàn điểm đúng một lần (cách hoàn xem BR-263, BR-264).
 - **BR-232:** (Sắp bỏ) Mức độ khó gồm tên, số tình nguyện viên tối đa và số điểm thưởng; chiến dịch không còn dùng mức độ khó.
 - **BR-233:** Mỗi lần đổi lấy đúng một món, từ lô sắp hết hạn trước; nhiều người tranh món cuối thì chỉ một người được.
-- **BR-234:** Huỷ đơn đang xử lý thì trả món về đúng lô cũ, chỉ một lần; huỷ đơn đã gửi thì kho không đổi.
+- **BR-234:** Huỷ đơn đang xử lý thì trả món về đúng lô cũ, chỉ một lần; huỷ đơn đã gửi thì chỉ trả kho khi quản trị viên chọn "hàng đã về kho".
 - **BR-235:** Số tồn kho luôn bằng tổng các lô còn hạn và khớp với lịch sử kho.
 - **BR-236:** Nguồn quà không bị xoá; nguồn đã ngừng không nhập kho mới được nhưng hàng cũ vẫn đổi được.
-- **BR-237:** Nhập kho cần nguồn đang hợp tác, số lượng từ 1, ngày nhận không ở tương lai, hạn dùng (nếu có) sau ngày nhận và số chứng từ.
+- **BR-237:** Nhập kho cần nguồn đang hợp tác, số lượng từ 1, ngày nhận không ở tương lai, hạn dùng (nếu có) sau ngày nhận và số chứng từ. Quà mã voucher nhập bằng danh sách 1–5.000 mã, không trùng nhau và không trùng mã đã có của quà đó.
 - **BR-238:** Trang quà chỉ ghi tên và logo nhà tài trợ được phép hiển thị và đang còn hàng; không lộ thông tin liên hệ.
-- **BR-239:** Ghi giảm cần lý do và không vượt số còn lại; muốn tăng thì nhập một lô mới.
+- **BR-239:** Ghi giảm cần lý do và không vượt số còn lại; muốn tăng thì nhập một lô mới. Lô mã voucher ghi giảm bằng cách chọn mã chưa phát; lô hết hạn thì các mã chưa phát bị huỷ theo.
 
 ### 5.11 Điểm xanh
 - **BR-240:** Mỗi hoạt động chỉ được cộng điểm một lần; mọi lần cộng, trừ, hoàn, hết hạn đều được ghi lại đúng một lần.
@@ -660,7 +662,9 @@ Dấu tích xanh hiện chỉ được gắn một lần khi duyệt hồ sơ, v
 | Bị khoá | Quản trị viên (chưa có chức năng mở khoá) |
 
 ### 6.7 Đơn đổi quà
-Đang xử lý → Đã gửi → Đã giao, hoặc Huỷ (từ Đang xử lý hoặc Đã gửi; hoàn điểm về lô cũ; huỷ từ Đang xử lý thì món quà về lại kho). Chỉ quản trị viên đổi được trạng thái. Người đổi **không nhận thông báo** ở bước nào.
+Đang xử lý → Đã gửi → Đã giao, hoặc Huỷ (từ Đang xử lý hoặc Đã gửi; bắt buộc lý do; hoàn điểm về lô cũ; huỷ từ Đang xử lý thì món quà về lại kho, từ Đã gửi thì theo lựa chọn của quản trị viên). Đơn mã voucher bắt đầu ở Đã giao. Chỉ quản trị viên đổi được trạng thái.
+
+Mã voucher: Chưa phát → Đã phát (khi có người đổi) hoặc Đã huỷ (ghi giảm, lô hết hạn). Mã đã phát hoặc đã huỷ không quay lại. Người đổi **không nhận thông báo** ở bước nào.
 
 ### 6.8 Yêu cầu khẩn cấp
 Đang mở → Đã giải quyết (người hỗ trợ bấm, hoặc tự động khi chiến dịch hoàn thành).
@@ -834,7 +838,7 @@ Phần này viết lại các vấn đề trong `docs/99-open-issues.md` theo g�
 | 21 | **Xác nhận "đã sạch" của cộng đồng** | Chỉ để tham khảo, không ảnh hưởng quyết định | Có dùng làm điều kiện duyệt không? |
 | 22 | **Nộp kết quả (submission)** | Có chức năng nhưng không gắn với luồng hoàn thành | Giữ lại (và gắn vào luồng hoàn thành) hay bỏ? |
 | 23 | ~~SOS báo cho ai~~ | **Đã giải quyết (06/10/2026, theo spec "Cải tiến tính năng SOS"):** đội của ca nhận ngay; rồi tình nguyện viên "Sẵn sàng" ở gần, owner tổ chức (sau 10 phút, Y tế ngay), tổ chức lân cận và quản trị viên theo loại và mức ưu tiên (mục 4.7). Chưa kết nối lực lượng cứu hộ bên ngoài; SOS Y tế nhắc gọi 115 | — |
-| 24 | **Đơn đổi quà** | Không báo cho người đổi. Từ 21/10/2026: điểm hoàn về đúng lô cũ, giữ hạn cũ; huỷ khi đang xử lý thì món quà về lại kho; huỷ khi đã gửi thì kho không đổi | Có thông báo không? Huỷ đơn đã gửi: quản trị viên được chọn hàng có về kho không (dự kiến bước 5–6)? |
+| 24 | **Đơn đổi quà** | Không báo cho người đổi. Từ 21/10/2026: điểm hoàn về đúng lô cũ, giữ hạn cũ; huỷ khi đang xử lý thì món quà về lại kho. **Từ 22/10/2026:** huỷ phải có lý do (người đổi thấy trong "Đơn của tôi"); huỷ khi đã gửi thì quản trị viên chọn hàng có về kho không | Có thông báo không? |
 | 25 | ~~Hai hệ điểm song song~~ | **Đã giải quyết (21/10/2026):** chỉ còn một loại điểm xanh có hạn dùng; đổi quà trừ thẳng vào điểm xanh. Khi triển khai, số dư mỗi người được đối soát theo điểm còn hạn và ghi một dòng "điều chỉnh số dư" nếu lệch | — |
 | 26 | ~~Mùa giải và huy hiệu~~ | **Không còn (21/10/2026):** mùa giải, bảng xếp hạng, huy hiệu và giảm giá theo huy hiệu đã bỏ | — |
 | 27 | **Mật khẩu** | Giao diện cho 6 ký tự, hệ thống yêu cầu 8 | Thống nhất một quy định |
