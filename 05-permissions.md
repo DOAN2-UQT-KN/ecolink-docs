@@ -232,8 +232,9 @@ Phía client, SOS: tab **SOS** của trang campaign (`FE/app/(pages)/(main)/camp
 | Xem quà, chi tiết quà, difficulty (deprecated) | ✅ | ✅ | ✅ | Không có guard |
 | Lọc quà theo `isActive` | ❌ | ❌ | ✅ | `gift.api.routes.ts` (tryAuthenticate) |
 | Đổi quà; xem điểm (số dư, sắp hết hạn, tổng đã kiếm), lịch sử điểm, đơn của mình | ❌ | ✅ | ✅ | `authenticate` |
+| Xem chi tiết và lịch sử đơn của mình, tự huỷ đơn đang xử lý, xác nhận đã nhận đơn đã gửi (`/me/redemptions/:code*`, spec 017) | ❌ | ✅ (chỉ đơn của mình; đơn người khác → 404) | ✅ (như user) | `authenticate` + lọc `user_id` trong câu khoá dòng |
 | Tạo và sửa quà; sửa difficulty (deprecated); xem mọi đơn đổi quà | ❌ | ❌ | ✅ | `requireAdmin` |
-| Đổi trạng thái đơn đổi quà (huỷ cần lý do; đơn đang xử lý trả món về lô, đơn đã gửi theo lựa chọn `restock`) | ❌ | ❌ | ✅ | `requireAdmin` (spec 015) |
+| Đổi trạng thái đơn đổi quà (huỷ cần lý do; đơn đang xử lý trả món về lô, đơn đã gửi theo lựa chọn `restock`; gửi hàng cần hãng + mã vận đơn), sửa mã vận đơn, xem chi tiết đơn kèm người làm từng bước | ❌ | ❌ | ✅ | `requireAdmin` (spec 015, 017) |
 | Nguồn quà: xem, tạo, sửa, ngừng / bật lại, xem lô theo nguồn, báo cáo và CSV (`/admin/gift-sources*`) | ❌ | ❌ | ✅ | `requireAdmin` (`gift-source.api.routes.ts`) |
 | Kho: xem lô, nhập kho, ghi giảm, lịch sử kho (`/admin/gifts/:id/stock-*`, `/admin/stock-batches/:id/adjustments`) | ❌ | ❌ | ✅ | `requireAdmin` (`gift-stock.api.routes.ts`) |
 | Thấy `expiringSoon` trong `GET /gifts`, `/gifts/:id` | ❌ | ❌ | ✅ | role từ `tryAuthenticate` (người khác nhận `null`) |

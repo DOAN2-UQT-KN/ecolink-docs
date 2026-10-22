@@ -1150,9 +1150,10 @@ sequenceDiagram
 ```
 
 ### F38 — Xử lý đơn đổi quà
-- `/admin/gifts` → `GET /api/v1/admin/gift-redemptions` (admin; lọc được theo `status`, `sourceId`, mỗi đơn kèm `source`, `cancelReason`, `restocked`, `allowedTransitions`) → `PATCH /admin/gift-redemptions/:id/status {status, cancelReason?, restock?}` (admin). Client giữ bộ lọc trạng thái / nguồn / trang trên URL (`redeemStatus`, `redeemSource`, `redeemPage`) và chỉ vẽ nút theo `allowedTransitions`.
+- `/admin/gifts` → `GET /api/v1/admin/gift-redemptions` (admin; lọc được theo `status`, `sourceId`, mỗi đơn kèm `source`, `cancelReason`, `restocked`, `allowedTransitions`) → `PATCH /admin/gift-redemptions/:id/status {status, cancelReason?, restock?, carrier?, trackingCode?}` (admin). Client giữ bộ lọc trạng thái / nguồn / mã đơn / trang trên URL (`redeemStatus`, `redeemSource`, `redeemCode`, `redeemPage`) và chỉ vẽ nút theo `allowedTransitions`.
+- Gửi hàng (spec 017, BR-230): nút Ship mở `ShipOrderDialog` bắt nhập hãng vận chuyển (gợi ý GHN, GHTK, Viettel Post, J&T Express, VNPost) và mã vận đơn; server lưu `carrier`, `trackingCode`, `shippedAt`, ghi event SHIPPED, rồi **sau commit** gọi notification-service tạo thông báo website `GIFT_ORDER_SHIPPED` cho chủ đơn (`RW/utils/notification.client.ts`, lỗi chỉ log). Admin sửa mã khi đơn đang SHIPPED qua `PATCH /admin/gift-redemptions/:id/tracking` (event TRACKING_UPDATED). Admin thứ hai Ship cùng đơn với mã khác → 409, bảng tự tải lại.
 - Chuyển trạng thái: PROCESSING → SHIPPED | CANCELLED; SHIPPED → DELIVERED | CANCELLED (BR-230).
-- `updateRedemptionStatus()` khoá dòng đơn (`SELECT … FOR UPDATE`) trước khi đọc: hai admin huỷ cùng lúc thì người sau thấy CANCELLED và nhận lại đơn không đổi. Gửi đúng trạng thái hiện tại → trả đơn như cũ, không ghi đè lý do.
+- `changeStatus()` (dùng chung cho admin và chủ đơn) khoá dòng đơn (`SELECT … FOR UPDATE`) trước khi đọc: hai admin huỷ cùng lúc thì người sau thấy CANCELLED và nhận lại đơn không đổi. Gửi đúng trạng thái hiện tại → trả đơn như cũ, không ghi đè lý do.
 - Huỷ (spec 016, BR-229): hộp thoại `CancelRedemptionDialog` bắt nhập lý do (1–500 ký tự sau trim, thiếu → 400 field `cancelReason`); đơn **SHIPPED** phải chọn "Hàng có về kho không?" (`restock` boolean, thiếu → 400 field `restock`); đơn **PROCESSING** luôn trả về kho. Đơn lưu `cancelReason`, `cancelledAt`, `restocked = restock && batchId != null`.
 - Khi CANCELLED và `greenPointsSpent > 0` (`refundRedemptionPoints()`, trong cùng transaction):
   - Ghi `GIFT_REDEEM_REFUND` +đã tiêu (khoá `gift_redeem_refund:<redemptionId>`); đã có thì không làm gì nữa (hoàn đúng 1 lần, BR-231).
@@ -1161,9 +1162,10 @@ sequenceDiagram
 - Kho (BR-234):
   - Huỷ có trả kho (đơn PROCESSING, hoặc đơn SHIPPED với `restock: true`) và đơn có `batch_id`: `returnToBatch()` ghi `CANCEL_RETURN` +1 (unique `(redemption_id, type)`, nên huỷ lặp chỉ cộng 1), cộng lô +1, cache +1 nếu lô còn hạn. Lô đã hết hạn thì món vẫn về lô, job F50 ghi hết hạn ở lần chạy sau.
   - Đơn SHIPPED với `restock: false`, hoặc đơn cũ không có lô: kho không đổi.
-- Không có thông báo gửi cho người đổi.
-- Người dùng xem đơn của mình ở `/profile/orders` qua `GET /me/redemptions`: đơn huỷ có `cancelReason` thì hiện lý do.
-- **File:** `gift.service.ts > updateRedemptionStatus(), refundRedemptionPoints()`, `gift.dto.ts > allowedTransitionsFor()`, `RW/modules/gift/gift-stock.util.ts > returnToBatch()`, `FE/app/(pages)/(admin)/admin/gifts/_components/CancelRedemptionDialog.tsx`, `RW/modules/green-point/green-point-lot.util.ts > planRefund()`.
+- Thông báo cho người đổi chỉ có ở bước gửi hàng (`GIFT_ORDER_SHIPPED`).
+- Người dùng xem đơn của mình ở `/profile/orders` qua `GET /me/redemptions` (tìm theo mã đơn `?code=`): mỗi đơn hiện mã đơn (link sang chi tiết), hãng · mã vận đơn kèm nút sao chép, lý do huỷ. Spec 017: đơn PROCESSING có nút "Cancel order" (`POST /me/redemptions/:code/cancel`, bắt lý do, hoàn điểm và trả kho như admin huỷ); đơn SHIPPED có nút "I received it" (`POST /me/redemptions/:code/confirm-delivery`). Đơn vừa đổi trạng thái ở nơi khác → 422, client báo lỗi và tải lại.
+- Chi tiết đơn (spec 017): `/profile/orders/:code` (`GET /me/redemptions/:code`) và `/admin/gifts/orders/:code` (`GET /admin/gift-redemptions/:code`), cùng `FE/modules/GiftOrderDetail`: tab Details (quà, mã đơn, người nhận, địa chỉ, vận chuyển, lý do huỷ; admin thêm tài khoản và nguồn) và tab History (`gift_redemption_events`, mới nhất trước; phía khách chỉ ghi "Admin", không có tên).
+- **File:** `gift.service.ts > changeStatus(), updateTracking(), refundRedemptionPoints()`, `gift.dto.ts > allowedTransitionsFor()`, `RW/modules/gift/redemption-event.util.ts`, `RW/modules/user-points/user-points.api.routes.ts`, `RW/modules/gift/gift-stock.util.ts > returnToBatch()`, `FE/app/(pages)/(admin)/admin/gifts/_components/CancelRedemptionDialog.tsx`, `RW/modules/green-point/green-point-lot.util.ts > planRefund()`.
 
 ### F39 — Quản lý quà và mức độ khó (admin; mức độ khó deprecated)
 - Quà: `POST /api/v1/gifts`, `PUT /api/v1/gifts/:id` (admin). Ảnh được tạo thành Media GIFT. Sau khi ghi thì enqueue dịch (F45). Không có API xoá quà. Body có `stockRemaining` thì bị bỏ qua: tồn kho chỉ đổi qua lô (F49), quà mới có tồn kho 0.

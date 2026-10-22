@@ -421,12 +421,14 @@ stateDiagram-v2
 | Từ → sang | Ai (thực tế trong code) | Điều kiện | Side effect | File |
 |---|---|---|---|---|
 | (mới) → PROCESSING | User đăng nhập | BR-222..BR-226, BR-233 | Lấy 1 món từ lô quà còn hạn (hạn sớm trước), ghi `batch_id`, movement `REDEEM_OUT`, cache tồn kho −1; trừ lô điểm còn hạn theo hạn sớm nhất trước, ghi `green_point_lot_spends` (BR-262); ghi sổ `GIFT_REDEEM` âm | `RW/modules/gift/gift.service.ts > redeem()` |
-| PROCESSING → SHIPPED; SHIPPED → DELIVERED | Admin (`requireAdmin`, spec 015) | BR-230 | statusUpdatedAt | `updateRedemptionStatus()` |
-| PROCESSING / SHIPPED → CANCELLED | như trên | BR-229, BR-230: `cancelReason` 1..500 ký tự; từ SHIPPED phải có `restock` boolean | Khoá dòng `FOR UPDATE`; lưu cancelledAt, `cancelReason`, `restocked = restock && batchId != null`; ghi `GIFT_REDEEM_REFUND` (1 lần); trả điểm về đúng lô còn hạn, phần của lô đã hết hạn ghi `EXPIRE` ngay; đơn cũ không có lot spend thì tạo lô mới (BR-231, BR-263, BR-264). Từ PROCESSING (luôn) hoặc SHIPPED với `restock: true`, đơn có lô: trả 1 món về đúng lô (`CANCEL_RETURN`, 1 lần, BR-234); SHIPPED với `restock: false` hoặc đơn không có lô: kho không đổi | `updateRedemptionStatus()`, `gift-stock.util.ts > returnToBatch()` |
+| PROCESSING → SHIPPED | Admin (`requireAdmin`) | BR-230: `carrier` + `trackingCode` bắt buộc | statusUpdatedAt, `carrier`, `trackingCode`, `shippedAt`; event SHIPPED; sau commit gửi thông báo `GIFT_ORDER_SHIPPED` cho chủ đơn | `changeStatus()` |
+| SHIPPED → DELIVERED | Admin, hoặc chủ đơn (`POST /me/redemptions/:code/confirm-delivery`, spec 017) | BR-230 | statusUpdatedAt; event DELIVERED (actor USER hoặc ADMIN) | `changeStatus()` |
+| SHIPPED → SHIPPED (sửa mã vận đơn) | Admin | BR-230 | `carrier`, `trackingCode`; event TRACKING_UPDATED kèm giá trị cũ; không đổi gì thì không ghi | `updateTracking()` |
+| PROCESSING / SHIPPED → CANCELLED | Admin; chủ đơn chỉ từ PROCESSING (`POST /me/redemptions/:code/cancel`, spec 017) | BR-229, BR-230: `cancelReason` 1..500 ký tự; từ SHIPPED phải có `restock` boolean | Khoá dòng `FOR UPDATE`; lưu cancelledAt, `cancelReason`, `restocked = restock && batchId != null`; ghi `GIFT_REDEEM_REFUND` (1 lần); trả điểm về đúng lô còn hạn, phần của lô đã hết hạn ghi `EXPIRE` ngay; đơn cũ không có lot spend thì tạo lô mới (BR-231, BR-263, BR-264). Từ PROCESSING (luôn) hoặc SHIPPED với `restock: true`, đơn có lô: trả 1 món về đúng lô (`CANCEL_RETURN`, 1 lần, BR-234); SHIPPED với `restock: false` hoặc đơn không có lô: kho không đổi | `updateRedemptionStatus()`, `gift-stock.util.ts > returnToBatch()` |
 
-Bảng chuyển trạng thái nằm ở `gift.dto.ts > REDEMPTION_STATUS_TRANSITIONS`; mọi response đơn (và danh sách đơn của admin) trả `allowedTransitions` lấy từ bảng này, client chỉ vẽ nút theo đó (không còn bảng chuyển trạng thái riêng ở client). Gửi lại đúng trạng thái hiện tại thì trả đơn như cũ.
+Bảng chuyển trạng thái nằm ở `gift.dto.ts > REDEMPTION_STATUS_TRANSITIONS` (admin) và `USER_REDEMPTION_TRANSITIONS` (chủ đơn); mọi response đơn trả `allowedTransitions` theo vai trò người gọi, client chỉ vẽ nút theo đó (không còn bảng chuyển trạng thái riêng ở client). Gửi lại đúng trạng thái hiện tại thì trả đơn như cũ.
 
-Không có thông báo nào được gửi khi đơn đổi quà đổi trạng thái.
+Mỗi lần đổi trạng thái ghi một mục `gift_redemption_events` (BR-228). Chỉ có một thông báo: `GIFT_ORDER_SHIPPED` khi đơn chuyển sang SHIPPED; các bước khác không gửi thông báo.
 
 ### 11.1 Nguồn quà (`gift_sources.status`) và lô quà (`gift_stock_batches`)
 
