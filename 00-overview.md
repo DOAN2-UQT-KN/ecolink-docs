@@ -149,7 +149,7 @@ Nguồn:
 
 | Kiểu | Chi tiết | Bằng chứng |
 |---|---|---|
-| **REST qua gateway** | Client gọi `/api/v1/...`; gateway proxy theo prefix và không kiểm tra token | `api-gateway/src/index.ts` |
+| **REST qua gateway** | Client gọi `/api/v1/...`;   gateway proxy theo prefix và không kiểm tra token | `api-gateway/src/index.ts` |
 | **SSE** | Chat AI: `POST /api/v1/chat/conversations/{id}/messages/stream`; gateway đặt `parseReqBody: false` | `api-gateway/src/index.ts`, `ai-service/app/chat/router.py` |
 | **REST nội bộ (server-to-server)** | Các route `/internal/v1/*` và `POST /api/v1/notifications/jobs`, xác thực bằng header `x-internal-api-key`; gateway **không** proxy `/internal/*` | `identity-service/src/internal/internal.routes.ts`, `reward-service/src/internal/internal.routes.ts`, `ai-service/app/internal/router.py` |
 | **Circuit breaker HTTP** | incident-service bọc các lời gọi tới identity, reward, notification (5 lỗi → OPEN 30s) | `incident-service/src/resilience/http-circuit.ts` |
