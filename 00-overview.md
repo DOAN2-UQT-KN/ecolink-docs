@@ -18,7 +18,7 @@
 | [services/incident-service.md](services/incident-service.md) | Report, campaign, tổ chức, đơn đăng ký tổ chức, SOS, vote |
 | [services/notification-service.md](services/notification-service.md) | Thông báo in-app và email |
 | [services/reward-service.md](services/reward-service.md) | Điểm xanh (sổ cái và lô có hạn dùng), quà tặng, quy tắc điểm |
-| [services/translation-worker.md](services/translation-worker.md) | Cơ chế dịch nội dung (nằm trong reward-service và incident-service, **không phải service riêng**) |
+| [services/translation-worker.md](services/translation-worker.md) | Cơ chế dịch nội dung |
 | [services/ai-service.md](services/ai-service.md) | Chatbot LLM, dịch, gợi ý xử lý report, caption Facebook |
 
 ## 1. Mô tả hệ thống
