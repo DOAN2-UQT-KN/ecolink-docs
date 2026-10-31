@@ -4,7 +4,7 @@
 > "canManage" nghĩa là người quản lý campaign: thành viên active của tổ chức sở hữu campaign và là người tạo, manager trong `campaign_managers`, hoặc LR / OWNER (`INC/modules/campaign/campaign-access.service.ts`, BR-159). "canDelete" = người tạo hoặc LR / OWNER   .
 > Đường dẫn viết tắt giống [02-business-flows.md](02-business-flows.md).
 
-## 1. Report (`reports.status`, `isVerify`, `aiVerified`)
+## 1.  Report (`reports.status`, `isVerify`, `aiVerified`)
 
 ```mermaid
 stateDiagram-v2
